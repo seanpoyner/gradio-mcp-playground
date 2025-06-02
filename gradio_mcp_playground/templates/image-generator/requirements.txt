@@ -1,0 +1,9 @@
+gradio>=4.44.0
+mcp>=1.0.0
+pillow>=10.0.0
+numpy>=1.24.0
+# Uncomment for actual Stable Diffusion support:
+# diffusers>=0.20.0
+# transformers>=4.30.0
+# torch>=2.0.0
+# accelerate>=0.20.0
