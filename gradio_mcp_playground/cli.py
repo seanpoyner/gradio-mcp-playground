@@ -233,7 +233,11 @@ def start(name: str, port: Optional[int], reload: bool, public: bool):
 
     # Use provided port or find a free one
     if not port:
-        port = server_config.get("port", find_free_port())
+        config_port = server_config.get("port")
+        if config_port is None:
+            port = find_free_port()
+        else:
+            port = config_port
 
     console.print(f"[blue]Starting server '{name}' on port {port}...[/blue]")
 
