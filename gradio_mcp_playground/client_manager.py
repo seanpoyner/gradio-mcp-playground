@@ -14,44 +14,50 @@ try:
     from mcp.client.stdio import stdio_client, StdioServerParameters
     from mcp.client.session import ClientSession
     from mcp.client.sse import sse_client
+
     HAS_MCP = True
 except ImportError:
     HAS_MCP = False
+
     # Create fallback classes
     class StdioServerParameters:
         def __init__(self, command, args):
             self.command = command
             self.args = args
-    
+
     class ClientSession:
         def __init__(self, read, write):
             pass
-        
+
         async def initialize(self):
             pass
-        
+
         async def list_tools(self):
             class MockResult:
                 tools = []
+
             return MockResult()
-        
+
         async def call_tool(self, name, arguments):
             return None
-    
+
     async def stdio_client(*args):
         return None, None
-    
+
     async def sse_client(*args):
         return None, None
 
+
 try:
     import aiohttp
+
     HAS_AIOHTTP = True
 except ImportError:
     HAS_AIOHTTP = False
 
 try:
     from gradio_client import Client as GradioClient
+
     HAS_GRADIO_CLIENT = True
 except ImportError:
     HAS_GRADIO_CLIENT = False
@@ -59,83 +65,76 @@ except ImportError:
 
 class MCPClient:
     """Base MCP client implementation"""
-    
+
     def __init__(self):
         if not HAS_MCP:
             raise ImportError("MCP package is required for client functionality")
         self.session = None
         self.exit_stack = None
         self._connected = False
-        
+
     async def connect_stdio(self, command: str, args: List[str] = None) -> None:
         """Connect to an MCP server via stdio"""
         if not HAS_MCP:
             raise ImportError("MCP package is required for stdio connections")
-            
+
         self.exit_stack = AsyncExitStack()
-        
-        server_params = StdioServerParameters(
-            command=command,
-            args=args or []
-        )
-        
+
+        server_params = StdioServerParameters(command=command, args=args or [])
+
         # Connect to server
-        stdio_transport = await self.exit_stack.enter_async_context(
-            stdio_client(server_params)
-        )
-        
+        stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+
         # Initialize client session
         self.session = await self.exit_stack.enter_async_context(
             ClientSession(stdio_transport[0], stdio_transport[1])
         )
-        
+
         # Initialize
         await self.session.initialize()
         self._connected = True
-        
+
     async def connect_sse(self, url: str, headers: Optional[Dict[str, str]] = None) -> None:
         """Connect to an MCP server via SSE"""
         self.exit_stack = AsyncExitStack()
-        
+
         # Create SSE transport
-        sse_transport = await self.exit_stack.enter_async_context(
-            sse_client(url, headers)
-        )
-        
+        sse_transport = await self.exit_stack.enter_async_context(sse_client(url, headers))
+
         # Initialize client session
         self.session = await self.exit_stack.enter_async_context(
             ClientSession(sse_transport[0], sse_transport[1])
         )
-        
+
         # Initialize
         await self.session.initialize()
         self._connected = True
-        
+
     async def list_tools(self) -> List[Dict[str, Any]]:
         """List available tools from the connected server"""
         if not self._connected or not self.session:
             raise RuntimeError("Not connected to a server")
-        
+
         result = await self.session.list_tools()
         return [tool.model_dump() for tool in result.tools]
-    
+
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
         """Call a tool on the connected server"""
         if not self._connected or not self.session:
             raise RuntimeError("Not connected to a server")
-        
+
         result = await self.session.call_tool(name, arguments)
         return result
-    
+
     async def disconnect(self) -> None:
         """Disconnect from the server"""
         if self.exit_stack:
             await self.exit_stack.aclose()
             self.exit_stack = None
-        
+
         self.session = None
         self._connected = False
-    
+
     @property
     def is_connected(self) -> bool:
         """Check if client is connected"""
@@ -144,7 +143,7 @@ class MCPClient:
 
 class GradioMCPClient:
     """Enhanced MCP client for Gradio servers"""
-    
+
     def __init__(self):
         try:
             self.mcp_client = MCPClient() if HAS_MCP else None
@@ -152,13 +151,13 @@ class GradioMCPClient:
             self.mcp_client = None
         self.gradio_client = None
         self.server_info = {}
-        
+
     def connect(self, server_url: str, protocol: str = "auto") -> None:
         """Connect to a Gradio MCP server"""
         # Determine protocol
         if protocol == "auto":
             protocol = self._detect_protocol(server_url)
-        
+
         # Connect via appropriate protocol
         if protocol == "stdio":
             if not self.mcp_client:
@@ -167,25 +166,25 @@ class GradioMCPClient:
             parts = server_url.split()
             command = parts[0]
             args = parts[1:] if len(parts) > 1 else []
-            
+
             # Run async connection
             asyncio.run(self.mcp_client.connect_stdio(command, args))
-            
+
         elif protocol == "sse":
             if not self.mcp_client:
                 raise ImportError("MCP package is required for SSE connections")
             # Connect via SSE
             asyncio.run(self.mcp_client.connect_sse(server_url))
-            
+
         else:
             # Try Gradio client connection
             if not HAS_GRADIO_CLIENT:
                 raise ImportError("gradio_client package is required for Gradio connections")
             self.gradio_client = GradioClient(server_url)
-        
+
         # Get server info
         self._fetch_server_info()
-    
+
     def _detect_protocol(self, server_url: str) -> str:
         """Detect the appropriate protocol for a server URL"""
         if server_url.startswith("http"):
@@ -197,23 +196,17 @@ class GradioMCPClient:
         else:
             # Assume stdio for non-URL connections
             return "stdio"
-    
+
     def _fetch_server_info(self) -> None:
         """Fetch information about the connected server"""
         if self.mcp_client and self.mcp_client.is_connected:
             # Get MCP server info
             tools = asyncio.run(self.mcp_client.list_tools())
-            self.server_info = {
-                "type": "mcp",
-                "tools": tools
-            }
+            self.server_info = {"type": "mcp", "tools": tools}
         elif self.gradio_client:
             # Get Gradio server info
-            self.server_info = {
-                "type": "gradio",
-                "api_info": self.gradio_client.view_api()
-            }
-    
+            self.server_info = {"type": "gradio", "api_info": self.gradio_client.view_api()}
+
     def list_tools(self) -> List[Dict[str, Any]]:
         """List available tools/functions"""
         if self.server_info.get("type") == "mcp":
@@ -222,176 +215,158 @@ class GradioMCPClient:
             # Convert Gradio API info to tool format
             api_info = self.server_info.get("api_info", {})
             tools = []
-            
+
             for endpoint in api_info.get("named_endpoints", {}).values():
-                tools.append({
-                    "name": endpoint.get("api_name", "unknown"),
-                    "description": endpoint.get("description", "No description"),
-                    "parameters": endpoint.get("parameters", [])
-                })
-            
+                tools.append(
+                    {
+                        "name": endpoint.get("api_name", "unknown"),
+                        "description": endpoint.get("description", "No description"),
+                        "parameters": endpoint.get("parameters", []),
+                    }
+                )
+
             return tools
-        
+
         return []
-    
+
     def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
         """Call a tool/function on the server"""
         if self.server_info.get("type") == "mcp":
             return asyncio.run(self.mcp_client.call_tool(name, arguments))
         elif self.server_info.get("type") == "gradio" and self.gradio_client:
             # Call Gradio endpoint
-            result = self.gradio_client.predict(
-                api_name=f"/{name}",
-                **arguments
-            )
+            result = self.gradio_client.predict(api_name=f"/{name}", **arguments)
             return result
-        
+
         raise RuntimeError("No connection available")
-    
+
     def disconnect(self) -> None:
         """Disconnect from the server"""
         if self.mcp_client and self.mcp_client.is_connected:
             asyncio.run(self.mcp_client.disconnect())
-        
+
         self.gradio_client = None
         self.server_info = {}
-    
+
     @staticmethod
     def test_connection(server_url: str, protocol: str = "auto") -> Dict[str, Any]:
         """Test connection to a server"""
         client = GradioMCPClient()
-        
+
         try:
             client.connect(server_url, protocol)
             tools = client.list_tools()
-            
+
             result = {
                 "success": True,
                 "server_type": client.server_info.get("type"),
                 "tools_count": len(tools),
-                "tools": tools
+                "tools": tools,
             }
-            
+
         except Exception as e:
-            result = {
-                "success": False,
-                "error": str(e)
-            }
-        
+            result = {"success": False, "error": str(e)}
+
         finally:
             client.disconnect()
-        
+
         return result
 
 
 class MCPConnectionManager:
     """Manages multiple MCP client connections"""
-    
+
     def __init__(self):
         self.connections: Dict[str, GradioMCPClient] = {}
         self.config_path = Path.home() / ".gradio-mcp" / "connections.json"
         self._load_saved_connections()
-    
+
     def _load_saved_connections(self) -> None:
         """Load saved connections from config file"""
         if self.config_path.exists():
             with open(self.config_path) as f:
                 saved = json.load(f)
-            
+
             # Don't auto-connect, just load the configuration
             self.saved_connections = saved.get("connections", {})
         else:
             self.saved_connections = {}
-    
+
     def add_connection(
-        self,
-        name: str,
-        server_url: str,
-        protocol: str = "auto",
-        auto_connect: bool = True
+        self, name: str, server_url: str, protocol: str = "auto", auto_connect: bool = True
     ) -> None:
         """Add a new connection"""
         if name in self.connections:
             raise ValueError(f"Connection '{name}' already exists")
-        
+
         client = GradioMCPClient()
-        
+
         if auto_connect:
             client.connect(server_url, protocol)
-        
+
         self.connections[name] = client
-        
+
         # Save connection info
-        self.saved_connections[name] = {
-            "url": server_url,
-            "protocol": protocol
-        }
+        self.saved_connections[name] = {"url": server_url, "protocol": protocol}
         self._save_connections()
-    
+
     def remove_connection(self, name: str) -> None:
         """Remove a connection"""
         if name in self.connections:
             self.connections[name].disconnect()
             del self.connections[name]
-        
+
         if name in self.saved_connections:
             del self.saved_connections[name]
             self._save_connections()
-    
+
     def get_connection(self, name: str) -> Optional[GradioMCPClient]:
         """Get a connection by name"""
         return self.connections.get(name)
-    
+
     def list_connections(self) -> List[Dict[str, Any]]:
         """List all connections"""
         connections = []
-        
+
         for name, config in self.saved_connections.items():
             connection_info = {
                 "name": name,
                 "url": config["url"],
                 "protocol": config["protocol"],
-                "connected": (name in self.connections and 
-                             self.connections[name].mcp_client and 
-                             self.connections[name].mcp_client.is_connected)
+                "connected": (
+                    name in self.connections
+                    and self.connections[name].mcp_client
+                    and self.connections[name].mcp_client.is_connected
+                ),
             }
             connections.append(connection_info)
-        
+
         return connections
-    
+
     def _save_connections(self) -> None:
         """Save connections to config file"""
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         with open(self.config_path, "w") as f:
-            json.dump(
-                {"connections": self.saved_connections},
-                f,
-                indent=2
-            )
-    
+            json.dump({"connections": self.saved_connections}, f, indent=2)
+
     def connect_all(self) -> Dict[str, bool]:
         """Connect to all saved connections"""
         results = {}
-        
+
         for name, config in self.saved_connections.items():
             if name not in self.connections:
                 try:
-                    self.add_connection(
-                        name,
-                        config["url"],
-                        config["protocol"],
-                        auto_connect=True
-                    )
+                    self.add_connection(name, config["url"], config["protocol"], auto_connect=True)
                     results[name] = True
                 except Exception:
                     results[name] = False
-        
+
         return results
-    
+
     def disconnect_all(self) -> None:
         """Disconnect all connections"""
         for client in self.connections.values():
             client.disconnect()
-        
+
         self.connections.clear()

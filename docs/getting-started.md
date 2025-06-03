@@ -100,6 +100,44 @@ if __name__ == "__main__":
     demo.launch(mcp_server=True)
 ```
 
+## Basic Server Management
+
+### Listing Servers
+
+See all your registered servers:
+
+```bash
+gmp server list
+```
+
+### Server Information
+
+Get detailed information about a server:
+
+```bash
+gmp server info hello-world
+```
+
+### Stopping Servers
+
+Stop a running server:
+
+```bash
+gmp server stop hello-world
+```
+
+### Deleting Servers
+
+Remove a server when you no longer need it:
+
+```bash
+# Remove from registry (keeps files)
+gmp server delete hello-world
+
+# Remove completely (including files)
+gmp server delete hello-world --files
+```
+
 ## Using the Dashboard
 
 Launch the web dashboard to manage your servers visually:
@@ -109,7 +147,7 @@ gmp dashboard
 ```
 
 The dashboard provides:
-- Server management (create, start, stop)
+- Server management (create, start, stop, delete)
 - Connection management
 - Registry browsing
 - Configuration editing
@@ -123,7 +161,6 @@ The dashboard provides:
 
 ## Getting Help
 
-- Check the [Troubleshooting Guide](troubleshooting.md)
 - Open an issue on [GitHub](https://github.com/gradio-mcp-playground/gradio-mcp-playground/issues)
 - Join our [Discord community](https://discord.gg/gradio-mcp)
 

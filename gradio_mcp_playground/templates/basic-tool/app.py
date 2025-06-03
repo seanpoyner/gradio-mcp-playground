@@ -8,11 +8,11 @@ import gradio as gr
 
 def process_text(text: str, operation: str = "uppercase") -> str:
     """Process text with various operations.
-    
+
     Args:
         text: The input text to process
         operation: The operation to perform (uppercase, lowercase, reverse, length)
-        
+
     Returns:
         The processed text result
     """
@@ -36,8 +36,8 @@ demo = gr.Interface(
         gr.Radio(
             choices=["uppercase", "lowercase", "reverse", "length"],
             label="Operation",
-            value="uppercase"
-        )
+            value="uppercase",
+        ),
     ],
     outputs=gr.Textbox(label="Result"),
     title="Text Processor",
@@ -46,8 +46,8 @@ demo = gr.Interface(
         ["Hello World!", "uppercase"],
         ["GRADIO MCP", "lowercase"],
         ["Gradio", "reverse"],
-        ["Count my characters", "length"]
-    ]
+        ["Count my characters", "length"],
+    ],
 )
 
 # Launch as MCP server

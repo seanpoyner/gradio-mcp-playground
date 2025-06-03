@@ -33,8 +33,6 @@ header-includes:
   - \lstset{basicstyle=\ttfamily\footnotesize, breaklines=true, frame=single, backgroundcolor=\color{gray!10}}
 ---
 
-\newpage
-
 # Executive Summary
 
 The **Gradio MCP Playground** is a comprehensive toolkit that revolutionizes how developers create, deploy, and manage AI-powered applications by seamlessly bridging Gradio interfaces with the Model Context Protocol (MCP). This toolkit enables developers to transform any Gradio application into a fully-functional MCP server with minimal code changes, making AI tools accessible to Claude Desktop, Cursor, Cline, and other MCP-compatible clients.
@@ -556,8 +554,14 @@ gmp server start my-app --port 7860 --reload
 # Stop a server
 gmp server stop my-app
 
-# Remove a server
-gmp server remove my-app
+# Delete a server (from registry only)
+gmp server delete my-app
+
+# Delete a server including all files
+gmp server delete my-app --files
+
+# Force delete without confirmation
+gmp server delete my-app --force --files
 ```
 
 ### Server Configuration
@@ -572,6 +576,38 @@ gmp server validate my-app
 # Export server configuration
 gmp server export my-app --format json
 ```
+
+### Server Deletion
+
+The delete command provides flexible options for removing servers from your system:
+
+```bash
+# Delete server from registry only (keeps files)
+gmp server delete my-app
+
+# Delete server and all associated files
+gmp server delete my-app --files
+
+# Force deletion without confirmation prompts
+gmp server delete my-app --force
+
+# Combine options for complete removal
+gmp server delete my-app --files --force
+```
+
+**Important Safety Features:**
+
+- **Registry vs Files**: By default, delete only removes the server from the registry, preserving files
+- **Safety Checks**: Without `--force`, the command will check for unexpected files before deletion
+- **Confirmation Prompts**: Interactive confirmation prevents accidental deletions
+- **Process Management**: Automatically stops running server processes before deletion
+
+**Use Cases:**
+
+1. **Clean Removal**: `gmp server delete my-app --files` - Remove everything cleanly
+2. **Registry Cleanup**: `gmp server delete my-app` - Keep files, remove from management
+3. **Automated Scripts**: `gmp server delete my-app --files --force` - Non-interactive deletion
+4. **Safe Testing**: Default behavior prevents accidental data loss
 
 ## Client Management Commands
 

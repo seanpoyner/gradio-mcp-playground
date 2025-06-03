@@ -16,6 +16,7 @@ from datetime import datetime
 # Optional imports
 try:
     import psutil
+
     HAS_PSUTIL = True
 except ImportError:
     HAS_PSUTIL = False
@@ -31,7 +32,7 @@ def find_free_port(start_port: int = 7860, max_attempts: int = 100) -> int:
                 return port
             except OSError:
                 continue
-    
+
     raise RuntimeError(f"Could not find free port after {max_attempts} attempts")
 
 
@@ -48,25 +49,25 @@ def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
 def validate_server_config(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """Validate a server configuration"""
     errors = []
-    
+
     # Required fields
     required = ["name", "path"]
     for field in required:
         if field not in config:
             errors.append(f"Missing required field: {field}")
-    
+
     # Validate path exists
     if "path" in config:
         path = Path(config["path"])
         if not path.exists():
             errors.append(f"Server file not found: {config['path']}")
-    
+
     # Validate port if specified
     if "port" in config:
         port = config["port"]
         if not isinstance(port, int) or port < 1 or port > 65535:
             errors.append(f"Invalid port number: {port}")
-    
+
     return len(errors) == 0, errors
 
 
@@ -74,7 +75,7 @@ def get_process_info(pid: int) -> Optional[Dict[str, Any]]:
     """Get information about a process"""
     if not HAS_PSUTIL:
         return None
-    
+
     try:
         process = psutil.Process(pid)
         return {
@@ -83,7 +84,7 @@ def get_process_info(pid: int) -> Optional[Dict[str, Any]]:
             "status": process.status(),
             "create_time": datetime.fromtimestamp(process.create_time()).isoformat(),
             "memory_percent": process.memory_percent(),
-            "cpu_percent": process.cpu_percent(interval=0.1)
+            "cpu_percent": process.cpu_percent(interval=0.1),
         }
     except (psutil.NoSuchProcess, psutil.AccessDenied):
         return None
@@ -93,7 +94,7 @@ def kill_process_on_port(port: int) -> bool:
     """Kill process listening on a specific port"""
     if not HAS_PSUTIL:
         return False
-    
+
     try:
         for conn in psutil.net_connections():
             if conn.laddr.port == port and conn.status == "LISTEN":
@@ -106,7 +107,7 @@ def kill_process_on_port(port: int) -> bool:
                     pass
     except Exception:
         pass
-    
+
     return False
 
 
@@ -114,7 +115,7 @@ def check_python_version() -> Tuple[bool, str]:
     """Check if Python version meets requirements"""
     version = sys.version_info
     version_str = f"{version.major}.{version.minor}.{version.micro}"
-    
+
     if version >= (3, 8):
         return True, version_str
     else:
@@ -129,9 +130,9 @@ def check_dependencies() -> Dict[str, bool]:
         "anthropic": "anthropic",
         "aiohttp": "aiohttp",
         "pydantic": "pydantic",
-        "rich": "rich"
+        "rich": "rich",
     }
-    
+
     results = {}
     for name, module in dependencies.items():
         try:
@@ -139,16 +140,14 @@ def check_dependencies() -> Dict[str, bool]:
             results[name] = True
         except ImportError:
             results[name] = False
-    
+
     return results
 
 
 def install_dependencies(packages: List[str]) -> bool:
     """Install missing dependencies"""
     try:
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install"] + packages
-        )
+        subprocess.check_call([sys.executable, "-m", "pip", "install"] + packages)
         return True
     except subprocess.CalledProcessError:
         return False
@@ -157,15 +156,12 @@ def install_dependencies(packages: List[str]) -> bool:
 def create_requirements_file(directory: Path, packages: List[str]) -> None:
     """Create a requirements.txt file"""
     requirements_path = directory / "requirements.txt"
-    
+
     # Add default packages
-    default_packages = [
-        "gradio>=4.44.0",
-        "mcp>=1.0.0"
-    ]
-    
+    default_packages = ["gradio>=4.44.0", "mcp>=1.0.0"]
+
     all_packages = list(set(default_packages + packages))
-    
+
     with open(requirements_path, "w") as f:
         f.write("\n".join(sorted(all_packages)))
 
@@ -188,49 +184,45 @@ def format_file_size(size_bytes: int) -> str:
 
 def get_server_stats(server_path: Path) -> Dict[str, Any]:
     """Get statistics about a server"""
-    stats = {
-        "files": 0,
-        "total_size": 0,
-        "last_modified": None
-    }
-    
+    stats = {"files": 0, "total_size": 0, "last_modified": None}
+
     if not server_path.exists():
         return stats
-    
+
     for file_path in server_path.rglob("*"):
         if file_path.is_file():
             stats["files"] += 1
             stats["total_size"] += file_path.stat().st_size
-            
+
             mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
             if stats["last_modified"] is None or mtime > stats["last_modified"]:
                 stats["last_modified"] = mtime
-    
+
     if stats["last_modified"]:
         stats["last_modified"] = stats["last_modified"].isoformat()
-    
+
     stats["total_size_formatted"] = format_file_size(stats["total_size"])
-    
+
     return stats
 
 
 def validate_tool_args(args: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[bool, List[str]]:
     """Validate tool arguments against a schema"""
     errors = []
-    
+
     properties = schema.get("properties", {})
     required = schema.get("required", [])
-    
+
     # Check required fields
     for field in required:
         if field not in args:
             errors.append(f"Missing required field: {field}")
-    
+
     # Validate types
     for field, value in args.items():
         if field in properties:
             expected_type = properties[field].get("type")
-            
+
             if expected_type == "string" and not isinstance(value, str):
                 errors.append(f"Field '{field}' must be a string")
             elif expected_type == "integer" and not isinstance(value, int):
@@ -239,25 +231,22 @@ def validate_tool_args(args: Dict[str, Any], schema: Dict[str, Any]) -> Tuple[bo
                 errors.append(f"Field '{field}' must be a number")
             elif expected_type == "boolean" and not isinstance(value, bool):
                 errors.append(f"Field '{field}' must be a boolean")
-    
+
     return len(errors) == 0, errors
 
 
 def create_gradio_app_template(
-    function_name: str,
-    description: str,
-    inputs: List[str],
-    output_type: str = "text"
+    function_name: str, description: str, inputs: List[str], output_type: str = "text"
 ) -> str:
     """Generate a Gradio app template"""
-    
+
     # Generate input components
     input_components = []
     for inp in inputs:
         input_components.append(f'    gr.Textbox(label="{inp}")')
-    
+
     inputs_str = ",\n".join(input_components) if input_components else '    "text"'
-    
+
     template = f'''"""Generated Gradio MCP Server
 
 {description}
@@ -295,18 +284,14 @@ demo = gr.Interface(
 if __name__ == "__main__":
     demo.launch(mcp_server=True)
 '''
-    
+
     return template
 
 
 def parse_mcp_url(url: str) -> Dict[str, Any]:
     """Parse an MCP URL to extract connection details"""
-    result = {
-        "protocol": "auto",
-        "url": url,
-        "valid": False
-    }
-    
+    result = {"protocol": "auto", "url": url, "valid": False}
+
     if url.startswith("stdio://"):
         result["protocol"] = "stdio"
         result["command"] = url[8:]  # Remove stdio://
@@ -323,7 +308,7 @@ def parse_mcp_url(url: str) -> Dict[str, Any]:
         result["protocol"] = "stdio"
         result["command"] = url
         result["valid"] = True
-    
+
     return result
 
 
@@ -350,7 +335,7 @@ demo = gr.Interface(
     title="Calculator"
 )
 
-demo.launch(mcp_server=True)'''
+demo.launch(mcp_server=True)''',
         },
         {
             "name": "Text Processor",
@@ -380,6 +365,6 @@ demo = gr.Interface(
     title="Text Processor"
 )
 
-demo.launch(mcp_server=True)'''
-        }
+demo.launch(mcp_server=True)''',
+        },
     ]

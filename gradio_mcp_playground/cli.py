@@ -23,32 +23,39 @@ from .config_manager import ConfigManager
 # Optional imports
 try:
     from .server_manager import GradioMCPServer
+
     HAS_MCP_SERVER = True
 except ImportError:
     HAS_MCP_SERVER = False
 
 try:
     from .client_manager import GradioMCPClient
+
     HAS_MCP_CLIENT = True
 except ImportError:
     HAS_MCP_CLIENT = False
 
 try:
     from .web_ui import launch_dashboard
+
     HAS_WEB_UI = True
 except ImportError:
     HAS_WEB_UI = False
 
 try:
     from .utils import find_free_port, validate_server_config
+
     HAS_UTILS = True
 except ImportError:
     HAS_UTILS = False
+
     # Provide fallback implementations
     def find_free_port():
         return 7860
+
     def validate_server_config(config):
         return {"valid": True, "errors": [], "warnings": []}
+
 
 console = Console()
 
@@ -63,68 +70,57 @@ def main():
 @main.command()
 def setup():
     """Interactive setup wizard for Gradio MCP Playground"""
-    console.print(Panel.fit(
-        "[bold blue]Welcome to Gradio MCP Playground Setup![/bold blue]\n\n"
-        "This wizard will help you configure your environment for creating "
-        "and managing Gradio MCP servers.",
-        title="Setup Wizard"
-    ))
-    
+    console.print(
+        Panel.fit(
+            "[bold blue]Welcome to Gradio MCP Playground Setup![/bold blue]\n\n"
+            "This wizard will help you configure your environment for creating "
+            "and managing Gradio MCP servers.",
+            title="Setup Wizard",
+        )
+    )
+
     config_manager = ConfigManager()
-    
+
     # Check for existing configuration
     if config_manager.config_exists():
         if not click.confirm("Configuration already exists. Overwrite?"):
             console.print("[yellow]Setup cancelled.[/yellow]")
             return
-    
+
     # Get user preferences
     config = {}
-    
+
     # Default port
-    config["default_port"] = click.prompt(
-        "Default port for Gradio servers",
-        type=int,
-        default=7860
-    )
-    
+    config["default_port"] = click.prompt("Default port for Gradio servers", type=int, default=7860)
+
     # Auto-reload
-    config["auto_reload"] = click.confirm(
-        "Enable auto-reload for development?",
-        default=True
-    )
-    
+    config["auto_reload"] = click.confirm("Enable auto-reload for development?", default=True)
+
     # MCP protocol preference
     config["mcp_protocol"] = click.prompt(
-        "Preferred MCP protocol",
-        type=click.Choice(["stdio", "sse", "auto"]),
-        default="auto"
+        "Preferred MCP protocol", type=click.Choice(["stdio", "sse", "auto"]), default="auto"
     )
-    
+
     # Hugging Face token
     hf_token = click.prompt(
-        "Hugging Face token (optional, for deployment)",
-        default="",
-        hide_input=True
+        "Hugging Face token (optional, for deployment)", default="", hide_input=True
     )
     if hf_token:
         config["hf_token"] = hf_token
-    
+
     # Log level
     config["log_level"] = click.prompt(
-        "Log level",
-        type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]),
-        default="INFO"
+        "Log level", type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]), default="INFO"
     )
-    
+
     # Save configuration
     config_manager.save_config(config)
     console.print("\n[green]✓ Configuration saved successfully![/green]")
-    
+
     # Check for required dependencies
     console.print("\n[blue]Checking dependencies...[/blue]")
     check_dependencies()
-    
+
     console.print("\n[green]✓ Setup complete![/green]")
     console.print("\nNext steps:")
     console.print("  1. Create a server: [cyan]gmp server create[/cyan]")
@@ -146,7 +142,7 @@ def server():
 def create(name: str, template: str, port: Optional[int], directory: str):
     """Create a new Gradio MCP server"""
     registry = ServerRegistry()
-    
+
     # Check if template exists
     if not registry.template_exists(template):
         console.print(f"[red]Template '{template}' not found.[/red]")
@@ -154,30 +150,23 @@ def create(name: str, template: str, port: Optional[int], directory: str):
         for t in registry.list_templates():
             console.print(f"  - {t}")
         return
-    
+
     # Create server directory
     server_path = Path(directory) / name
     if server_path.exists():
         if not click.confirm(f"Directory '{server_path}' already exists. Overwrite?"):
             return
-    
+
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console
+        SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
     ) as progress:
         task = progress.add_task(f"Creating server '{name}'...", total=None)
-        
+
         # Create server from template
-        server_config = registry.create_from_template(
-            template,
-            name,
-            server_path,
-            port=port
-        )
-        
+        server_config = registry.create_from_template(template, name, server_path, port=port)
+
         progress.update(task, completed=True)
-    
+
     console.print(f"\n[green]✓ Server '{name}' created successfully![/green]")
     console.print(f"\nLocation: {server_path}")
     console.print("\nNext steps:")
@@ -192,12 +181,12 @@ def list(format: str):
     """List all Gradio MCP servers"""
     config_manager = ConfigManager()
     servers = config_manager.list_servers()
-    
+
     if not servers:
         console.print("[yellow]No servers found.[/yellow]")
         console.print("\nCreate a server with: [cyan]gmp server create <name>[/cyan]")
         return
-    
+
     if format == "json":
         console.print(json.dumps(servers, indent=2))
     else:
@@ -207,7 +196,7 @@ def list(format: str):
         table.add_column("Port")
         table.add_column("Protocol")
         table.add_column("Path")
-        
+
         for server in servers:
             status = "[green]Running[/green]" if server.get("running") else "[red]Stopped[/red]"
             table.add_row(
@@ -215,9 +204,9 @@ def list(format: str):
                 status,
                 str(server.get("port", "N/A")),
                 server.get("protocol", "auto"),
-                server.get("path", "N/A")
+                server.get("path", "N/A"),
             )
-        
+
         console.print(table)
 
 
@@ -230,29 +219,29 @@ def start(name: str, port: Optional[int], reload: bool, public: bool):
     """Start a Gradio MCP server"""
     config_manager = ConfigManager()
     server_config = config_manager.get_server(name)
-    
+
     if not server_config:
         console.print(f"[red]Server '{name}' not found.[/red]")
         return
-    
+
     # Use provided port or find a free one
     if not port:
         port = server_config.get("port", find_free_port())
-    
+
     console.print(f"[blue]Starting server '{name}' on port {port}...[/blue]")
-    
+
     # Build command
     cmd = ["python", server_config["path"]]
     env = os.environ.copy()
     env["GRADIO_SERVER_PORT"] = str(port)
-    
+
     if reload:
         env["GRADIO_WATCH_DIRS"] = server_config.get("directory", ".")
         env["GRADIO_WATCH_RELOAD"] = "True"
-    
+
     if public:
         env["GRADIO_SHARE"] = "True"
-    
+
     # Start server
     try:
         subprocess.run(cmd, env=env, cwd=server_config.get("directory"))
@@ -277,26 +266,114 @@ def info(name: str):
     """Show detailed information about a server"""
     config_manager = ConfigManager()
     server_config = config_manager.get_server(name)
-    
+
     if not server_config:
         console.print(f"[red]Server '{name}' not found.[/red]")
         return
-    
-    console.print(Panel.fit(
-        f"[bold]Server: {name}[/bold]\n\n"
-        f"Path: {server_config.get('path', 'N/A')}\n"
-        f"Port: {server_config.get('port', 'N/A')}\n"
-        f"Protocol: {server_config.get('protocol', 'auto')}\n"
-        f"Template: {server_config.get('template', 'custom')}\n"
-        f"Created: {server_config.get('created', 'N/A')}",
-        title="📦 Server Information"
-    ))
-    
+
+    console.print(
+        Panel.fit(
+            f"[bold]Server: {name}[/bold]\n\n"
+            f"Path: {server_config.get('path', 'N/A')}\n"
+            f"Port: {server_config.get('port', 'N/A')}\n"
+            f"Protocol: {server_config.get('protocol', 'auto')}\n"
+            f"Template: {server_config.get('template', 'custom')}\n"
+            f"Created: {server_config.get('created', 'N/A')}",
+            title="📦 Server Information",
+        )
+    )
+
     # Show available tools if server is an MCP server
     if server_config.get("tools"):
         console.print("\n[bold]Available Tools:[/bold]")
         for tool in server_config["tools"]:
             console.print(f"  - {tool['name']}: {tool['description']}")
+
+
+@server.command()
+@click.argument("name")
+@click.option("--force", "-f", is_flag=True, help="Force deletion without confirmation")
+@click.option("--files", is_flag=True, help="Also delete server files on disk")
+def delete(name: str, force: bool, files: bool):
+    """Delete a Gradio MCP server"""
+    config_manager = ConfigManager()
+    server_config = config_manager.get_server(name)
+
+    if not server_config:
+        console.print(f"[red]Server '{name}' not found.[/red]")
+        return
+
+    # Show server info before deletion
+    console.print(f"\n[yellow]Server to delete:[/yellow]")
+    console.print(f"  Name: {name}")
+    console.print(f"  Path: {server_config.get('path', 'N/A')}")
+    console.print(f"  Directory: {server_config.get('directory', 'N/A')}")
+
+    if server_config.get("running"):
+        console.print(f"  [red]Status: Running (will be stopped)[/red]")
+    else:
+        console.print(f"  Status: Stopped")
+
+    # Confirmation prompt unless --force is used
+    if not force:
+        console.print(f"\n[yellow]This will remove the server from the registry.[/yellow]")
+        if files:
+            console.print(f"[red]This will also delete all server files and directories![/red]")
+
+        if not click.confirm("Are you sure you want to delete this server?"):
+            console.print("[yellow]Deletion cancelled.[/yellow]")
+            return
+
+    # Remove from registry first
+    try:
+        success = config_manager.remove_server(name)
+        if success:
+            console.print(f"[green]✓ Server '{name}' removed from registry[/green]")
+        else:
+            console.print(f"[red]Failed to remove server '{name}' from registry[/red]")
+            return
+    except Exception as e:
+        console.print(f"[red]Error removing server from registry: {e}[/red]")
+        return
+
+    # Delete files if requested
+    if files:
+        server_directory = server_config.get("directory")
+        if server_directory:
+            from .server_manager import GradioMCPServer
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task("Deleting server files...", total=None)
+
+                try:
+                    result = GradioMCPServer.delete_server(Path(server_directory), force=force)
+
+                    progress.update(task, completed=True)
+
+                    if result["success"]:
+                        console.print(f"[green]✓ Server files deleted successfully[/green]")
+                        if result["process_stopped"]:
+                            console.print(f"[green]✓ Running server process stopped[/green]")
+                        if result["files_removed"]:
+                            console.print(
+                                f"[blue]Files removed: {len(result['files_removed'])}[/blue]"
+                            )
+                    else:
+                        console.print(
+                            f"[red]Failed to delete server files: {result['message']}[/red]"
+                        )
+
+                except Exception as e:
+                    progress.update(task, completed=True)
+                    console.print(f"[red]Error deleting server files: {e}[/red]")
+        else:
+            console.print("[yellow]No directory path found, skipping file deletion[/yellow]")
+
+    console.print(f"\n[green]✓ Server '{name}' deleted successfully![/green]")
 
 
 @main.group()
@@ -315,35 +392,33 @@ def connect(server_url: str, name: Optional[str], protocol: str):
         console.print("[red]MCP client functionality not available.[/red]")
         console.print("Install MCP dependencies: [cyan]pip install --user mcp>=1.0.0[/cyan]")
         return
-    
+
     client = GradioMCPClient()
-    
+
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console
+        SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
     ) as progress:
         task = progress.add_task("Connecting to server...", total=None)
-        
+
         try:
             client.connect(server_url, protocol=protocol)
             progress.update(task, completed=True)
-            
+
             console.print(f"\n[green]✓ Connected to {server_url}[/green]")
-            
+
             # List available tools
             tools = client.list_tools()
             if tools:
                 console.print("\n[bold]Available tools:[/bold]")
                 for tool in tools:
                     console.print(f"  - {tool['name']}: {tool['description']}")
-            
+
             # Save connection
             if name:
                 config_manager = ConfigManager()
                 config_manager.save_connection(name, server_url, protocol)
                 console.print(f"\n[green]✓ Connection saved as '{name}'[/green]")
-                
+
         except Exception as e:
             progress.update(task, completed=True)
             console.print(f"\n[red]Failed to connect: {e}[/red]")
@@ -354,17 +429,17 @@ def list():
     """List saved client connections"""
     config_manager = ConfigManager()
     connections = config_manager.list_connections()
-    
+
     if not connections:
         console.print("[yellow]No saved connections.[/yellow]")
         return
-    
+
     table = Table(title="Saved Connections")
     table.add_column("Name", style="cyan")
     table.add_column("URL")
     table.add_column("Protocol")
     table.add_column("Status")
-    
+
     for conn in connections:
         # Check connection status
         client = GradioMCPClient()
@@ -373,14 +448,9 @@ def list():
             status = "[green]Active[/green]"
         except:
             status = "[red]Inactive[/red]"
-        
-        table.add_row(
-            conn["name"],
-            conn["url"],
-            conn["protocol"],
-            status
-        )
-    
+
+        table.add_row(conn["name"], conn["url"], conn["protocol"], status)
+
     console.print(table)
 
 
@@ -397,20 +467,20 @@ def search(query: Optional[str], category: Optional[str]):
     """Search for Gradio MCP servers"""
     try:
         registry = ServerRegistry()
-        
+
         if query:
             results = registry.search(query, category=category)
         elif category:
             results = registry.get_by_category(category)
         else:
             results = registry.get_all()
-        
+
         if not results:
             console.print("[yellow]No servers found.[/yellow]")
             return
-        
+
         console.print(f"[bold]Found {len(results)} server(s):[/bold]\n")
-        
+
         for server in results:
             try:
                 # Use Windows-compatible formatting without emojis
@@ -421,7 +491,9 @@ def search(query: Optional[str], category: Optional[str]):
                 console.print(f"  URL: {server.get('url', 'N/A')}")
                 console.print("  " + "-" * 60)
             except Exception as e:
-                console.print(f"[red]Error displaying server {server.get('id', 'unknown')}: {e}[/red]")
+                console.print(
+                    f"[red]Error displaying server {server.get('id', 'unknown')}: {e}[/red]"
+                )
     except Exception as e:
         console.print(f"[red]Error searching registry: {e}[/red]")
 
@@ -431,7 +503,7 @@ def categories():
     """List all registry categories"""
     registry = ServerRegistry()
     categories = registry.list_categories()
-    
+
     console.print("[bold]Available Categories:[/bold]\n")
     for cat in categories:
         count = len(registry.get_by_category(cat))
@@ -447,9 +519,9 @@ def dashboard(port: int, public: bool):
         console.print("[red]Web dashboard not available.[/red]")
         console.print("Install Gradio: [cyan]pip install --user gradio>=4.44.0[/cyan]")
         return
-    
+
     console.print(f"[blue]Starting Gradio MCP Dashboard on port {port}...[/blue]")
-    
+
     try:
         launch_dashboard(port=port, share=public)
     except KeyboardInterrupt:
@@ -466,32 +538,30 @@ def deploy(server_name: str, public: bool, hardware: str):
     """Deploy a server to Hugging Face Spaces"""
     config_manager = ConfigManager()
     config = config_manager.load_config()
-    
+
     if "hf_token" not in config:
         console.print("[red]Hugging Face token not configured.[/red]")
         console.print("Run [cyan]gmp setup[/cyan] to configure your token.")
         return
-    
+
     server_config = config_manager.get_server(server_name)
     if not server_config:
         console.print(f"[red]Server '{server_name}' not found.[/red]")
         return
-    
+
     with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console
+        SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console
     ) as progress:
         task = progress.add_task(f"Deploying '{server_name}' to Hugging Face Spaces...", total=None)
-        
+
         try:
             # Deploy logic here
             # This would use the Hugging Face Hub API to create and deploy a Space
-            
+
             progress.update(task, completed=True)
             console.print(f"\n[green]✓ Server deployed successfully![/green]")
             console.print(f"\nSpace URL: https://huggingface.co/spaces/your-username/{server_name}")
-            
+
         except Exception as e:
             progress.update(task, completed=True)
             console.print(f"\n[red]Deployment failed: {e}[/red]")
@@ -502,18 +572,18 @@ def examples():
     """Show example Gradio MCP servers"""
     try:
         examples_dir = Path(__file__).parent.parent / "examples"
-        
+
         if not examples_dir.exists():
             console.print("[yellow]No examples found.[/yellow]")
             return
-        
+
         console.print("[bold]Available Examples:[/bold]\n")
-        
+
         for example in examples_dir.glob("*.py"):
             # Read first few lines to get description
             description = ""
             try:
-                with open(example, 'r', encoding='utf-8') as f:
+                with open(example, "r", encoding="utf-8") as f:
                     lines = f.readlines()
                     for line in lines[:10]:
                         if line.strip().startswith('"""') and len(line.strip()) > 3:
@@ -524,17 +594,19 @@ def examples():
                             start = line.find('"""')
                             end = line.find('"""', start + 3)
                             if end > start:
-                                description = line[start+3:end].strip()
+                                description = line[start + 3 : end].strip()
                                 break
             except (IOError, UnicodeDecodeError) as e:
                 description = f"Could not read description ({e})"
-            
+
             if not description:
                 description = "Example Gradio MCP Server"
-            
+
             console.print(f"  - [cyan]{example.stem}[/cyan]: {description}")
-        
-        console.print(f"\nView an example: [cyan]cat {examples_dir.as_posix()}/basic_server.py[/cyan]")
+
+        console.print(
+            f"\nView an example: [cyan]cat {examples_dir.as_posix()}/basic_server.py[/cyan]"
+        )
     except Exception as e:
         console.print(f"[red]Error listing examples: {e}[/red]")
 
@@ -550,7 +622,7 @@ def dev(command: Optional[str]):
         console.print("  - [cyan]gmp dev lint[/cyan]: Run linters")
         console.print("  - [cyan]gmp dev format[/cyan]: Format code")
         return
-    
+
     if command == "server":
         # Start development server
         console.print("[blue]Starting development server...[/blue]")
@@ -573,16 +645,16 @@ def check_dependencies():
     dependencies = {
         "gradio": "pip install gradio",
         "mcp": "pip install mcp",
-        "anthropic": "pip install anthropic"
+        "anthropic": "pip install anthropic",
     }
-    
+
     missing = []
     for dep, install_cmd in dependencies.items():
         try:
             __import__(dep)
         except ImportError:
             missing.append((dep, install_cmd))
-    
+
     if missing:
         console.print("\n[yellow]Missing dependencies:[/yellow]")
         for dep, cmd in missing:

@@ -8,10 +8,10 @@ import gradio as gr
 
 def process_text(text: str) -> str:
     """Process the input text.
-    
+
     Args:
         text: Input text to process
-        
+
     Returns:
         Processed text result
     """
@@ -27,18 +27,12 @@ demo = gr.Interface(
     outputs=gr.Textbox(label="Processed Result"),
     title="Basic Text Processor",
     description="A simple MCP server that processes text input",
-    examples=[
-        ["Hello world"],
-        ["Gradio MCP is awesome"],
-        ["Testing the server"]
-    ]
+    examples=[["Hello world"], ["Gradio MCP is awesome"], ["Testing the server"]],
 )
 
 # Launch as MCP server
 if __name__ == "__main__":
     # The mcp_server=True flag enables MCP protocol support
     demo.launch(
-        server_port=7860,
-        mcp_server=True,
-        server_name="0.0.0.0"  # Allow external connections
+        server_port=7860, mcp_server=True, server_name="0.0.0.0"  # Allow external connections
     )

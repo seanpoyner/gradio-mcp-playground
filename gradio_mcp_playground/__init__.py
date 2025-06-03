@@ -18,6 +18,7 @@ __all__ = [
 # Optional imports that depend on external packages
 try:
     from .server_manager import MCPServer, GradioMCPServer
+
     __all__.extend(["MCPServer", "GradioMCPServer"])
 except ImportError:
     # MCP package not available
@@ -25,6 +26,7 @@ except ImportError:
 
 try:
     from .client_manager import MCPClient, GradioMCPClient
+
     __all__.extend(["MCPClient", "GradioMCPClient"])
 except ImportError:
     # MCP or other client dependencies not available
