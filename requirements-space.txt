@@ -1,0 +1,19 @@
+# Hugging Face Space Requirements
+# Optimized for Track 3: Agentic Demo
+
+# Core Gradio dependency
+gradio>=4.44.0
+
+# Essential dependencies for the demo
+click>=8.0.0
+pydantic>=2.0.0
+requests>=2.28.0
+pyyaml>=6.0
+rich>=13.0.0
+
+# Optional MCP support (graceful fallback if not available)
+mcp>=1.0.0
+
+# For the demo interface and utilities
+python-dotenv>=1.0.0
+pathlib
