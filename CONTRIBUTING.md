@@ -26,7 +26,7 @@ Thank you for your interest in contributing to Gradio MCP Playground! We welcome
 
 ```bash
 # Clone your fork
-git clone https://github.com/yourusername/gradio-mcp-playground.git
+git clone https://github.com/seanpoyner/gradio-mcp-playground.git
 cd gradio-mcp-playground
 
 # Create virtual environment

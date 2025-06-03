@@ -10,9 +10,15 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 import json
-import psutil
 import hashlib
 from datetime import datetime
+
+# Optional imports
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
 
 
 def find_free_port(start_port: int = 7860, max_attempts: int = 100) -> int:
@@ -66,6 +72,9 @@ def validate_server_config(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
 
 def get_process_info(pid: int) -> Optional[Dict[str, Any]]:
     """Get information about a process"""
+    if not HAS_PSUTIL:
+        return None
+    
     try:
         process = psutil.Process(pid)
         return {
@@ -82,6 +91,9 @@ def get_process_info(pid: int) -> Optional[Dict[str, Any]]:
 
 def kill_process_on_port(port: int) -> bool:
     """Kill process listening on a specific port"""
+    if not HAS_PSUTIL:
+        return False
+    
     try:
         for conn in psutil.net_connections():
             if conn.laddr.port == port and conn.status == "LISTEN":

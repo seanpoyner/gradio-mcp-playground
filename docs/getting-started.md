@@ -1,25 +1,25 @@
 # Getting Started with Gradio MCP Playground
 
-Welcome to Gradio MCP Playground! This guide will help you get up and running quickly.
-
-## Prerequisites
-
-- Python 3.8 or higher
-- pip (Python package manager)
-- Basic knowledge of Python and Gradio
+Welcome to Gradio MCP Playground! This guide will help you get started with creating and managing Gradio applications as Model Context Protocol (MCP) servers.
 
 ## Installation
 
-### Option 1: Install from PyPI (Recommended)
+### Prerequisites
+
+- Python 3.8 or higher
+- Node.js 14 or higher (for some MCP features)
+- Git
+
+### Install from PyPI
 
 ```bash
 pip install gradio-mcp-playground
 ```
 
-### Option 2: Install from Source
+### Install from Source
 
 ```bash
-git clone https://github.com/gradio-mcp-playground/gradio-mcp-playground.git
+git clone https://github.com/seanpoyner/gradio-mcp-playground.git
 cd gradio-mcp-playground
 pip install -e .
 ```
@@ -28,18 +28,18 @@ pip install -e .
 
 ### 1. Run Setup
 
-After installation, run the setup wizard:
+First, run the setup wizard to configure your environment:
 
 ```bash
 gmp setup
 ```
 
 This will:
-- Check your environment
+- Check for required dependencies
 - Create configuration files
-- Set up default preferences
+- Set up your environment
 
-### 2. Create Your First MCP Server
+### 2. Create Your First Server
 
 Create a simple MCP server using a template:
 
@@ -58,76 +58,41 @@ cd hello-world
 gmp server start hello-world
 ```
 
-Your server will start on the default port (7860) and be accessible at `http://localhost:7860`.
+Your server is now running at `http://localhost:7860` and is available as an MCP server!
 
-### 4. Test the MCP Connection
+### 4. Test with an MCP Client
 
-In a new terminal, connect to your server as an MCP client:
+You can test your server with any MCP-compatible client:
 
-```bash
-gmp client connect http://localhost:7860
-```
+- **Claude Desktop**: Add the server to your Claude Desktop configuration
+- **Cursor**: Use the MCP integration in Cursor
+- **Cline**: Connect via the Cline interface
 
-## Understanding MCP Servers
+## Creating a Simple MCP Server
 
-### What is MCP?
-
-Model Context Protocol (MCP) is a standardized protocol for communication between AI models and tools. It allows:
-
-- Standardized tool discovery
-- Type-safe function calling
-- Support for multiple transport layers (STDIO, SSE)
-- Integration with various AI assistants
-
-### Gradio + MCP
-
-Gradio MCP Playground makes it easy to:
-
-1. **Create MCP Servers**: Any Gradio app can become an MCP server
-2. **Expose Tools**: Functions in your Gradio app become callable tools
-3. **Test Locally**: Debug and test your MCP servers before deployment
-4. **Deploy Easily**: One-command deployment to Hugging Face Spaces
-
-## Creating a Custom MCP Server
-
-Here's a simple example of a custom MCP server:
+Here's a minimal example of a Gradio MCP server:
 
 ```python
 import gradio as gr
 
-def translate_text(text: str, target_language: str) -> str:
-    """Translate text to another language.
+def greet(name: str) -> str:
+    """Greet someone by name.
     
     Args:
-        text: Text to translate
-        target_language: Target language code (e.g., 'es', 'fr', 'de')
+        name: The person's name
         
     Returns:
-        Translated text
+        A greeting message
     """
-    # Your translation logic here
-    # This is a placeholder - integrate with a real translation service
-    translations = {
-        "es": "Hola Mundo",
-        "fr": "Bonjour le Monde",
-        "de": "Hallo Welt"
-    }
-    
-    if text.lower() == "hello world" and target_language in translations:
-        return translations[target_language]
-    
-    return f"Translation of '{text}' to {target_language}"
+    return f"Hello, {name}! Welcome to Gradio MCP."
 
 # Create Gradio interface
 demo = gr.Interface(
-    fn=translate_text,
-    inputs=[
-        gr.Textbox(label="Text to Translate"),
-        gr.Textbox(label="Target Language", placeholder="es, fr, de, etc.")
-    ],
-    outputs=gr.Textbox(label="Translation"),
-    title="Translation Tool",
-    description="Translate text between languages"
+    fn=greet,
+    inputs=gr.Textbox(label="Name"),
+    outputs=gr.Textbox(label="Greeting"),
+    title="Greeting Service",
+    description="A simple MCP server that greets people"
 )
 
 # Launch as MCP server
@@ -135,174 +100,48 @@ if __name__ == "__main__":
     demo.launch(mcp_server=True)
 ```
 
-## Using the Web Dashboard
+## Using the Dashboard
 
-Start the web dashboard for visual management:
+Launch the web dashboard to manage your servers visually:
 
 ```bash
 gmp dashboard
 ```
 
 The dashboard provides:
-- Server management (start/stop/delete)
-- Connection testing
+- Server management (create, start, stop)
+- Connection management
 - Registry browsing
 - Configuration editing
-- Deployment tools
-
-## Connecting from AI Assistants
-
-### Claude Desktop
-
-1. Add your server to Claude Desktop's configuration:
-
-```json
-{
-  "mcpServers": {
-    "my-gradio-server": {
-      "command": "python",
-      "args": ["/path/to/your/server/app.py"],
-      "env": {}
-    }
-  }
-}
-```
-
-2. Restart Claude Desktop
-3. Your tools will be available in Claude
-
-### Cursor
-
-Similar to Claude Desktop, add your server configuration to Cursor's MCP settings.
-
-### Using the Gradio Client
-
-For programmatic access:
-
-```python
-from gradio_mcp_playground import GradioMCPClient
-
-# Connect to server
-client = GradioMCPClient()
-client.connect("http://localhost:7860")
-
-# List available tools
-tools = client.list_tools()
-print(tools)
-
-# Call a tool
-result = client.call_tool("translate_text", {
-    "text": "Hello World",
-    "target_language": "es"
-})
-print(result)
-```
-
-## Deployment
-
-### Deploy to Hugging Face Spaces
-
-1. Configure your Hugging Face token:
-
-```bash
-gmp setup  # Enter your HF token when prompted
-```
-
-2. Deploy your server:
-
-```bash
-gmp deploy my-server --public
-```
-
-Your server will be deployed to Hugging Face Spaces and accessible via a public URL.
-
-## Common Patterns
-
-### Multi-Tool Server
-
-Create a server with multiple tools:
-
-```python
-import gradio as gr
-
-def tool1(input1: str) -> str:
-    return f"Tool 1: {input1}"
-
-def tool2(input2: str) -> str:
-    return f"Tool 2: {input2}"
-
-# Create interfaces
-interface1 = gr.Interface(fn=tool1, inputs="text", outputs="text")
-interface2 = gr.Interface(fn=tool2, inputs="text", outputs="text")
-
-# Combine with tabs
-demo = gr.TabbedInterface(
-    [interface1, interface2],
-    ["Tool 1", "Tool 2"]
-)
-
-demo.launch(mcp_server=True)
-```
-
-### Custom Components
-
-Use Gradio's custom components:
-
-```python
-import gradio as gr
-
-def process_image(image, threshold: float = 0.5):
-    """Process an image with a threshold.
-    
-    Args:
-        image: Input image
-        threshold: Processing threshold (0-1)
-        
-    Returns:
-        Processed image
-    """
-    # Your image processing logic
-    return image
-
-demo = gr.Interface(
-    fn=process_image,
-    inputs=[
-        gr.Image(type="pil"),
-        gr.Slider(0, 1, value=0.5, label="Threshold")
-    ],
-    outputs=gr.Image(type="pil"),
-    title="Image Processor"
-)
-
-demo.launch(mcp_server=True)
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Port already in use**: Use a different port with `--port` flag
-2. **Import errors**: Ensure all dependencies are installed
-3. **MCP not working**: Check that `mcp_server=True` is set in launch()
-
-### Debug Mode
-
-Enable debug logging:
-
-```bash
-export GRADIO_LOG_LEVEL=DEBUG
-gmp server start my-server
-```
 
 ## Next Steps
 
-- Explore the [templates](templates.md) for more examples
-- Read about [advanced features](advanced.md)
-- Learn about [deployment options](deployment.md)
-- Join our [Discord community](https://discord.gg/gradio-mcp)
+- [Creating MCP Servers](creating-servers.md) - Learn how to build more complex servers
+- [Client Integration](client-integration.md) - Connect your servers to MCP clients
+- [Deployment Guide](deployment.md) - Deploy your servers to production
+- [API Reference](api-reference.md) - Detailed API documentation
 
 ## Getting Help
 
-- Check the [documentation](https://gradio-mcp-playground.readthedocs.io)
-- Browse [GitHub issues](https://github.com/gradio-mcp-playground/gradio-mcp-playground/issues)
-- Ask in the [community forum](https://discuss.gradio.app)
+- Check the [Troubleshooting Guide](troubleshooting.md)
+- Open an issue on [GitHub](https://github.com/gradio-mcp-playground/gradio-mcp-playground/issues)
+- Join our [Discord community](https://discord.gg/gradio-mcp)
+
+## Examples
+
+Explore the `examples/` directory for more complex examples:
+
+- `weather_server.py` - Weather information service
+- `calculator_server.py` - Mathematical operations
+- `image_generator.py` - AI image generation
+- `data_analyzer.py` - CSV data analysis
+
+## Tips
+
+1. **Use Type Hints**: Add type hints to your functions for better MCP integration
+2. **Write Docstrings**: Good docstrings become tool descriptions in MCP
+3. **Handle Errors**: Return helpful error messages for better user experience
+4. **Test Locally**: Always test your server locally before deployment
+5. **Use Templates**: Start with templates and customize them for your needs
+
+Happy building with Gradio MCP Playground! 🚀

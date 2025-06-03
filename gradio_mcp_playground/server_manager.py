@@ -12,10 +12,29 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Callable
 from datetime import datetime
 
-import gradio as gr
-from mcp.server import Server
-from mcp.server.models import InitializeResult, Tool, ServerInfo
-from pydantic import BaseModel
+# Optional imports
+try:
+    import gradio as gr
+    HAS_GRADIO = True
+except ImportError:
+    HAS_GRADIO = False
+
+try:
+    from mcp.server import FastMCP
+    HAS_MCP = True
+except ImportError:
+    HAS_MCP = False
+
+try:
+    from pydantic import BaseModel
+    HAS_PYDANTIC = True
+except ImportError:
+    HAS_PYDANTIC = False
+    # Create a simple fallback
+    class BaseModel:
+        def __init__(self, **kwargs):
+            for k, v in kwargs.items():
+                setattr(self, k, v)
 
 
 class MCPTool(BaseModel):
@@ -30,11 +49,13 @@ class MCPServer:
     """Base MCP Server implementation"""
     
     def __init__(self, name: str, version: str = "1.0.0", description: str = ""):
+        if not HAS_MCP:
+            raise ImportError("MCP package is required for server functionality")
         self.name = name
         self.version = version
         self.description = description
         self.tools: List[MCPTool] = []
-        self._server = Server(name)
+        self._server = FastMCP(name=name, instructions=description)
         
     def tool(self, name: Optional[str] = None, description: Optional[str] = None):
         """Decorator to register a function as an MCP tool"""
@@ -84,8 +105,8 @@ class MCPServer:
             )
             self.tools.append(tool)
             
-            # Register with underlying MCP server
-            @self._server.tool(tool_name, tool_description, input_schema)
+            # Register with underlying FastMCP server using its tool decorator
+            @self._server.tool(tool_name)
             async def tool_handler(**kwargs):
                 return await func(**kwargs)
             
@@ -95,27 +116,13 @@ class MCPServer:
     
     async def run_stdio(self):
         """Run the MCP server using stdio transport"""
-        from mcp.server.stdio import stdio_server
-        
-        async with stdio_server() as (read_stream, write_stream):
-            await self._server.run(
-                read_stream,
-                write_stream,
-                InitializeResult(
-                    protocol_version="2024-11-05",
-                    capabilities=self._server.get_capabilities(
-                        notification_options=None,
-                        experimental_capabilities={}
-                    ),
-                    server_info=ServerInfo(
-                        name=self.name,
-                        version=self.version
-                    )
-                )
-            )
+        await self._server.run_stdio_async()
     
     def to_gradio_functions(self) -> List[Dict[str, Any]]:
         """Convert MCP tools to Gradio function definitions"""
+        if not HAS_GRADIO:
+            raise ImportError("Gradio is required for function conversion")
+        
         functions = []
         
         for tool in self.tools:
@@ -141,8 +148,11 @@ class MCPServer:
         
         return functions
     
-    def _schema_to_gradio_inputs(self, schema: Dict[str, Any]) -> List[gr.components.Component]:
+    def _schema_to_gradio_inputs(self, schema: Dict[str, Any]) -> List[Any]:
         """Convert JSON schema to Gradio input components"""
+        if not HAS_GRADIO:
+            return []
+        
         inputs = []
         properties = schema.get("properties", {})
         
@@ -181,7 +191,7 @@ class GradioMCPServer:
                 return json.load(f)
         return {}
     
-    def create_from_function(self, fn: Callable, **kwargs) -> gr.Interface:
+    def create_from_function(self, fn: Callable, **kwargs):
         """Create a Gradio Interface from a function with MCP support"""
         # Extract function metadata
         import inspect
@@ -223,7 +233,7 @@ class GradioMCPServer:
         
         return interface
     
-    def create_multi_tool_interface(self, tools: List[Dict[str, Any]]) -> gr.TabbedInterface:
+    def create_multi_tool_interface(self, tools: List[Dict[str, Any]]):
         """Create a tabbed interface for multiple tools"""
         interfaces = []
         tab_names = []
@@ -403,7 +413,7 @@ class GradioMCPServer:
         return results
 
 
-def create_simple_mcp_server(fn: Callable, name: str = "gradio-mcp-server") -> gr.Interface:
+def create_simple_mcp_server(fn: Callable, name: str = "gradio-mcp-server"):
     """Create a simple Gradio MCP server from a function"""
     # Extract function metadata
     import inspect
@@ -423,7 +433,7 @@ def create_simple_mcp_server(fn: Callable, name: str = "gradio-mcp-server") -> g
 
 
 def launch_mcp_server(
-    interface: gr.Interface,
+    interface,
     port: int = 7860,
     mcp_server: bool = True,
     **kwargs

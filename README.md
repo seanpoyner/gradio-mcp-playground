@@ -27,6 +27,21 @@ Or install with all extras:
 pip install "gradio-mcp-playground[all]"
 ```
 
+**🔧 Troubleshooting Installation:**
+
+If you see "mcp (optional) missing - some features will be limited":
+
+```bash
+# Install MCP dependency specifically
+pip install mcp>=1.0.0
+
+# Or install everything at once
+pip install -e .
+
+# Check what's missing
+python check_dependencies.py
+```
+
 ### Create Your First MCP Server
 
 ```python
@@ -303,6 +318,57 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**"mcp (optional) missing - some features will be limited"**
+
+This means the MCP package is not installed. Install it with:
+
+```bash
+pip install mcp>=1.0.0
+```
+
+**"ModuleNotFoundError: No module named 'gradio_mcp_playground'"**
+
+The package isn't installed in development mode. Install with:
+
+```bash
+pip install -e .
+```
+
+**CLI commands not working**
+
+Make sure you've installed the package properly:
+
+```bash
+# Check what's missing
+python check_dependencies.py
+
+# Install all dependencies
+pip install -e .
+
+# Test CLI
+gmp --help
+```
+
+**Windows installation issues**
+
+Use these commands on Windows:
+
+```cmd
+pip install --user -e .
+pip install --user mcp>=1.0.0 gradio>=4.44.0
+```
+
+### Getting Help
+
+- 🧪 Run automated tests: `python run_all_tests.py`
+- 📋 Check QA/QC checklist: `QA_QC_CHECKLIST.md`
+- 🔍 Test imports: `python test_imports.py`
+- 📊 Check dependencies: `python check_dependencies.py`
 
 ## 📄 License
 

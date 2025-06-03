@@ -16,12 +16,39 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from .server_manager import GradioMCPServer
-from .client_manager import GradioMCPClient
+# Always available imports
 from .registry import ServerRegistry
 from .config_manager import ConfigManager
-from .web_ui import launch_dashboard
-from .utils import find_free_port, validate_server_config
+
+# Optional imports
+try:
+    from .server_manager import GradioMCPServer
+    HAS_MCP_SERVER = True
+except ImportError:
+    HAS_MCP_SERVER = False
+
+try:
+    from .client_manager import GradioMCPClient
+    HAS_MCP_CLIENT = True
+except ImportError:
+    HAS_MCP_CLIENT = False
+
+try:
+    from .web_ui import launch_dashboard
+    HAS_WEB_UI = True
+except ImportError:
+    HAS_WEB_UI = False
+
+try:
+    from .utils import find_free_port, validate_server_config
+    HAS_UTILS = True
+except ImportError:
+    HAS_UTILS = False
+    # Provide fallback implementations
+    def find_free_port():
+        return 7860
+    def validate_server_config(config):
+        return {"valid": True, "errors": [], "warnings": []}
 
 console = Console()
 
@@ -40,7 +67,7 @@ def setup():
         "[bold blue]Welcome to Gradio MCP Playground Setup![/bold blue]\n\n"
         "This wizard will help you configure your environment for creating "
         "and managing Gradio MCP servers.",
-        title="🚀 Setup Wizard"
+        title="Setup Wizard"
     ))
     
     config_manager = ConfigManager()
@@ -284,6 +311,11 @@ def client():
 @click.option("--protocol", "-p", type=click.Choice(["stdio", "sse"]), default="auto")
 def connect(server_url: str, name: Optional[str], protocol: str):
     """Connect to a Gradio MCP server"""
+    if not HAS_MCP_CLIENT:
+        console.print("[red]MCP client functionality not available.[/red]")
+        console.print("Install MCP dependencies: [cyan]pip install --user mcp>=1.0.0[/cyan]")
+        return
+    
     client = GradioMCPClient()
     
     with Progress(
@@ -363,30 +395,35 @@ def registry():
 @click.option("--category", "-c", help="Filter by category")
 def search(query: Optional[str], category: Optional[str]):
     """Search for Gradio MCP servers"""
-    registry = ServerRegistry()
-    
-    if query:
-        results = registry.search(query, category=category)
-    elif category:
-        results = registry.get_by_category(category)
-    else:
-        results = registry.get_all()
-    
-    if not results:
-        console.print("[yellow]No servers found.[/yellow]")
-        return
-    
-    console.print(f"[bold]Found {len(results)} server(s):[/bold]\n")
-    
-    for server in results:
-        console.print(Panel.fit(
-            f"[bold cyan]{server['name']}[/bold cyan]\n"
-            f"{server['description']}\n\n"
-            f"Category: {server['category']}\n"
-            f"Author: {server.get('author', 'Unknown')}\n"
-            f"URL: {server.get('url', 'N/A')}",
-            title=f"📦 {server['id']}"
-        ))
+    try:
+        registry = ServerRegistry()
+        
+        if query:
+            results = registry.search(query, category=category)
+        elif category:
+            results = registry.get_by_category(category)
+        else:
+            results = registry.get_all()
+        
+        if not results:
+            console.print("[yellow]No servers found.[/yellow]")
+            return
+        
+        console.print(f"[bold]Found {len(results)} server(s):[/bold]\n")
+        
+        for server in results:
+            try:
+                # Use Windows-compatible formatting without emojis
+                console.print(f"\n[bold cyan]{server['name']}[/bold cyan] ({server['id']})")
+                console.print(f"  Description: {server['description']}")
+                console.print(f"  Category: {server['category']}")
+                console.print(f"  Author: {server.get('author', 'Unknown')}")
+                console.print(f"  URL: {server.get('url', 'N/A')}")
+                console.print("  " + "-" * 60)
+            except Exception as e:
+                console.print(f"[red]Error displaying server {server.get('id', 'unknown')}: {e}[/red]")
+    except Exception as e:
+        console.print(f"[red]Error searching registry: {e}[/red]")
 
 
 @registry.command()
@@ -406,6 +443,11 @@ def categories():
 @click.option("--public", is_flag=True, help="Create public URL")
 def dashboard(port: int, public: bool):
     """Launch the web dashboard"""
+    if not HAS_WEB_UI:
+        console.print("[red]Web dashboard not available.[/red]")
+        console.print("Install Gradio: [cyan]pip install --user gradio>=4.44.0[/cyan]")
+        return
+    
     console.print(f"[blue]Starting Gradio MCP Dashboard on port {port}...[/blue]")
     
     try:
@@ -458,27 +500,43 @@ def deploy(server_name: str, public: bool, hardware: str):
 @main.command()
 def examples():
     """Show example Gradio MCP servers"""
-    examples_dir = Path(__file__).parent.parent / "examples"
-    
-    if not examples_dir.exists():
-        console.print("[yellow]No examples found.[/yellow]")
-        return
-    
-    console.print("[bold]Available Examples:[/bold]\n")
-    
-    for example in examples_dir.glob("*.py"):
-        # Read first few lines to get description
-        with open(example) as f:
-            lines = f.readlines()
-            description = ""
-            for line in lines[:10]:
-                if line.strip().startswith('"""'):
-                    description = line.strip().strip('"""')
-                    break
+    try:
+        examples_dir = Path(__file__).parent.parent / "examples"
         
-        console.print(f"  - [cyan]{example.stem}[/cyan]: {description}")
-    
-    console.print(f"\nView an example: [cyan]cat {examples_dir}/basic_server.py[/cyan]")
+        if not examples_dir.exists():
+            console.print("[yellow]No examples found.[/yellow]")
+            return
+        
+        console.print("[bold]Available Examples:[/bold]\n")
+        
+        for example in examples_dir.glob("*.py"):
+            # Read first few lines to get description
+            description = ""
+            try:
+                with open(example, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    for line in lines[:10]:
+                        if line.strip().startswith('"""') and len(line.strip()) > 3:
+                            description = line.strip().strip('"""').strip()
+                            break
+                        elif '"""' in line and line.strip() != '"""':
+                            # Handle single-line docstrings
+                            start = line.find('"""')
+                            end = line.find('"""', start + 3)
+                            if end > start:
+                                description = line[start+3:end].strip()
+                                break
+            except (IOError, UnicodeDecodeError) as e:
+                description = f"Could not read description ({e})"
+            
+            if not description:
+                description = "Example Gradio MCP Server"
+            
+            console.print(f"  - [cyan]{example.stem}[/cyan]: {description}")
+        
+        console.print(f"\nView an example: [cyan]cat {examples_dir.as_posix()}/basic_server.py[/cyan]")
+    except Exception as e:
+        console.print(f"[red]Error listing examples: {e}[/red]")
 
 
 @main.command()

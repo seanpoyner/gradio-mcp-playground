@@ -3,23 +3,48 @@
 Web-based dashboard for managing Gradio MCP servers.
 """
 
-import gradio as gr
 import json
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
-from .server_manager import GradioMCPServer
-from .client_manager import GradioMCPClient, MCPConnectionManager
+# Optional imports
+try:
+    import gradio as gr
+    HAS_GRADIO = True
+except ImportError:
+    HAS_GRADIO = False
+
+# Always available imports
 from .registry import ServerRegistry
 from .config_manager import ConfigManager
 
+# Optional imports that depend on other modules
+try:
+    from .server_manager import GradioMCPServer
+    HAS_SERVER_MANAGER = True
+except ImportError:
+    HAS_SERVER_MANAGER = False
 
-def create_dashboard() -> gr.Blocks:
+try:
+    from .client_manager import GradioMCPClient, MCPConnectionManager
+    HAS_CLIENT_MANAGER = True
+except ImportError:
+    HAS_CLIENT_MANAGER = False
+
+
+def create_dashboard():
     """Create the Gradio MCP Playground dashboard"""
+    if not HAS_GRADIO:
+        raise ImportError("Gradio is required for web dashboard functionality")
     
     config_manager = ConfigManager()
     registry = ServerRegistry()
-    connection_manager = MCPConnectionManager()
+    
+    # Only create connection manager if client manager is available
+    if HAS_CLIENT_MANAGER:
+        connection_manager = MCPConnectionManager()
+    else:
+        connection_manager = None
     
     with gr.Blocks(title="Gradio MCP Playground", theme=gr.themes.Soft()) as dashboard:
         gr.Markdown(

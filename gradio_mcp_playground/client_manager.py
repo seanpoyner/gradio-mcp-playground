@@ -9,23 +9,69 @@ from typing import Dict, Any, Optional, List, Union
 from pathlib import Path
 from contextlib import AsyncExitStack
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from mcp.client.sse import sse_client
-import aiohttp
-from gradio_client import Client as GradioClient
+# Optional imports for MCP functionality
+try:
+    from mcp.client.stdio import stdio_client, StdioServerParameters
+    from mcp.client.session import ClientSession
+    from mcp.client.sse import sse_client
+    HAS_MCP = True
+except ImportError:
+    HAS_MCP = False
+    # Create fallback classes
+    class StdioServerParameters:
+        def __init__(self, command, args):
+            self.command = command
+            self.args = args
+    
+    class ClientSession:
+        def __init__(self, read, write):
+            pass
+        
+        async def initialize(self):
+            pass
+        
+        async def list_tools(self):
+            class MockResult:
+                tools = []
+            return MockResult()
+        
+        async def call_tool(self, name, arguments):
+            return None
+    
+    async def stdio_client(*args):
+        return None, None
+    
+    async def sse_client(*args):
+        return None, None
+
+try:
+    import aiohttp
+    HAS_AIOHTTP = True
+except ImportError:
+    HAS_AIOHTTP = False
+
+try:
+    from gradio_client import Client as GradioClient
+    HAS_GRADIO_CLIENT = True
+except ImportError:
+    HAS_GRADIO_CLIENT = False
 
 
 class MCPClient:
     """Base MCP client implementation"""
     
     def __init__(self):
-        self.session: Optional[ClientSession] = None
-        self.exit_stack: Optional[AsyncExitStack] = None
+        if not HAS_MCP:
+            raise ImportError("MCP package is required for client functionality")
+        self.session = None
+        self.exit_stack = None
         self._connected = False
         
     async def connect_stdio(self, command: str, args: List[str] = None) -> None:
         """Connect to an MCP server via stdio"""
+        if not HAS_MCP:
+            raise ImportError("MCP package is required for stdio connections")
+            
         self.exit_stack = AsyncExitStack()
         
         server_params = StdioServerParameters(
@@ -100,9 +146,12 @@ class GradioMCPClient:
     """Enhanced MCP client for Gradio servers"""
     
     def __init__(self):
-        self.mcp_client = MCPClient()
-        self.gradio_client: Optional[GradioClient] = None
-        self.server_info: Dict[str, Any] = {}
+        try:
+            self.mcp_client = MCPClient() if HAS_MCP else None
+        except ImportError:
+            self.mcp_client = None
+        self.gradio_client = None
+        self.server_info = {}
         
     def connect(self, server_url: str, protocol: str = "auto") -> None:
         """Connect to a Gradio MCP server"""
@@ -112,6 +161,8 @@ class GradioMCPClient:
         
         # Connect via appropriate protocol
         if protocol == "stdio":
+            if not self.mcp_client:
+                raise ImportError("MCP package is required for stdio connections")
             # Parse stdio connection string
             parts = server_url.split()
             command = parts[0]
@@ -121,11 +172,15 @@ class GradioMCPClient:
             asyncio.run(self.mcp_client.connect_stdio(command, args))
             
         elif protocol == "sse":
+            if not self.mcp_client:
+                raise ImportError("MCP package is required for SSE connections")
             # Connect via SSE
             asyncio.run(self.mcp_client.connect_sse(server_url))
             
         else:
             # Try Gradio client connection
+            if not HAS_GRADIO_CLIENT:
+                raise ImportError("gradio_client package is required for Gradio connections")
             self.gradio_client = GradioClient(server_url)
         
         # Get server info
@@ -145,7 +200,7 @@ class GradioMCPClient:
     
     def _fetch_server_info(self) -> None:
         """Fetch information about the connected server"""
-        if self.mcp_client.is_connected:
+        if self.mcp_client and self.mcp_client.is_connected:
             # Get MCP server info
             tools = asyncio.run(self.mcp_client.list_tools())
             self.server_info = {
@@ -195,7 +250,7 @@ class GradioMCPClient:
     
     def disconnect(self) -> None:
         """Disconnect from the server"""
-        if self.mcp_client.is_connected:
+        if self.mcp_client and self.mcp_client.is_connected:
             asyncio.run(self.mcp_client.disconnect())
         
         self.gradio_client = None
@@ -296,7 +351,9 @@ class MCPConnectionManager:
                 "name": name,
                 "url": config["url"],
                 "protocol": config["protocol"],
-                "connected": name in self.connections and self.connections[name].mcp_client.is_connected
+                "connected": (name in self.connections and 
+                             self.connections[name].mcp_client and 
+                             self.connections[name].mcp_client.is_connected)
             }
             connections.append(connection_info)
         
