@@ -1,0 +1,62 @@
+{
+  "app": {
+    "name": "GMP Agent",
+    "version": "1.0.0",
+    "description": "Intelligent MCP Server Builder",
+    "debug": false
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "auto_reload": false,
+    "share": false,
+    "max_threads": 10,
+    "enable_queue": true
+  },
+  "agent": {
+    "model": "gmp-agent-v1",
+    "max_conversation_length": 100,
+    "response_timeout": 30,
+    "enable_suggestions": true,
+    "auto_save_conversations": true
+  },
+  "ui": {
+    "theme": "soft",
+    "show_api": false,
+    "enable_progress": true,
+    "chat_height": 500,
+    "enable_examples": true
+  },
+  "registry": {
+    "local_cache_ttl": 3600,
+    "public_discovery": true,
+    "auto_update": true,
+    "search_timeout": 10
+  },
+  "server_builder": {
+    "default_template": "basic",
+    "output_directory": "./generated_servers",
+    "auto_test": true,
+    "include_docs": true,
+    "code_format": "black"
+  },
+  "deployment": {
+    "default_target": "local",
+    "auto_start": false,
+    "health_check": true,
+    "backup_configs": true
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "file": "agent.log",
+    "max_size": "10MB",
+    "backup_count": 5
+  },
+  "security": {
+    "enable_cors": true,
+    "allowed_origins": ["*"],
+    "rate_limiting": false,
+    "max_requests_per_minute": 60
+  }
+}
