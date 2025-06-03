@@ -163,7 +163,14 @@ def create(name: str, template: str, port: Optional[int], directory: str):
         task = progress.add_task(f"Creating server '{name}'...", total=None)
 
         # Create server from template
+        # Assign default port if not specified
+        if port is None:
+            port = 7860  # Default Gradio port
         server_config = registry.create_from_template(template, name, server_path, port=port)
+
+        # Register server with ConfigManager
+        config_manager = ConfigManager()
+        config_manager.add_server(server_config)
 
         progress.update(task, completed=True)
 
@@ -231,7 +238,7 @@ def start(name: str, port: Optional[int], reload: bool, public: bool):
     console.print(f"[blue]Starting server '{name}' on port {port}...[/blue]")
 
     # Build command
-    cmd = ["python", server_config["path"]]
+    cmd = ["python", "app.py"]
     env = os.environ.copy()
     env["GRADIO_SERVER_PORT"] = str(port)
 
