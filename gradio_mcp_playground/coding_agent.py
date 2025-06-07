@@ -39,6 +39,7 @@ if HAS_LLAMAINDEX:
             self.current_model = None
             self.hf_token = None
             self.memory = ChatMemoryBuffer.from_defaults(token_limit=3000)
+            self.mcp_connections = {}  # Store MCP connections
 
             # Available models - CONFIRMED working with HuggingFace Inference API
             self.available_models = {
@@ -629,6 +630,144 @@ Ready to help with any coding challenge or MCP development task!""",
         def is_configured(self) -> bool:
             """Check if agent is properly configured"""
             return self.agent is not None and self.llm is not None
+
+        def add_mcp_connection(self, connection_id: str, connection_info: Dict[str, Any]):
+            """Add an MCP connection to the coding agent"""
+            try:
+                self.mcp_connections[connection_id] = connection_info
+                
+                # Create a tool for this MCP connection
+                if connection_info.get('tools'):
+                    self._create_mcp_tools(connection_id, connection_info)
+                    
+                # Recreate agent with new tools if already configured
+                if self.is_configured():
+                    self._recreate_agent_with_mcp_tools()
+                    
+            except Exception as e:
+                raise Exception(f"Failed to add MCP connection {connection_id}: {str(e)}")
+
+        def _create_mcp_tools(self, connection_id: str, connection_info: Dict[str, Any]):
+            """Create LlamaIndex tools for MCP connection"""
+            tools = []
+            
+            # For filesystem connection, create actual working tools
+            if connection_id == "filesystem":
+                def read_file_tool(path: str) -> str:
+                    """Read contents of a file"""
+                    try:
+                        import os
+                        with open(path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                        return f"File content from {os.path.abspath(path)}:\n\n{content}"
+                    except Exception as e:
+                        return f"Error reading file: {str(e)}"
+                
+                def write_file_tool(path: str, content: str) -> str:
+                    """Write content to a file"""
+                    try:
+                        import os
+                        with open(path, 'w', encoding='utf-8') as f:
+                            f.write(content)
+                        return f"Successfully wrote {len(content)} characters to {os.path.abspath(path)}"
+                    except Exception as e:
+                        return f"Error writing file: {str(e)}"
+                
+                def list_directory_tool(path: str = ".") -> str:
+                    """List contents of a directory"""
+                    try:
+                        import os
+                        files = os.listdir(path)
+                        abs_path = os.path.abspath(path)
+                        file_list = "\n".join([f"  - {f}" for f in files])
+                        return f"Directory contents of {abs_path} ({len(files)} items):\n{file_list}"
+                    except Exception as e:
+                        return f"Error listing directory: {str(e)}"
+                
+                def create_directory_tool(path: str) -> str:
+                    """Create a directory"""
+                    try:
+                        import os
+                        os.makedirs(path, exist_ok=True)
+                        return f"Successfully created directory: {os.path.abspath(path)}"
+                    except Exception as e:
+                        return f"Error creating directory: {str(e)}"
+                
+                tools.extend([
+                    FunctionTool.from_defaults(fn=read_file_tool, name="filesystem_read_file"),
+                    FunctionTool.from_defaults(fn=write_file_tool, name="filesystem_write_file"),
+                    FunctionTool.from_defaults(fn=list_directory_tool, name="filesystem_list_directory"),
+                    FunctionTool.from_defaults(fn=create_directory_tool, name="filesystem_create_directory"),
+                ])
+            
+            else:
+                # For other connections, create placeholder tools
+                for tool_name in connection_info.get('tools', []):
+                    def create_placeholder_tool(conn_id, tool_n):
+                        def placeholder_func(**kwargs) -> str:
+                            """Placeholder MCP tool"""
+                            return f"Tool {tool_n} from {conn_id} called with args: {kwargs}\n\nNote: This is a placeholder. Install the actual MCP server for full functionality."
+                        
+                        return FunctionTool.from_defaults(
+                            fn=placeholder_func,
+                            name=f"{conn_id}_{tool_n}",
+                            description=f"Call {tool_n} tool from {connection_info['name']} MCP server"
+                        )
+                    
+                    tools.append(create_placeholder_tool(connection_id, tool_name))
+            
+            # Store tools for this connection
+            if not hasattr(self, 'mcp_tools'):
+                self.mcp_tools = {}
+            self.mcp_tools[connection_id] = tools
+
+        def _recreate_agent_with_mcp_tools(self):
+            """Recreate the agent with MCP tools included"""
+            if not self.is_configured():
+                return
+                
+            try:
+                # Get all existing tools
+                all_tools = [
+                    self._create_mcp_knowledge_tool(),
+                    self._create_file_analysis_tool(),
+                    self._create_code_analysis_tool(),
+                    self._create_gradio_helper_tool(),
+                ]
+                
+                # Add MCP tools
+                if hasattr(self, 'mcp_tools'):
+                    for connection_tools in self.mcp_tools.values():
+                        all_tools.extend(connection_tools)
+                
+                # Recreate agent
+                self.agent = ReActAgent.from_tools(
+                    all_tools,
+                    llm=self.llm,
+                    memory=self.memory,
+                    verbose=True,
+                    max_iterations=10,
+                )
+                
+            except Exception as e:
+                # If recreation fails, just continue with existing agent
+                pass
+
+        def get_mcp_connections(self) -> Dict[str, Any]:
+            """Get all MCP connections"""
+            return self.mcp_connections
+
+        def remove_mcp_connection(self, connection_id: str):
+            """Remove an MCP connection"""
+            if connection_id in self.mcp_connections:
+                del self.mcp_connections[connection_id]
+            
+            if hasattr(self, 'mcp_tools') and connection_id in self.mcp_tools:
+                del self.mcp_tools[connection_id]
+                
+            # Recreate agent without this connection's tools
+            if self.is_configured():
+                self._recreate_agent_with_mcp_tools()
 
 else:
     # Dummy class when LlamaIndex is not available

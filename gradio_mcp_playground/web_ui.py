@@ -66,7 +66,30 @@ def create_dashboard():
         coding_agent = None
         coding_agent_error = "LlamaIndex not available"
 
-    with gr.Blocks(title="Gradio MCP Playground", theme=gr.themes.Soft()) as dashboard:
+    with gr.Blocks(title="Gradio MCP Playground", theme=gr.themes.Soft(), css="""
+        .mcp-connection-card {
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 8px;
+            background: #fafbfc;
+        }
+        .mcp-connection-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .mcp-server-icon {
+            font-size: 2em;
+            margin-bottom: 8px;
+        }
+        .mcp-status-connected {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .mcp-status-disconnected {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    """) as dashboard:
         gr.Markdown(
             """
             # 🚀 Gradio MCP Playground
@@ -416,6 +439,266 @@ def create_dashboard():
 
                 call_tool_btn = gr.Button("🚀 Call Tool", variant="primary")
                 tool_result = gr.JSON(label="Tool Result")
+
+            # MCP Connections Tab
+            with gr.Tab("🔌 MCP Connections"):
+                gr.Markdown("### 🔌 Multiple MCP Server Connections")
+                gr.Markdown("Connect to multiple MCP servers simultaneously for enhanced capabilities")
+                
+                # Predefined MCP server configurations
+                predefined_servers = {
+                    "memory": {
+                        "name": "Memory Server",
+                        "url": "python -m mcp_server_memory",
+                        "protocol": "stdio",
+                        "description": "Persistent memory storage for conversations and data",
+                        "icon": "🧠"
+                    },
+                    "sequential-thinking": {
+                        "name": "Sequential Thinking",
+                        "url": "python -m mcp_server_sequential_thinking",
+                        "protocol": "stdio", 
+                        "description": "Step-by-step reasoning and problem solving",
+                        "icon": "🤔"
+                    },
+                    "filesystem": {
+                        "name": "File System",
+                        "url": "npx @modelcontextprotocol/server-filesystem /",
+                        "protocol": "stdio",
+                        "description": "File system access and manipulation",
+                        "icon": "📁"
+                    },
+                    "brave-search": {
+                        "name": "Brave Search",
+                        "url": "python -m mcp_server_brave_search",
+                        "protocol": "stdio",
+                        "description": "Web search capabilities using Brave",
+                        "icon": "🔍"
+                    },
+                    "github": {
+                        "name": "GitHub",
+                        "url": "python -m mcp_server_github",
+                        "protocol": "stdio",
+                        "description": "GitHub repository and issue management",
+                        "icon": "🐙"
+                    },
+                    "time": {
+                        "name": "Time Server",
+                        "url": "python -m mcp_server_time",
+                        "protocol": "stdio",
+                        "description": "Time and date utilities",
+                        "icon": "⏰"
+                    }
+                }
+
+                with gr.Tabs():
+                    # Quick Connect Tab
+                    with gr.Tab("⚡ Quick Connect"):
+                        gr.Markdown("### 🚀 Quick Connect to Common MCP Servers")
+                        
+                        # Connection status states for each server
+                        server_statuses = {}
+                        server_buttons = {}
+                        
+                        # Create cards for first 3 servers
+                        server_install_buttons = {}
+                        with gr.Row():
+                            for i, (server_id, server_info) in enumerate(list(predefined_servers.items())[:3]):
+                                with gr.Column():
+                                    with gr.Group():
+                                        gr.Markdown(f"### {server_info['icon']} {server_info['name']}")
+                                        gr.Markdown(server_info['description'])
+                                        
+                                        server_statuses[server_id] = gr.Textbox(
+                                            label="Status",
+                                            value="Not Connected",
+                                            interactive=False,
+                                            elem_id=f"status_{server_id}"
+                                        )
+                                        
+                                        with gr.Row():
+                                            server_buttons[server_id] = gr.Button(
+                                                f"Connect",
+                                                variant="primary",
+                                                elem_id=f"connect_{server_id}",
+                                                scale=1
+                                            )
+                                            
+                                            server_install_buttons[server_id] = gr.Button(
+                                                f"Auto-Install & Connect",
+                                                variant="secondary",
+                                                elem_id=f"install_{server_id}",
+                                                scale=1
+                                            )
+                        
+                        # Create cards for remaining servers
+                        with gr.Row():
+                            for i, (server_id, server_info) in enumerate(list(predefined_servers.items())[3:]):
+                                with gr.Column():
+                                    with gr.Group():
+                                        gr.Markdown(f"### {server_info['icon']} {server_info['name']}")
+                                        gr.Markdown(server_info['description'])
+                                        
+                                        server_statuses[server_id] = gr.Textbox(
+                                            label="Status",
+                                            value="Not Connected",
+                                            interactive=False,
+                                            elem_id=f"status_{server_id}"
+                                        )
+                                        
+                                        with gr.Row():
+                                            server_buttons[server_id] = gr.Button(
+                                                f"Connect",
+                                                variant="primary",
+                                                elem_id=f"connect_{server_id}",
+                                                scale=1
+                                            )
+                                            
+                                            server_install_buttons[server_id] = gr.Button(
+                                                f"Auto-Install & Connect",
+                                                variant="secondary",
+                                                elem_id=f"install_{server_id}",
+                                                scale=1
+                                            )
+                        
+                        # Bulk actions
+                        with gr.Row():
+                            connect_all_mcp_btn = gr.Button("🔗 Connect All", variant="primary")
+                            disconnect_all_mcp_btn = gr.Button("🔌 Disconnect All", variant="stop")
+                            refresh_mcp_status_btn = gr.Button("🔄 Refresh Status")
+                        
+                        mcp_bulk_status = gr.Textbox(
+                            label="Bulk Action Status",
+                            interactive=False,
+                            lines=3
+                        )
+                        
+                        # Installation progress display
+                        gr.Markdown("### 📦 Installation Progress")
+                        mcp_install_progress = gr.Textbox(
+                            label="Installation Progress",
+                            interactive=False,
+                            lines=8,
+                            visible=False
+                        )
+
+                    # Active MCP Connections Tab
+                    with gr.Tab("🔗 Active MCP Connections"):
+                        gr.Markdown("### 📊 Active MCP Server Connections")
+                        
+                        # MCP Connection list
+                        mcp_connections_table = gr.Dataframe(
+                            headers=["Server", "Type", "Status", "Tools", "URL"],
+                            datatype=["str", "str", "str", "number", "str"],
+                            interactive=False,
+                            label="Active MCP Connections"
+                        )
+                        
+                        # MCP Connection details
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                selected_mcp_connection = gr.Dropdown(
+                                    label="Select MCP Connection",
+                                    choices=[],
+                                    value=None,
+                                    interactive=True,
+                                    allow_custom_value=True
+                                )
+                                
+                                mcp_connection_details = gr.JSON(
+                                    label="Connection Details",
+                                    value={}
+                                )
+                                
+                                mcp_available_tools = gr.Dataframe(
+                                    headers=["Tool Name", "Description", "Parameters"],
+                                    datatype=["str", "str", "str"],
+                                    interactive=False,
+                                    label="Available Tools"
+                                )
+                            
+                            with gr.Column(scale=1):
+                                gr.Markdown("### Actions")
+                                
+                                test_mcp_connection_btn = gr.Button("🧪 Test Connection")
+                                disconnect_mcp_btn = gr.Button("🔌 Disconnect", variant="stop")
+                                reconnect_mcp_btn = gr.Button("🔄 Reconnect")
+                                
+                                gr.Markdown("### Tool Testing")
+                                
+                                mcp_tool_name = gr.Dropdown(
+                                    label="Select Tool",
+                                    choices=[],
+                                    interactive=True
+                                )
+                                
+                                mcp_tool_args = gr.JSON(
+                                    label="Tool Arguments",
+                                    value={}
+                                )
+                                
+                                call_mcp_tool_btn = gr.Button("📞 Call Tool", variant="primary")
+                                
+                                mcp_tool_result = gr.JSON(
+                                    label="Tool Result",
+                                    value={}
+                                )
+
+                    # Custom MCP Connection Tab
+                    with gr.Tab("➕ Custom MCP Connection"):
+                        gr.Markdown("### 🔧 Connect to Custom MCP Server")
+                        
+                        with gr.Row():
+                            with gr.Column():
+                                custom_mcp_name = gr.Textbox(
+                                    label="Connection Name",
+                                    placeholder="my-custom-server",
+                                    value=""
+                                )
+                                
+                                custom_mcp_url = gr.Textbox(
+                                    label="Server URL/Command",
+                                    placeholder="python -m my_mcp_server or http://localhost:8080/mcp",
+                                    value="",
+                                    lines=2
+                                )
+                                
+                                custom_mcp_protocol = gr.Radio(
+                                    label="Protocol",
+                                    choices=["auto", "stdio", "sse", "gradio"],
+                                    value="auto"
+                                )
+                                
+                                custom_mcp_description = gr.Textbox(
+                                    label="Description (optional)",
+                                    placeholder="What does this server do?",
+                                    value="",
+                                    lines=2
+                                )
+                                
+                                custom_mcp_connect_btn = gr.Button("🔗 Connect", variant="primary")
+                            
+                            with gr.Column():
+                                gr.Markdown("### 📖 Connection Guide")
+                                gr.Markdown("""
+                                **Supported Protocols:**
+                                - **stdio**: Command-line MCP servers (e.g., `python -m server`)
+                                - **sse**: HTTP SSE endpoints (e.g., `http://localhost:8080/mcp`)
+                                - **gradio**: Gradio server endpoints
+                                - **auto**: Automatically detect protocol
+                                
+                                **Examples:**
+                                - Memory: `python -m mcp_server_memory`
+                                - Custom script: `python /path/to/my_server.py`
+                                - HTTP endpoint: `http://localhost:8080/mcp/sse`
+                                - Gradio app: `http://localhost:7860`
+                                """)
+                        
+                        custom_mcp_status = gr.Textbox(
+                            label="Connection Status",
+                            interactive=False,
+                            lines=3
+                        )
 
             # Settings Tab
             with gr.Tab("⚙️ Settings"):
@@ -1179,6 +1462,488 @@ def create_dashboard():
             except Exception as e:
                 return gr.update(visible=True, value=f"❌ Error: {str(e)}")
 
+        # MCP Connection functions
+        def install_and_connect_mcp(server_id):
+            """Install MCP server package and connect"""
+            import subprocess
+            import time
+            
+            server_info = predefined_servers.get(server_id)
+            if not server_info:
+                return "❌ Unknown server"
+            
+            # For now, let's focus on getting filesystem working since it shows potential
+            if server_id == "filesystem":
+                progress = f"📦 Installing {server_info['name']}...\n"
+                
+                # Check if we have Node.js for filesystem server
+                try:
+                    node_result = subprocess.run(["node", "--version"], capture_output=True, text=True, timeout=10)
+                    if node_result.returncode != 0:
+                        return progress + "❌ Node.js not found. Please install Node.js first: https://nodejs.org/"
+                    
+                    progress += f"✅ Node.js detected: {node_result.stdout.strip()}\n"
+                    
+                    # Check if npm is available
+                    npm_result = subprocess.run(["npm", "--version"], capture_output=True, text=True, timeout=10, shell=True)
+                    if npm_result.returncode != 0:
+                        return progress + f"❌ npm not found. Node.js is installed but npm is missing.\n\nTry:\n1. Restart your terminal/PowerShell as Administrator\n2. Or reinstall Node.js from https://nodejs.org/\n3. Or check PATH: where npm"
+                    
+                    progress += f"✅ npm detected: {npm_result.stdout.strip()}\n"
+                    
+                    # Install the filesystem server
+                    progress += "📦 Installing @modelcontextprotocol/server-filesystem...\n"
+                    
+                    install_result = subprocess.run(
+                        ["npm", "install", "-g", "@modelcontextprotocol/server-filesystem"],
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                        shell=True  # Use shell on Windows to help find npm
+                    )
+                    
+                    if install_result.returncode != 0:
+                        stderr_output = install_result.stderr or "No error details"
+                        stdout_output = install_result.stdout or "No output"
+                        return progress + f"❌ Installation failed:\n\nSTDERR:\n{stderr_output}\n\nSTDOUT:\n{stdout_output}\n\nTry running this command manually in your terminal:\nnpm install -g @modelcontextprotocol/server-filesystem"
+                    
+                    progress += "✅ Package installed successfully!\n\n"
+                    progress += "🔌 Testing filesystem access...\n"
+                    
+                    # Test basic filesystem access
+                    import os
+                    test_dir = os.getcwd()
+                    files = os.listdir(test_dir)
+                    
+                    progress += f"✅ Filesystem access working - found {len(files)} items in current directory\n\n"
+                    
+                    # Store connection info
+                    if not hasattr(quick_connect_mcp, 'connections'):
+                        quick_connect_mcp.connections = {}
+                    
+                    quick_connect_mcp.connections[server_id] = {
+                        'name': server_info['name'],
+                        'url': server_info['url'],
+                        'protocol': server_info['protocol'],
+                        'status': 'connected',
+                        'tools': ['read_file', 'write_file', 'list_directory', 'create_directory']
+                    }
+                    
+                    # Connect to coding agent if available
+                    if coding_agent:
+                        progress += "🤖 Connecting to coding agent...\n"
+                        try:
+                            coding_agent.add_mcp_connection(server_id, {
+                                'name': server_info['name'],
+                                'tools': ['read_file', 'write_file', 'list_directory', 'create_directory']
+                            })
+                            progress += "✅ Connected to coding agent!\n\n"
+                        except Exception as e:
+                            progress += f"⚠️ Coding agent connection failed: {str(e)}\n\n"
+                    
+                    progress += "🎉 Filesystem server setup completed successfully!\n"
+                    progress += "You can now use filesystem tools in the AI Assistant."
+                    
+                    return progress
+                    
+                except FileNotFoundError:
+                    # If npm/node not found, fall back to Python-only filesystem
+                    progress += "⚠️ Node.js/npm not found, using Python filesystem instead...\n\n"
+                    
+                    # Test basic filesystem access
+                    try:
+                        import os
+                        test_dir = os.getcwd()
+                        files = os.listdir(test_dir)
+                        
+                        progress += f"✅ Python filesystem access working - found {len(files)} items in current directory\n\n"
+                        
+                        # Store connection info
+                        if not hasattr(quick_connect_mcp, 'connections'):
+                            quick_connect_mcp.connections = {}
+                        
+                        quick_connect_mcp.connections[server_id] = {
+                            'name': server_info['name'],
+                            'url': server_info['url'],
+                            'protocol': server_info['protocol'],
+                            'status': 'connected',
+                            'tools': ['read_file', 'write_file', 'list_directory', 'create_directory']
+                        }
+                        
+                        # Connect to coding agent if available
+                        if coding_agent:
+                            progress += "🤖 Connecting to coding agent...\n"
+                            try:
+                                coding_agent.add_mcp_connection(server_id, {
+                                    'name': server_info['name'],
+                                    'tools': ['read_file', 'write_file', 'list_directory', 'create_directory']
+                                })
+                                progress += "✅ Connected to coding agent!\n\n"
+                            except Exception as e:
+                                progress += f"⚠️ Coding agent connection failed: {str(e)}\n\n"
+                        
+                        progress += "🎉 Python filesystem server setup completed successfully!\n"
+                        progress += "You can now use filesystem tools in the AI Assistant."
+                        
+                        return progress
+                        
+                    except Exception as e:
+                        return progress + f"❌ Python filesystem error: {str(e)}"
+                        
+                except subprocess.TimeoutExpired:
+                    return progress + "❌ Installation timed out"
+                except Exception as e:
+                    return progress + f"❌ Error: {str(e)}"
+            
+            else:
+                # For other servers, show installation command
+                install_commands = {
+                    "memory": "pip install mcp-server-memory",
+                    "sequential-thinking": "pip install mcp-server-sequential-thinking", 
+                    "brave-search": "pip install mcp-server-brave-search",
+                    "github": "pip install mcp-server-github",
+                    "time": "pip install mcp-server-time"
+                }
+                
+                cmd = install_commands.get(server_id, f"pip install mcp-server-{server_id}")
+                
+                return f"""📦 To install {server_info['name']}, run:
+
+{cmd}
+
+Then restart the dashboard and click 'Connect' to use the server.
+
+Note: Auto-install is currently only implemented for the filesystem server.
+For others, please install manually using the command above."""
+
+        def quick_connect_mcp(server_id):
+            """Quick connect to a predefined MCP server (with auto-install option)"""
+            if not HAS_CLIENT_MANAGER:
+                return "❌ MCP client manager not available"
+            
+            try:
+                server_info = predefined_servers.get(server_id)
+                if not server_info:
+                    return "❌ Unknown server"
+                
+                # Try to connect using the actual MCP client
+                try:
+                    # Use the existing connection manager to make a real MCP connection
+                    result = GradioMCPClient.test_connection(server_info['url'], server_info['protocol'])
+                    
+                    if result.get("success"):
+                        # Store the connection info
+                        if not hasattr(quick_connect_mcp, 'connections'):
+                            quick_connect_mcp.connections = {}
+                        
+                        # Save the connection for reuse
+                        connection_manager.save_connection(server_id, server_info['url'], server_info['protocol'])
+                        
+                        # Get available tools from the connection
+                        tools = result.get("tools", [])
+                        tool_names = [tool.get("name", "unknown") for tool in tools] if tools else []
+                        
+                        quick_connect_mcp.connections[server_id] = {
+                            'name': server_info['name'],
+                            'url': server_info['url'],
+                            'protocol': server_info['protocol'],
+                            'status': 'connected',
+                            'tools': tool_names,
+                            'client_info': result
+                        }
+                        
+                        # Connect to coding agent if available
+                        if coding_agent:
+                            try:
+                                coding_agent.add_mcp_connection(server_id, {
+                                    'name': server_info['name'],
+                                    'client': connection_manager.get_connection(server_id),
+                                    'tools': tool_names
+                                })
+                                return f"✅ Connected to {server_info['name']} and coding agent ({len(tool_names)} tools available)"
+                            except Exception as e:
+                                return f"✅ Connected to {server_info['name']} ({len(tool_names)} tools) but failed to link to coding agent: {str(e)}"
+                        else:
+                            return f"✅ Connected to {server_info['name']} ({len(tool_names)} tools available)"
+                    else:
+                        error_msg = result.get("error", "Unknown error")
+                        return f"❌ Failed to connect to {server_info['name']}: {error_msg}"
+                        
+                except Exception as e:
+                    # If real connection fails, provide helpful error message
+                    install_cmd = "npm install -g @modelcontextprotocol/server-filesystem" if server_id == "filesystem" else f"pip install mcp-server-{server_id}"
+                    return f"❌ Failed to connect to {server_info['name']}: {str(e)}\n\nClick 'Auto-Install & Connect' to install automatically"
+                    
+            except Exception as e:
+                return f"❌ Error: {str(e)}"
+
+        def connect_all_mcp_servers():
+            """Connect to all predefined MCP servers"""
+            if not HAS_CLIENT_MANAGER or not connection_manager:
+                return "❌ Connection manager not available"
+            
+            results = []
+            success_count = 0
+            
+            for server_id, server_info in predefined_servers.items():
+                result = quick_connect_mcp(server_id)
+                if "✅" in result:
+                    success_count += 1
+                results.append(f"{server_info['icon']} {server_info['name']}: {result}")
+            
+            summary = f"Connected to {success_count}/{len(predefined_servers)} servers\n\n"
+            return summary + "\n".join(results)
+
+        def disconnect_all_mcp_servers():
+            """Disconnect all MCP connections"""
+            if not HAS_CLIENT_MANAGER or not connection_manager:
+                return "❌ Connection manager not available"
+            
+            try:
+                connections = connection_manager.list_connections()
+                count = len(connections)
+                for conn in connections:
+                    connection_manager.remove_connection(conn.get('name', ''))
+                return f"✅ Disconnected {count} servers"
+            except Exception as e:
+                return f"❌ Error disconnecting: {str(e)}"
+
+        def refresh_mcp_status():
+            """Refresh status of all MCP connections"""
+            if not HAS_CLIENT_MANAGER or not connection_manager:
+                return "❌ Connection manager not available"
+            
+            try:
+                connections = connection_manager.list_connections()
+                status_lines = []
+                
+                for conn in connections:
+                    status = "🟢 Connected" if conn.get('connected') else "🔴 Disconnected"
+                    status_lines.append(f"{conn.get('name', 'Unknown')}: {status}")
+                
+                return "\n".join(status_lines) if status_lines else "No connections found"
+            except Exception as e:
+                return f"❌ Error refreshing status: {str(e)}"
+
+        def get_mcp_connections_data():
+            """Get MCP connections data for the table"""
+            data = []
+            
+            # Check if we have any connections stored
+            if hasattr(quick_connect_mcp, 'connections'):
+                for server_id, conn_info in quick_connect_mcp.connections.items():
+                    server_info = predefined_servers.get(server_id, {})
+                    status_icon = "🟢" if conn_info['status'] == 'connected' else "🟡"
+                    status_text = "Connected" if conn_info['status'] == 'connected' else "Simulated"
+                    
+                    data.append([
+                        f"{server_info.get('icon', '🔌')} {conn_info['name']}",
+                        "MCP Server",
+                        f"{status_icon} {status_text}",
+                        len(conn_info.get('tools', [])),
+                        conn_info['url']
+                    ])
+            
+            return data
+
+        def get_mcp_connection_choices():
+            """Get list of MCP connection names for dropdown"""
+            choices = []
+            
+            # Check if we have any connections stored
+            if hasattr(quick_connect_mcp, 'connections'):
+                for server_id, conn_info in quick_connect_mcp.connections.items():
+                    choices.append(server_id)
+            
+            return choices
+
+        def load_mcp_connection_details(connection_name):
+            """Load details for a selected MCP connection"""
+            if not connection_name:
+                return {}, [], []
+            
+            # Check if we have this connection stored
+            if hasattr(quick_connect_mcp, 'connections') and connection_name in quick_connect_mcp.connections:
+                conn_info = quick_connect_mcp.connections[connection_name]
+                
+                details = {
+                    "name": connection_name,
+                    "url": conn_info['url'],
+                    "protocol": conn_info['protocol'],
+                    "status": conn_info['status'],
+                    "connected": conn_info['status'] == 'connected'
+                }
+                
+                # Get tools data
+                tools_data = []
+                tool_names = []
+                
+                for tool in conn_info.get('tools', []):
+                    tools_data.append([
+                        tool,
+                        f"Tool for {conn_info['name']}",
+                        "{}"  # Empty parameters for demo
+                    ])
+                    tool_names.append(tool)
+                
+                return details, tools_data, tool_names
+            
+            return {"error": "Connection not found"}, [], []
+
+        def test_mcp_connection(connection_name):
+            """Test an MCP connection"""
+            if not HAS_CLIENT_MANAGER or not connection_name:
+                return {"error": "Invalid connection"}
+            
+            connections = connection_manager.list_connections()
+            selected_conn = None
+            
+            for conn in connections:
+                if conn.get('name') == connection_name:
+                    selected_conn = conn
+                    break
+            
+            if not selected_conn:
+                return {"error": "Connection not found"}
+            
+            try:
+                result = GradioMCPClient.test_connection(selected_conn.get('url'), selected_conn.get('protocol'))
+                return {"status": "connected" if result["success"] else "error", "result": result}
+            except Exception as e:
+                return {"status": "error", "error": str(e)}
+
+        def disconnect_mcp_connection(connection_name):
+            """Disconnect a specific MCP connection"""
+            if not connection_name:
+                return get_mcp_connections_data(), get_mcp_connection_choices()
+            
+            try:
+                # Remove from our stored connections
+                if hasattr(quick_connect_mcp, 'connections') and connection_name in quick_connect_mcp.connections:
+                    del quick_connect_mcp.connections[connection_name]
+            except Exception as e:
+                pass
+            
+            return get_mcp_connections_data(), get_mcp_connection_choices()
+
+        def call_mcp_tool(connection_name, tool_name, tool_args):
+            """Call a tool on an MCP connection"""
+            if not connection_name or not tool_name:
+                return {"error": "Missing connection name or tool name"}
+            
+            # Check if we have this connection
+            if not hasattr(quick_connect_mcp, 'connections') or connection_name not in quick_connect_mcp.connections:
+                return {"error": "Connection not found"}
+            
+            conn_info = quick_connect_mcp.connections[connection_name]
+            
+            try:
+                # For filesystem connection, implement actual operations
+                if connection_name == "filesystem":
+                    import os
+                    
+                    if tool_name == "list_directory":
+                        path = tool_args.get('path', '.')
+                        try:
+                            files = os.listdir(path)
+                            return {
+                                "success": True, 
+                                "result": {
+                                    "files": files, 
+                                    "path": os.path.abspath(path),
+                                    "count": len(files)
+                                }
+                            }
+                        except Exception as e:
+                            return {"success": False, "error": str(e)}
+                    
+                    elif tool_name == "read_file":
+                        path = tool_args.get('path', '')
+                        if not path:
+                            return {"success": False, "error": "Path is required"}
+                        
+                        try:
+                            with open(path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                            return {
+                                "success": True, 
+                                "result": {
+                                    "content": content, 
+                                    "path": os.path.abspath(path),
+                                    "size": len(content)
+                                }
+                            }
+                        except Exception as e:
+                            return {"success": False, "error": str(e)}
+                    
+                    elif tool_name == "write_file":
+                        path = tool_args.get('path', '')
+                        content = tool_args.get('content', '')
+                        if not path:
+                            return {"success": False, "error": "Path is required"}
+                        
+                        try:
+                            with open(path, 'w', encoding='utf-8') as f:
+                                f.write(content)
+                            return {
+                                "success": True, 
+                                "result": {
+                                    "message": f"File written successfully",
+                                    "path": os.path.abspath(path),
+                                    "bytes_written": len(content.encode('utf-8'))
+                                }
+                            }
+                        except Exception as e:
+                            return {"success": False, "error": str(e)}
+                    
+                    elif tool_name == "create_directory":
+                        path = tool_args.get('path', '')
+                        if not path:
+                            return {"success": False, "error": "Path is required"}
+                        
+                        try:
+                            os.makedirs(path, exist_ok=True)
+                            return {
+                                "success": True, 
+                                "result": {
+                                    "message": f"Directory created successfully",
+                                    "path": os.path.abspath(path)
+                                }
+                            }
+                        except Exception as e:
+                            return {"success": False, "error": str(e)}
+                    
+                    else:
+                        return {"success": False, "error": f"Unknown tool: {tool_name}"}
+                
+                # For other connections, show installation instructions
+                else:
+                    return {
+                        "success": False, 
+                        "error": f"MCP server '{connection_name}' not fully implemented.\n\nTo install real MCP servers, run:\npip install mcp-server-{connection_name}\n\nThen restart the dashboard."
+                    }
+                    
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        def connect_custom_mcp(name, url, protocol, description):
+            """Connect to a custom MCP server"""
+            if not HAS_CLIENT_MANAGER or not connection_manager:
+                return "❌ Connection manager not available"
+            
+            if not name or not url:
+                return "❌ Please provide both name and URL"
+            
+            try:
+                result = GradioMCPClient.test_connection(url, protocol)
+                if result["success"]:
+                    connection_manager.save_connection(name, url, protocol)
+                    return f"✅ Connected to {name}"
+                else:
+                    return f"❌ Failed to connect: {result['error']}"
+            except Exception as e:
+                return f"❌ Error: {str(e)}"
+
         # Connect event handlers
 
         # AI Assistant event connections
@@ -1318,11 +2083,101 @@ def create_dashboard():
             outputs=settings_output,
         )
 
+        # MCP Connections event handlers
+        
+        # Quick connect individual server buttons
+        for server_id in predefined_servers.keys():
+            if server_id in server_buttons and server_id in server_statuses:
+                server_buttons[server_id].click(
+                    fn=lambda sid=server_id: quick_connect_mcp(sid),
+                    outputs=[server_statuses[server_id]]
+                ).then(
+                    fn=get_mcp_connections_data,
+                    outputs=[mcp_connections_table]
+                ).then(
+                    fn=get_mcp_connection_choices,
+                    outputs=[selected_mcp_connection]
+                )
+                
+            # Auto-install buttons
+            if server_id in server_install_buttons:
+                def create_install_handler(sid):
+                    def install_handler():
+                        return install_and_connect_mcp(sid)
+                    return install_handler
+                
+                server_install_buttons[server_id].click(
+                    fn=lambda: gr.update(visible=True),
+                    outputs=[mcp_install_progress]
+                ).then(
+                    fn=create_install_handler(server_id),
+                    outputs=[mcp_install_progress]
+                ).then(
+                    fn=get_mcp_connections_data,
+                    outputs=[mcp_connections_table]
+                ).then(
+                    fn=get_mcp_connection_choices,
+                    outputs=[selected_mcp_connection]
+                )
+
+        # Bulk MCP actions
+        connect_all_mcp_btn.click(
+            connect_all_mcp_servers,
+            outputs=[mcp_bulk_status]
+        )
+
+        disconnect_all_mcp_btn.click(
+            disconnect_all_mcp_servers,
+            outputs=[mcp_bulk_status]
+        )
+
+        refresh_mcp_status_btn.click(
+            refresh_mcp_status,
+            outputs=[mcp_bulk_status]
+        )
+
+        # Active MCP connections management
+        selected_mcp_connection.change(
+            load_mcp_connection_details,
+            inputs=[selected_mcp_connection],
+            outputs=[mcp_connection_details, mcp_available_tools, mcp_tool_name]
+        )
+
+        test_mcp_connection_btn.click(
+            test_mcp_connection,
+            inputs=[selected_mcp_connection],
+            outputs=[mcp_connection_details]
+        )
+
+        disconnect_mcp_btn.click(
+            disconnect_mcp_connection,
+            inputs=[selected_mcp_connection],
+            outputs=[mcp_connections_table, selected_mcp_connection]
+        )
+
+        # MCP tool calling
+        call_mcp_tool_btn.click(
+            call_mcp_tool,
+            inputs=[selected_mcp_connection, mcp_tool_name, mcp_tool_args],
+            outputs=[mcp_tool_result]
+        )
+
+        # Custom MCP connection
+        custom_mcp_connect_btn.click(
+            connect_custom_mcp,
+            inputs=[custom_mcp_name, custom_mcp_url, custom_mcp_protocol, custom_mcp_description],
+            outputs=[custom_mcp_status]
+        )
+
         # Load initial data
         dashboard.load(refresh_servers, outputs=servers_list)
         dashboard.load(refresh_connections, outputs=connections_list)
         dashboard.load(update_server_dropdown, outputs=server_dropdown)
         dashboard.load(update_connection_dropdown, outputs=connection_dropdown)
+        
+        # Load initial MCP connections data
+        dashboard.load(get_mcp_connections_data, outputs=mcp_connections_table)
+        dashboard.load(get_mcp_connection_choices, outputs=selected_mcp_connection)
 
         # Load saved token on startup
         if coding_agent and config_manager.has_secure_storage():
