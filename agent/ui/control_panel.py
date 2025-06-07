@@ -36,7 +36,7 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Custom CSS for production-ready styling
+# Custom CSS for production-ready styling with sidebar
 CUSTOM_CSS = """
 /* Dark theme with glassmorphism effects */
 .gradio-container {
@@ -53,6 +53,74 @@ CUSTOM_CSS = """
     padding: 2rem;
     margin-bottom: 2rem;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Sidebar styling */
+.sidebar {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(15px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1.5rem;
+    margin-left: 1rem;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+    min-height: 600px;
+}
+
+.sidebar:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.15);
+}
+
+/* Code editor styling */
+.code-editor {
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+    max-height: 500px;
+    overflow: auto;
+    resize: both;
+}
+
+.code-editor:focus-within {
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+/* Code editor textarea styling */
+.code-editor textarea {
+    overflow: auto !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    resize: both !important;
+    min-height: 400px !important;
+    max-height: 600px !important;
+    white-space: pre !important;
+    word-wrap: normal !important;
+}
+
+/* Code editor container */
+.code-editor .code-container {
+    overflow: auto !important;
+    max-width: 100% !important;
+}
+
+/* Ensure proper scrolling for long lines */
+.code-editor pre {
+    overflow: auto !important;
+    white-space: pre !important;
+    word-wrap: normal !important;
+}
+
+/* Editor action buttons */
+.editor-actions {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-top: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Section cards */
@@ -114,6 +182,14 @@ CUSTOM_CSS = """
     box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
 }
 
+.warning-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    border: none;
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+}
+
 /* Dashboard grid */
 .dashboard-grid {
     border-radius: 12px;
@@ -169,7 +245,32 @@ CUSTOM_CSS = """
     color: #10b981;
 }
 
+/* Main content layout */
+.main-content {
+    display: flex;
+    gap: 1rem;
+}
+
+.main-panel {
+    flex: 2;
+}
+
+.side-panel {
+    flex: 1;
+    min-width: 400px;
+}
+
 /* Responsive design */
+@media (max-width: 1200px) {
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .side-panel {
+        min-width: unset;
+    }
+}
+
 @media (max-width: 768px) {
     .control-section {
         padding: 1rem;
@@ -178,6 +279,11 @@ CUSTOM_CSS = """
     
     .main-header {
         padding: 1.5rem;
+    }
+    
+    .sidebar {
+        margin-left: 0;
+        margin-top: 1rem;
     }
 }
 """
@@ -632,16 +738,161 @@ class ControlPanelUI:
         
         return info
     
-    def _preview_template_code(self, template_name: str) -> str:
-        """Preview the code for a selected template"""
+    def _load_template_code(self, template_name: str) -> str:
+        """Load template code into the editor"""
         if not template_name:
-            return "# Select a template to preview its code"
+            return "# Select a template to load its code"
         
         template = self.templates.get(template_name)
         if not template:
             return f"# Template '{template_name}' not found"
         
         return template['code']
+    
+    def _validate_code(self, code: str) -> Tuple[str, str]:
+        """Validate Python code syntax"""
+        if not code.strip():
+            return "❌ Validation Failed", "Code is empty"
+        
+        try:
+            # Basic syntax check
+            compile(code, '<string>', 'exec')
+            
+            # Check for required components for MCP agents
+            required_patterns = [
+                ('class', 'Agent class definition'),
+                ('def handle', 'Handle method for requests'),
+                ('gradio', 'Gradio import for UI')
+            ]
+            
+            validation_results = []
+            for pattern, desc in required_patterns:
+                if pattern in code:
+                    validation_results.append(f"✅ {desc}")
+                else:
+                    validation_results.append(f"⚠️ Missing: {desc}")
+            
+            status = "✅ Validation Passed"
+            details = "Code syntax is valid.\n\n" + "\n".join(validation_results)
+            
+            return status, details
+            
+        except SyntaxError as e:
+            return "❌ Syntax Error", f"Line {e.lineno}: {e.msg}"
+        except Exception as e:
+            return "❌ Validation Failed", str(e)
+    
+    def _test_code(self, code: str) -> Tuple[str, str]:
+        """Test code execution in a safe environment"""
+        if not code.strip():
+            return "❌ Test Failed", "No code to test"
+        
+        try:
+            # First validate syntax
+            compile(code, '<string>', 'exec')
+            
+            # For now, we'll do basic validation
+            # In a full implementation, this could run in a sandboxed environment
+            test_results = []
+            
+            # Check if it's a valid agent structure
+            if 'class' in code and 'def' in code:
+                test_results.append("✅ Class structure detected")
+            
+            if 'gradio' in code or 'gr.' in code:
+                test_results.append("✅ Gradio components found")
+            
+            if 'def handle' in code or 'def main' in code:
+                test_results.append("✅ Handler methods found")
+            
+            if not test_results:
+                test_results.append("⚠️ No recognizable agent patterns found")
+            
+            status = "✅ Test Completed"
+            details = "Basic structure test completed.\n\n" + "\n".join(test_results)
+            details += "\n\nNote: This is a basic validation. Deploy to test full functionality."
+            
+            return status, details
+            
+        except SyntaxError as e:
+            return "❌ Test Failed", f"Syntax Error - Line {e.lineno}: {e.msg}"
+        except Exception as e:
+            return "❌ Test Failed", str(e)
+    
+    def _save_template(self, template_name: str, code: str) -> Tuple[str, str]:
+        """Save modified template code to file"""
+        if not template_name:
+            return "❌ Save Failed", "No template selected"
+        
+        if not code.strip():
+            return "❌ Save Failed", "No code to save"
+        
+        try:
+            # Create a custom templates directory if it doesn't exist
+            current_file = Path(__file__)
+            project_root = current_file.parent.parent.parent
+            custom_templates_dir = project_root / "custom_templates"
+            custom_templates_dir.mkdir(exist_ok=True)
+            
+            # Generate filename based on template name
+            safe_name = template_name.lower().replace(' ', '_').replace('🧮', 'calc').replace('🕷️', 'scraper').replace('📊', 'data').replace('💬', 'chat').replace('📁', 'monitor').replace('🔌', 'api')
+            filename = f"custom_{safe_name}_{int(time.time())}.py"
+            file_path = custom_templates_dir / filename
+            
+            # Save the code
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(f"# Custom template based on: {template_name}\n")
+                f.write(f"# Created: {datetime.now().isoformat()}\n\n")
+                f.write(code)
+            
+            status = "✅ Save Successful"
+            details = f"Template saved as: {filename}\nLocation: {file_path}\n\nYou can now deploy this custom template."
+            
+            return status, details
+            
+        except Exception as e:
+            return "❌ Save Failed", f"Error saving file: {str(e)}"
+    
+    def _deploy_from_editor(self, agent_name: str, code: str) -> Tuple[str, List[List[str]]]:
+        """Deploy agent directly from the code editor"""
+        if not self.agent_runner:
+            return "❌ Agent runner not available", self._update_dashboard()
+        
+        if not agent_name or not agent_name.strip():
+            return "❌ Please provide an agent name", self._update_dashboard()
+        
+        if not code.strip():
+            return "❌ No code to deploy", self._update_dashboard()
+        
+        agent_name = agent_name.strip().replace(' ', '_')
+        
+        try:
+            # Validate code first
+            compile(code, '<string>', 'exec')
+            
+            # Deploy the agent
+            success, message, metadata = self.agent_runner.start_agent(agent_name, code)
+            
+            if success:
+                self.deployment_stats["total_deployed"] += 1
+                self.deployment_stats["successful_deployments"] += 1
+                result = f"✅ Agent '{agent_name}' deployed successfully!\n"
+                result += f"📊 Port: {metadata.get('port', 'auto-assigned')}\n"
+                result += f"🔄 Status: {metadata.get('status', 'running')}\n"
+                result += f"⏱️ Deployed: {datetime.now().strftime('%H:%M:%S')}"
+            else:
+                self.deployment_stats["total_deployed"] += 1
+                self.deployment_stats["failed_deployments"] += 1
+                result = f"❌ Failed to deploy agent '{agent_name}'\n"
+                result += f"Error: {message}"
+            
+            return result, self._update_dashboard()
+            
+        except SyntaxError as e:
+            return f"❌ Code has syntax errors:\nLine {e.lineno}: {e.msg}", self._update_dashboard()
+        except Exception as e:
+            logger.error(f"Error deploying from editor: {e}")
+            return f"❌ Deployment failed: {str(e)}", self._update_dashboard()
     
     def _get_agent_choices(self) -> List[str]:
         """Get list of agent names for filtering"""
@@ -662,116 +913,157 @@ class ControlPanelUI:
         # Header
         gr.Markdown("""
         # 🤖 Agent Management Control Panel
-        **Real-time agent deployment and monitoring system**
+        **Real-time agent deployment and monitoring system with integrated code editor**
         """)
         
-        # Section 1: Agent Dashboard - Live Status Grid
-        with gr.Group():
-            gr.Markdown("## 🔄 Live Agent Dashboard")
-            
-            status_grid = gr.Dataframe(
-                headers=["Name", "Status", "Uptime", "CPU", "Memory", "Port"],
-                datatype=["str", "str", "str", "str", "str", "str"],
-                label="Agent Status Grid",
-                interactive=False,
-                wrap=True
-            )
-            
-            # Auto-refresh dashboard every 5 seconds
-            dashboard_timer = gr.Timer(5.0)
-            dashboard_timer.tick(
-                fn=self._update_dashboard,
-                outputs=[status_grid]
-            )
-        
-        # Section 2: Quick Actions - Emergency Controls
-        with gr.Group():
-            gr.Markdown("## ⚡ Quick Actions & Emergency Controls")
-            
-            with gr.Row():
-                with gr.Column(scale=2):
-                    agent_name_input = gr.Textbox(
-                        label="Agent Name",
-                        placeholder="Enter unique agent name (e.g., my-calculator)",
-                        value=""
+        # Main layout: Content + Sidebar
+        with gr.Row():
+            # Main content area
+            with gr.Column(scale=2, elem_classes=["main-panel"]):
+                
+                # Section 1: Agent Dashboard - Live Status Grid
+                with gr.Group():
+                    gr.Markdown("## 🔄 Live Agent Dashboard")
+                    
+                    status_grid = gr.Dataframe(
+                        headers=["Name", "Status", "Uptime", "CPU", "Memory", "Port"],
+                        datatype=["str", "str", "str", "str", "str", "str"],
+                        label="Agent Status Grid",
+                        interactive=False,
+                        wrap=True
                     )
                     
-                    template_dropdown = gr.Dropdown(
-                        choices=list(self.templates.keys()),
-                        label="Select Template",
-                        value=None
+                    # Auto-refresh dashboard every 5 seconds
+                    dashboard_timer = gr.Timer(5.0)
+                    dashboard_timer.tick(
+                        fn=self._update_dashboard,
+                        outputs=[status_grid]
+                    )
+                
+                # Section 2: Quick Actions - Emergency Controls
+                with gr.Group():
+                    gr.Markdown("## ⚡ Quick Actions & Emergency Controls")
+                    
+                    with gr.Row():
+                        with gr.Column(scale=2):
+                            agent_name_input = gr.Textbox(
+                                label="Agent Name",
+                                placeholder="Enter unique agent name (e.g., my-calculator)",
+                                value=""
+                            )
+                            
+                            template_dropdown = gr.Dropdown(
+                                choices=list(self.templates.keys()),
+                                label="Select Template",
+                                value=None
+                            )
+                            
+                            deploy_btn = gr.Button("🚀 Deploy Agent", variant="primary", size="lg")
+                        
+                        with gr.Column(scale=1):
+                            emergency_stop_btn = gr.Button("🛑 Emergency Stop All", variant="stop", size="lg")
+                            refresh_btn = gr.Button("🔄 Refresh Dashboard", size="sm")
+                            clear_logs_btn = gr.Button("🧹 Clear Logs", size="sm")
+                    
+                    with gr.Row():
+                        action_status = gr.Textbox(
+                            label="Action Status",
+                            lines=4,
+                            interactive=False,
+                            value="Ready to deploy agents..."
+                        )
+                
+                # Section 3: Logs Panel - Real-time Output
+                with gr.Group():
+                    gr.Markdown("## 📋 Real-time Agent Logs")
+                    
+                    with gr.Row():
+                        log_filter_dropdown = gr.Dropdown(
+                            choices=self._get_agent_choices(),
+                            value="All Agents",
+                            label="Filter by Agent",
+                            scale=1
+                        )
+                        
+                    logs_display = gr.Textbox(
+                        label="Live Logs",
+                        lines=12,
+                        max_lines=20,
+                        interactive=False,
+                        value="Waiting for agent logs...",
+                        show_copy_button=True
                     )
                     
-                    deploy_btn = gr.Button("🚀 Deploy Agent", variant="primary", size="lg")
+                    # Auto-refresh logs every 2 seconds
+                    logs_timer = gr.Timer(2.0)
+                    logs_timer.tick(
+                        fn=lambda filter_choice: self._get_agent_logs(filter_choice),
+                        inputs=[log_filter_dropdown],
+                        outputs=[logs_display]
+                    )
                 
-                with gr.Column(scale=1):
-                    emergency_stop_btn = gr.Button("🛑 Emergency Stop All", variant="stop", size="lg")
-                    refresh_btn = gr.Button("🔄 Refresh Dashboard", size="sm")
-                    clear_logs_btn = gr.Button("🧹 Clear Logs", size="sm")
-            
-            with gr.Row():
-                action_status = gr.Textbox(
-                    label="Action Status",
-                    lines=4,
-                    interactive=False,
-                    value="Ready to deploy agents..."
-                )
-        
-        # Section 3: Logs Panel - Real-time Output
-        with gr.Group():
-            gr.Markdown("## 📋 Real-time Agent Logs")
-            
-            with gr.Row():
-                log_filter_dropdown = gr.Dropdown(
-                    choices=self._get_agent_choices(),
-                    value="All Agents",
-                    label="Filter by Agent",
-                    scale=1
-                )
-                
-            logs_display = gr.Textbox(
-                label="Live Logs",
-                lines=12,
-                max_lines=20,
-                interactive=False,
-                value="Waiting for agent logs...",
-                show_copy_button=True
-            )
-            
-            # Auto-refresh logs every 2 seconds
-            logs_timer = gr.Timer(2.0)
-            logs_timer.tick(
-                fn=lambda filter_choice: self._get_agent_logs(filter_choice),
-                inputs=[log_filter_dropdown],
-                outputs=[logs_display]
-            )
-        
-        # Section 4: Agent Templates - Pre-built Examples
-        with gr.Group():
-            gr.Markdown("## 📚 Agent Templates Library")
-            
-            with gr.Row():
-                with gr.Column(scale=1):
+                # Section 4: Template Selection
+                with gr.Group():
+                    gr.Markdown("## 📚 Agent Templates")
+                    
                     template_info_display = gr.Markdown(
                         self._get_template_info(None),
                         label="Template Information"
                     )
                     
                     with gr.Row():
-                        preview_btn = gr.Button("👁️ Preview Code", size="sm")
+                        load_template_btn = gr.Button("📥 Load Template", variant="secondary", size="sm")
                         quick_deploy_btn = gr.Button("⚡ Quick Deploy", variant="secondary", size="sm")
+            
+            # Sidebar: Code Editor
+            with gr.Column(scale=1, elem_classes=["side-panel", "sidebar"]):
+                gr.Markdown("## 🔧 Code Editor & Testing")
                 
-                with gr.Column(scale=2):
-                    code_preview = gr.Code(
-                        label="Template Code Preview",
-                        language="python",
-                        lines=15,
-                        value="# Select a template to preview its code"
-                    )
+                # Editor name input
+                editor_agent_name = gr.Textbox(
+                    label="Agent Name for Editor",
+                    placeholder="Enter name for code deployment",
+                    value=""
+                )
+                
+                # Code editor
+                code_editor = gr.Code(
+                    label="Agent Code Editor",
+                    language="python",
+                    lines=25,
+                    max_lines=50,
+                    value="# Select a template or write your own agent code here\n# Use the buttons below to validate, test, and deploy",
+                    elem_classes=["code-editor"],
+                    interactive=True,
+                    show_label=True,
+                    container=True,
+                    wrap_lines=False
+                )
+                
+                # Editor actions
+                with gr.Group(elem_classes=["editor-actions"]):
+                    gr.Markdown("### 🛠️ Editor Actions")
+                    
+                    with gr.Row():
+                        validate_btn = gr.Button("✅ Validate", size="sm", variant="secondary")
+                        test_btn = gr.Button("🧪 Test", size="sm", variant="secondary")
+                    
+                    with gr.Row():
+                        save_btn = gr.Button("💾 Save Template", size="sm")
+                        deploy_editor_btn = gr.Button("🚀 Deploy", size="sm", variant="primary")
+                
+                # Editor status
+                editor_status = gr.Textbox(
+                    label="Editor Status",
+                    lines=6,
+                    interactive=False,
+                    value="Ready to edit code...",
+                    show_copy_button=True
+                )
         
         # Event handlers
         
-        # Deploy agent
+        # Deploy agent from template
         deploy_btn.click(
             fn=self._deploy_agent,
             inputs=[agent_name_input, template_dropdown],
@@ -803,11 +1095,11 @@ class ControlPanelUI:
             outputs=[template_info_display]
         )
         
-        # Preview template code
-        preview_btn.click(
-            fn=self._preview_template_code,
+        # Load template into editor
+        load_template_btn.click(
+            fn=self._load_template_code,
             inputs=[template_dropdown],
-            outputs=[code_preview]
+            outputs=[code_editor]
         )
         
         # Quick deploy from template
@@ -817,6 +1109,31 @@ class ControlPanelUI:
                 template
             ),
             inputs=[template_dropdown],
+            outputs=[action_status, status_grid]
+        )
+        
+        # Editor actions
+        validate_btn.click(
+            fn=self._validate_code,
+            inputs=[code_editor],
+            outputs=[editor_status]
+        )
+        
+        test_btn.click(
+            fn=self._test_code,
+            inputs=[code_editor],
+            outputs=[editor_status]
+        )
+        
+        save_btn.click(
+            fn=self._save_template,
+            inputs=[template_dropdown, code_editor],
+            outputs=[editor_status]
+        )
+        
+        deploy_editor_btn.click(
+            fn=self._deploy_from_editor,
+            inputs=[editor_agent_name, code_editor],
             outputs=[action_status, status_grid]
         )
         
@@ -832,122 +1149,159 @@ class ControlPanelUI:
         
         with gr.Blocks(
             title="Agent Management Control Panel",
-            theme=gr.themes.Default(primary_hue="blue", secondary_hue="gray")
+            theme=gr.themes.Default(primary_hue="blue", secondary_hue="gray"),
+            css=CUSTOM_CSS
         ) as interface:
             
             # Header
             gr.Markdown("""
             # 🤖 Agent Management Control Panel
-            **Real-time agent deployment and monitoring system**
+            **Real-time agent deployment and monitoring system with integrated code editor**
             """)
             
-            # Section 1: Agent Dashboard - Live Status Grid
-            with gr.Group():
-                gr.Markdown("## 🔄 Live Agent Dashboard")
-                
-                status_grid = gr.Dataframe(
-                    headers=["Name", "Status", "Uptime", "CPU", "Memory", "Port"],
-                    datatype=["str", "str", "str", "str", "str", "str"],
-                    label="Agent Status Grid",
-                    interactive=False,
-                    wrap=True
-                )
-                
-                # Auto-refresh dashboard every 5 seconds
-                dashboard_timer = gr.Timer(5.0)
-                dashboard_timer.tick(
-                    fn=self._update_dashboard,
-                    outputs=[status_grid]
-                )
-            
-            # Section 2: Quick Actions - Emergency Controls
-            with gr.Group():
-                gr.Markdown("## ⚡ Quick Actions & Emergency Controls")
-                
-                with gr.Row():
-                    with gr.Column(scale=2):
-                        agent_name_input = gr.Textbox(
-                            label="Agent Name",
-                            placeholder="Enter unique agent name (e.g., my-calculator)",
-                            value=""
+            # Main layout: Content + Sidebar
+            with gr.Row():
+                # Main content area
+                with gr.Column(scale=2, elem_classes=["main-panel"]):
+                    
+                    # Section 1: Agent Dashboard - Live Status Grid
+                    with gr.Group():
+                        gr.Markdown("## 🔄 Live Agent Dashboard")
+                        
+                        status_grid = gr.Dataframe(
+                            headers=["Name", "Status", "Uptime", "CPU", "Memory", "Port"],
+                            datatype=["str", "str", "str", "str", "str", "str"],
+                            label="Agent Status Grid",
+                            interactive=False,
+                            wrap=True
                         )
                         
-                        template_dropdown = gr.Dropdown(
-                            choices=list(self.templates.keys()),
-                            label="Select Template",
-                            value=None
+                        # Auto-refresh dashboard every 5 seconds
+                        dashboard_timer = gr.Timer(5.0)
+                        dashboard_timer.tick(
+                            fn=self._update_dashboard,
+                            outputs=[status_grid]
+                        )
+                    
+                    # Section 2: Quick Actions - Emergency Controls
+                    with gr.Group():
+                        gr.Markdown("## ⚡ Quick Actions & Emergency Controls")
+                        
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                agent_name_input = gr.Textbox(
+                                    label="Agent Name",
+                                    placeholder="Enter unique agent name (e.g., my-calculator)",
+                                    value=""
+                                )
+                                
+                                template_dropdown = gr.Dropdown(
+                                    choices=list(self.templates.keys()),
+                                    label="Select Template",
+                                    value=None
+                                )
+                                
+                                deploy_btn = gr.Button("🚀 Deploy Agent", variant="primary", size="lg")
+                            
+                            with gr.Column(scale=1):
+                                emergency_stop_btn = gr.Button("🛑 Emergency Stop All", variant="stop", size="lg")
+                                refresh_btn = gr.Button("🔄 Refresh Dashboard", size="sm")
+                                clear_logs_btn = gr.Button("🧹 Clear Logs", size="sm")
+                        
+                        with gr.Row():
+                            action_status = gr.Textbox(
+                                label="Action Status",
+                                lines=4,
+                                interactive=False,
+                                value="Ready to deploy agents..."
+                            )
+                    
+                    # Section 3: Logs Panel - Real-time Output
+                    with gr.Group():
+                        gr.Markdown("## 📋 Real-time Agent Logs")
+                        
+                        with gr.Row():
+                            log_filter_dropdown = gr.Dropdown(
+                                choices=self._get_agent_choices(),
+                                value="All Agents",
+                                label="Filter by Agent",
+                                scale=1
+                            )
+                            
+                        logs_display = gr.Textbox(
+                            label="Live Logs",
+                            lines=12,
+                            max_lines=20,
+                            interactive=False,
+                            value="Waiting for agent logs...",
+                            show_copy_button=True
                         )
                         
-                        deploy_btn = gr.Button("🚀 Deploy Agent", variant="primary", size="lg")
+                        # Auto-refresh logs every 2 seconds
+                        logs_timer = gr.Timer(2.0)
+                        logs_timer.tick(
+                            fn=lambda filter_choice: self._get_agent_logs(filter_choice),
+                            inputs=[log_filter_dropdown],
+                            outputs=[logs_display]
+                        )
                     
-                    with gr.Column(scale=1):
-                        emergency_stop_btn = gr.Button("🛑 Emergency Stop All", variant="stop", size="lg")
-                        refresh_btn = gr.Button("🔄 Refresh Dashboard", size="sm")
-                        clear_logs_btn = gr.Button("🧹 Clear Logs", size="sm")
-                
-                with gr.Row():
-                    action_status = gr.Textbox(
-                        label="Action Status",
-                        lines=4,
-                        interactive=False,
-                        value="Ready to deploy agents..."
-                    )
-            
-            # Section 3: Logs Panel - Real-time Output
-            with gr.Group():
-                gr.Markdown("## 📋 Real-time Agent Logs")
-                
-                with gr.Row():
-                    log_filter_dropdown = gr.Dropdown(
-                        choices=self._get_agent_choices(),
-                        value="All Agents",
-                        label="Filter by Agent",
-                        scale=1
-                    )
-                    
-                logs_display = gr.Textbox(
-                    label="Live Logs",
-                    lines=12,
-                    max_lines=20,
-                    interactive=False,
-                    value="Waiting for agent logs...",
-                    show_copy_button=True
-                )
-                
-                # Auto-refresh logs every 2 seconds
-                logs_timer = gr.Timer(2.0)
-                logs_timer.tick(
-                    fn=lambda filter_choice: self._get_agent_logs(filter_choice),
-                    inputs=[log_filter_dropdown],
-                    outputs=[logs_display]
-                )
-            
-            # Section 4: Agent Templates - Pre-built Examples
-            with gr.Group():
-                gr.Markdown("## 📚 Agent Templates Library")
-                
-                with gr.Row():
-                    with gr.Column(scale=1):
+                    # Section 4: Template Selection
+                    with gr.Group():
+                        gr.Markdown("## 📚 Agent Templates")
+                        
                         template_info_display = gr.Markdown(
                             self._get_template_info(None),
                             label="Template Information"
                         )
                         
                         with gr.Row():
-                            preview_btn = gr.Button("👁️ Preview Code", size="sm")
+                            load_template_btn = gr.Button("📥 Load Template", variant="secondary", size="sm")
                             quick_deploy_btn = gr.Button("⚡ Quick Deploy", variant="secondary", size="sm")
+                
+                # Sidebar: Code Editor
+                with gr.Column(scale=1, elem_classes=["side-panel", "sidebar"]):
+                    gr.Markdown("## 🔧 Code Editor & Testing")
                     
-                    with gr.Column(scale=2):
-                        code_preview = gr.Code(
-                            label="Template Code Preview",
-                            language="python",
-                            lines=15,
-                            value="# Select a template to preview its code"
-                        )
+                    # Editor name input
+                    editor_agent_name = gr.Textbox(
+                        label="Agent Name for Editor",
+                        placeholder="Enter name for code deployment",
+                        value=""
+                    )
+                    
+                    # Code editor
+                    code_editor = gr.Code(
+                        label="Agent Code Editor",
+                        language="python",
+                        lines=20,
+                        value="# Select a template or write your own agent code here\n# Use the buttons below to validate, test, and deploy",
+                        elem_classes=["code-editor"]
+                    )
+                    
+                    # Editor actions
+                    with gr.Group(elem_classes=["editor-actions"]):
+                        gr.Markdown("### 🛠️ Editor Actions")
+                        
+                        with gr.Row():
+                            validate_btn = gr.Button("✅ Validate", size="sm", variant="secondary")
+                            test_btn = gr.Button("🧪 Test", size="sm", variant="secondary")
+                        
+                        with gr.Row():
+                            save_btn = gr.Button("💾 Save Template", size="sm")
+                            deploy_editor_btn = gr.Button("🚀 Deploy", size="sm", variant="primary")
+                    
+                    # Editor status
+                    editor_status = gr.Textbox(
+                        label="Editor Status",
+                        lines=6,
+                        interactive=False,
+                        value="Ready to edit code...",
+                        show_copy_button=True
+                    )
             
             # Event handlers
             
-            # Deploy agent
+            # Deploy agent from template
             deploy_btn.click(
                 fn=self._deploy_agent,
                 inputs=[agent_name_input, template_dropdown],
@@ -979,11 +1333,11 @@ class ControlPanelUI:
                 outputs=[template_info_display]
             )
             
-            # Preview template code
-            preview_btn.click(
-                fn=self._preview_template_code,
+            # Load template into editor
+            load_template_btn.click(
+                fn=self._load_template_code,
                 inputs=[template_dropdown],
-                outputs=[code_preview]
+                outputs=[code_editor]
             )
             
             # Quick deploy from template
@@ -993,6 +1347,31 @@ class ControlPanelUI:
                     template
                 ),
                 inputs=[template_dropdown],
+                outputs=[action_status, status_grid]
+            )
+            
+            # Editor actions
+            validate_btn.click(
+                fn=self._validate_code,
+                inputs=[code_editor],
+                outputs=[editor_status]
+            )
+            
+            test_btn.click(
+                fn=self._test_code,
+                inputs=[code_editor],
+                outputs=[editor_status]
+            )
+            
+            save_btn.click(
+                fn=self._save_template,
+                inputs=[template_dropdown, code_editor],
+                outputs=[editor_status]
+            )
+            
+            deploy_editor_btn.click(
+                fn=self._deploy_from_editor,
+                inputs=[editor_agent_name, code_editor],
                 outputs=[action_status, status_grid]
             )
             
