@@ -656,6 +656,177 @@ class ControlPanelUI:
         except:
             return ["All Agents"]
 
+    def create_components(self) -> None:
+        """Create the control panel components for embedding in another interface"""
+        
+        # Header
+        gr.Markdown("""
+        # 🤖 Agent Management Control Panel
+        **Real-time agent deployment and monitoring system**
+        """)
+        
+        # Section 1: Agent Dashboard - Live Status Grid
+        with gr.Group():
+            gr.Markdown("## 🔄 Live Agent Dashboard")
+            
+            status_grid = gr.Dataframe(
+                headers=["Name", "Status", "Uptime", "CPU", "Memory", "Port"],
+                datatype=["str", "str", "str", "str", "str", "str"],
+                label="Agent Status Grid",
+                interactive=False,
+                wrap=True
+            )
+            
+            # Auto-refresh dashboard every 5 seconds
+            dashboard_timer = gr.Timer(5.0)
+            dashboard_timer.tick(
+                fn=self._update_dashboard,
+                outputs=[status_grid]
+            )
+        
+        # Section 2: Quick Actions - Emergency Controls
+        with gr.Group():
+            gr.Markdown("## ⚡ Quick Actions & Emergency Controls")
+            
+            with gr.Row():
+                with gr.Column(scale=2):
+                    agent_name_input = gr.Textbox(
+                        label="Agent Name",
+                        placeholder="Enter unique agent name (e.g., my-calculator)",
+                        value=""
+                    )
+                    
+                    template_dropdown = gr.Dropdown(
+                        choices=list(self.templates.keys()),
+                        label="Select Template",
+                        value=None
+                    )
+                    
+                    deploy_btn = gr.Button("🚀 Deploy Agent", variant="primary", size="lg")
+                
+                with gr.Column(scale=1):
+                    emergency_stop_btn = gr.Button("🛑 Emergency Stop All", variant="stop", size="lg")
+                    refresh_btn = gr.Button("🔄 Refresh Dashboard", size="sm")
+                    clear_logs_btn = gr.Button("🧹 Clear Logs", size="sm")
+            
+            with gr.Row():
+                action_status = gr.Textbox(
+                    label="Action Status",
+                    lines=4,
+                    interactive=False,
+                    value="Ready to deploy agents..."
+                )
+        
+        # Section 3: Logs Panel - Real-time Output
+        with gr.Group():
+            gr.Markdown("## 📋 Real-time Agent Logs")
+            
+            with gr.Row():
+                log_filter_dropdown = gr.Dropdown(
+                    choices=self._get_agent_choices(),
+                    value="All Agents",
+                    label="Filter by Agent",
+                    scale=1
+                )
+                
+            logs_display = gr.Textbox(
+                label="Live Logs",
+                lines=12,
+                max_lines=20,
+                interactive=False,
+                value="Waiting for agent logs...",
+                show_copy_button=True
+            )
+            
+            # Auto-refresh logs every 2 seconds
+            logs_timer = gr.Timer(2.0)
+            logs_timer.tick(
+                fn=lambda filter_choice: self._get_agent_logs(filter_choice),
+                inputs=[log_filter_dropdown],
+                outputs=[logs_display]
+            )
+        
+        # Section 4: Agent Templates - Pre-built Examples
+        with gr.Group():
+            gr.Markdown("## 📚 Agent Templates Library")
+            
+            with gr.Row():
+                with gr.Column(scale=1):
+                    template_info_display = gr.Markdown(
+                        self._get_template_info(None),
+                        label="Template Information"
+                    )
+                    
+                    with gr.Row():
+                        preview_btn = gr.Button("👁️ Preview Code", size="sm")
+                        quick_deploy_btn = gr.Button("⚡ Quick Deploy", variant="secondary", size="sm")
+                
+                with gr.Column(scale=2):
+                    code_preview = gr.Code(
+                        label="Template Code Preview",
+                        language="python",
+                        lines=15,
+                        value="# Select a template to preview its code"
+                    )
+        
+        # Event handlers
+        
+        # Deploy agent
+        deploy_btn.click(
+            fn=self._deploy_agent,
+            inputs=[agent_name_input, template_dropdown],
+            outputs=[action_status, status_grid]
+        )
+        
+        # Emergency stop all
+        emergency_stop_btn.click(
+            fn=self._emergency_stop_all,
+            outputs=[action_status, status_grid]
+        )
+        
+        # Refresh dashboard manually
+        refresh_btn.click(
+            fn=self._update_dashboard,
+            outputs=[status_grid]
+        )
+        
+        # Clear logs
+        clear_logs_btn.click(
+            fn=self._clear_logs,
+            outputs=[logs_display]
+        )
+        
+        # Template selection updates info
+        template_dropdown.change(
+            fn=self._get_template_info,
+            inputs=[template_dropdown],
+            outputs=[template_info_display]
+        )
+        
+        # Preview template code
+        preview_btn.click(
+            fn=self._preview_template_code,
+            inputs=[template_dropdown],
+            outputs=[code_preview]
+        )
+        
+        # Quick deploy from template
+        quick_deploy_btn.click(
+            fn=lambda template: self._deploy_agent(
+                f"quick-{template.split()[0].lower()}-{int(time.time()) % 10000}" if template else "quick-agent",
+                template
+            ),
+            inputs=[template_dropdown],
+            outputs=[action_status, status_grid]
+        )
+        
+        # Update log filter choices when dashboard updates
+        dashboard_timer.tick(
+            fn=self._get_agent_choices,
+            outputs=[log_filter_dropdown],
+            show_progress=False
+        )
+
     def create_interface(self) -> gr.Blocks:
         """Create the main control panel interface"""
         
