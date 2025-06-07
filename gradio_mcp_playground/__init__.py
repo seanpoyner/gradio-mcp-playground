@@ -4,8 +4,8 @@ A comprehensive toolkit for building and managing Gradio apps as MCP servers.
 """
 
 # Always available imports
-from .registry import ServerRegistry
 from .config_manager import ConfigManager
+from .registry import ServerRegistry
 
 __version__ = "0.1.0"
 
@@ -17,7 +17,7 @@ __all__ = [
 
 # Optional imports that depend on external packages
 try:
-    from .server_manager import MCPServer, GradioMCPServer
+    from .server_manager import GradioMCPServer, MCPServer
 
     __all__.extend(["MCPServer", "GradioMCPServer"])
 except ImportError:
@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 try:
-    from .client_manager import MCPClient, GradioMCPClient
+    from .client_manager import GradioMCPClient, MCPClient
 
     __all__.extend(["MCPClient", "GradioMCPClient"])
 except ImportError:

@@ -3,14 +3,14 @@
 Manages creation and configuration of Gradio apps as MCP servers.
 """
 
-import os
-import sys
-import json
 import asyncio
+import json
+import os
 import subprocess
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 # Optional imports
 try:
@@ -333,6 +333,161 @@ class GradioMCPServer:
         return servers
 
     @staticmethod
+    def find_claude_desktop_servers() -> List[Dict[str, Any]]:
+        """Find MCP servers managed by Claude Desktop"""
+        servers = []
+
+        # Path to Claude Desktop configuration and logs
+        # Handle both Windows and WSL paths
+        if os.name == "nt":
+            # Native Windows
+            claude_config_path = Path.home() / "AppData/Roaming/Claude/claude_desktop_config.json"
+            claude_logs_path = Path.home() / "AppData/Roaming/Claude/logs"
+        else:
+            # WSL or Linux - look for Windows user directory
+            # Try multiple possible usernames
+            possible_users = [
+                os.environ.get("USER", ""),
+                os.environ.get("USERNAME", ""),
+                "seanp",  # fallback
+            ]
+
+            claude_config_path = None
+            claude_logs_path = None
+
+            for user in possible_users:
+                if user:
+                    config_path = Path(
+                        f"/mnt/c/Users/{user}/AppData/Roaming/Claude/claude_desktop_config.json"
+                    )
+                    logs_path = Path(f"/mnt/c/Users/{user}/AppData/Roaming/Claude/logs")
+
+                    if config_path.exists():
+                        claude_config_path = config_path
+                        claude_logs_path = logs_path
+                        break
+
+            # If still not found, return empty list
+            if not claude_config_path:
+                return servers
+
+        if not claude_config_path.exists() or not claude_logs_path.exists():
+            return servers
+
+        try:
+            # Read Claude Desktop configuration
+            with open(claude_config_path) as f:
+                config = json.load(f)
+
+            mcp_servers = config.get("mcpServers", {})
+
+            for server_name, server_config in mcp_servers.items():
+                server_info = {
+                    "name": server_name,
+                    "command": server_config.get("command", ""),
+                    "args": server_config.get("args", []),
+                    "env": server_config.get("env", {}),
+                    "source": "claude_desktop",
+                    "running": False,
+                    "last_seen": None,
+                    "errors": [],
+                    "status_message": "Unknown",
+                }
+
+                # Check server log file for status
+                log_file = claude_logs_path / f"mcp-server-{server_name}.log"
+                if log_file.exists():
+                    status = GradioMCPServer._parse_claude_server_log(log_file)
+                    server_info.update(status)
+
+                servers.append(server_info)
+
+        except Exception as e:
+            print(f"Error reading Claude Desktop configuration: {e}")
+
+        return servers
+
+    @staticmethod
+    def _parse_claude_server_log(log_file: Path) -> Dict[str, Any]:
+        """Parse Claude Desktop server log to determine status"""
+        status = {"running": False, "last_seen": None, "errors": [], "status_message": "Stopped"}
+
+        try:
+            # Read the last 100 lines of the log file for recent status
+            with open(log_file, encoding="utf-8") as f:
+                lines = f.readlines()
+                recent_lines = lines[-100:] if len(lines) > 100 else lines
+
+            server_started = False
+            transport_closed = False
+            last_activity = None
+            errors = []
+
+            for line in recent_lines:
+                line = line.strip()
+                if not line:
+                    continue
+
+                # Parse timestamp and message
+                if line.startswith("2025-"):
+                    parts = line.split(" ", 3)
+                    if len(parts) >= 4:
+                        timestamp_str = parts[0]
+                        level = parts[2] if parts[2].startswith("[") else None
+                        message = parts[3] if len(parts) > 3 else ""
+
+                        # Update last activity timestamp
+                        try:
+                            from datetime import datetime
+
+                            last_activity = datetime.fromisoformat(
+                                timestamp_str.replace("Z", "+00:00")
+                            )
+                        except:
+                            pass
+
+                        # Check for server status indicators
+                        if "Server started and connected successfully" in message:
+                            server_started = True
+                            transport_closed = False
+                        elif (
+                            "Client transport closed" in message
+                            or "Server transport closed" in message
+                        ):
+                            transport_closed = True
+                        elif (
+                            "Server disconnected" in message or "error" in level.lower()
+                            if level
+                            else False
+                        ):
+                            errors.append(message)
+                        elif "Initializing server" in message:
+                            server_started = False
+
+            # Determine current status
+            if server_started and not transport_closed:
+                status["running"] = True
+                status["status_message"] = "Running"
+            elif server_started and transport_closed:
+                status["running"] = False
+                status["status_message"] = "Disconnected"
+            elif errors:
+                status["running"] = False
+                status["status_message"] = "Error"
+            else:
+                status["running"] = False
+                status["status_message"] = "Stopped"
+
+            status["last_seen"] = last_activity.isoformat() if last_activity else None
+            status["errors"] = errors[-5:]  # Keep last 5 errors
+
+        except Exception as e:
+            status["errors"] = [f"Failed to parse log: {str(e)}"]
+            status["status_message"] = "Log Parse Error"
+
+        return status
+
+    @staticmethod
     def create_template_server(template: str, name: str, directory: Path) -> Dict[str, Any]:
         """Create a new server from a template"""
         from .registry import ServerRegistry
@@ -435,7 +590,7 @@ class GradioMCPServer:
                 except (OSError, ProcessLookupError):
                     # Process already stopped or doesn't exist
                     pass
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass
 
         # Get list of files to remove

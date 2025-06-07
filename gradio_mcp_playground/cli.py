@@ -3,22 +3,23 @@
 Command-line interface for managing Gradio MCP servers and clients.
 """
 
-import click
-import sys
-import os
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Optional
 
+import click
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
+
+from .config_manager import ConfigManager
 
 # Always available imports
 from .registry import ServerRegistry
-from .config_manager import ConfigManager
 
 # Optional imports
 try:
@@ -68,8 +69,15 @@ def main():
 
 
 @main.command()
-def setup():
+@click.option("--path-only", is_flag=True, help="Only setup PATH, skip other configuration")
+def setup(path_only: bool):
     """Interactive setup wizard for Gradio MCP Playground"""
+    if path_only:
+        # Only handle PATH setup
+        from .setup_path import main as setup_path_main
+
+        setup_path_main()
+        return
     console.print(
         Panel.fit(
             "[bold blue]Welcome to Gradio MCP Playground Setup![/bold blue]\n\n"
@@ -179,7 +187,7 @@ def create(name: str, template: str, port: Optional[int], directory: str):
     console.print("\nNext steps:")
     console.print(f"  1. Navigate to server: [cyan]cd {server_path}[/cyan]")
     console.print(f"  2. Start the server: [cyan]gmp server start {name}[/cyan]")
-    console.print(f"  3. Or edit the code: [cyan]code app.py[/cyan]")
+    console.print("  3. Or edit the code: [cyan]code app.py[/cyan]")
 
 
 @server.command()
@@ -315,21 +323,21 @@ def delete(name: str, force: bool, files: bool):
         return
 
     # Show server info before deletion
-    console.print(f"\n[yellow]Server to delete:[/yellow]")
+    console.print("\n[yellow]Server to delete:[/yellow]")
     console.print(f"  Name: {name}")
     console.print(f"  Path: {server_config.get('path', 'N/A')}")
     console.print(f"  Directory: {server_config.get('directory', 'N/A')}")
 
     if server_config.get("running"):
-        console.print(f"  [red]Status: Running (will be stopped)[/red]")
+        console.print("  [red]Status: Running (will be stopped)[/red]")
     else:
-        console.print(f"  Status: Stopped")
+        console.print("  Status: Stopped")
 
     # Confirmation prompt unless --force is used
     if not force:
-        console.print(f"\n[yellow]This will remove the server from the registry.[/yellow]")
+        console.print("\n[yellow]This will remove the server from the registry.[/yellow]")
         if files:
-            console.print(f"[red]This will also delete all server files and directories![/red]")
+            console.print("[red]This will also delete all server files and directories![/red]")
 
         if not click.confirm("Are you sure you want to delete this server?"):
             console.print("[yellow]Deletion cancelled.[/yellow]")
@@ -366,9 +374,9 @@ def delete(name: str, force: bool, files: bool):
                     progress.update(task, completed=True)
 
                     if result["success"]:
-                        console.print(f"[green]✓ Server files deleted successfully[/green]")
+                        console.print("[green]✓ Server files deleted successfully[/green]")
                         if result["process_stopped"]:
-                            console.print(f"[green]✓ Running server process stopped[/green]")
+                            console.print("[green]✓ Running server process stopped[/green]")
                         if result["files_removed"]:
                             console.print(
                                 f"[blue]Files removed: {len(result['files_removed'])}[/blue]"
@@ -542,6 +550,28 @@ def dashboard(port: int, public: bool):
 
 
 @main.command()
+def mcp():
+    """Run as MCP server"""
+    console.print("[green]Starting Gradio MCP Playground as MCP Server...[/green]")
+    console.print("[blue]Communication over stdio[/blue]")
+
+    try:
+        import asyncio
+
+        from .mcp_server import main as mcp_main
+
+        asyncio.run(mcp_main())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]MCP server stopped.[/yellow]")
+    except ImportError:
+        console.print("[red]Error: MCP package is required. Install with: pip install mcp[/red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error running MCP server: {e}[/red]")
+        sys.exit(1)
+
+
+@main.command()
 @click.argument("server_name")
 @click.option("--public", is_flag=True, help="Make Space public")
 @click.option("--hardware", "-h", help="Hardware tier", default="cpu-basic")
@@ -570,12 +600,20 @@ def deploy(server_name: str, public: bool, hardware: str):
             # This would use the Hugging Face Hub API to create and deploy a Space
 
             progress.update(task, completed=True)
-            console.print(f"\n[green]✓ Server deployed successfully![/green]")
+            console.print("\n[green]✓ Server deployed successfully![/green]")
             console.print(f"\nSpace URL: https://huggingface.co/spaces/your-username/{server_name}")
 
         except Exception as e:
             progress.update(task, completed=True)
             console.print(f"\n[red]Deployment failed: {e}[/red]")
+
+
+@main.command()
+def setup_path():
+    """Setup Windows PATH to enable gmp command"""
+    from .setup_path import main as setup_path_main
+
+    setup_path_main()
 
 
 @main.command()
@@ -594,7 +632,7 @@ def examples():
             # Read first few lines to get description
             description = ""
             try:
-                with open(example, "r", encoding="utf-8") as f:
+                with open(example, encoding="utf-8") as f:
                     lines = f.readlines()
                     for line in lines[:10]:
                         if line.strip().startswith('"""') and len(line.strip()) > 3:
@@ -607,7 +645,7 @@ def examples():
                             if end > start:
                                 description = line[start + 3 : end].strip()
                                 break
-            except (IOError, UnicodeDecodeError) as e:
+            except (OSError, UnicodeDecodeError) as e:
                 description = f"Could not read description ({e})"
 
             if not description:

@@ -5,15 +5,15 @@ Manages MCP client connections to Gradio servers.
 
 import asyncio
 import json
-from typing import Dict, Any, Optional, List, Union
-from pathlib import Path
 from contextlib import AsyncExitStack
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # Optional imports for MCP functionality
 try:
-    from mcp.client.stdio import stdio_client, StdioServerParameters
     from mcp.client.session import ClientSession
     from mcp.client.sse import sse_client
+    from mcp.client.stdio import StdioServerParameters, stdio_client
 
     HAS_MCP = True
 except ImportError:

@@ -4,10 +4,17 @@ Manages configuration for Gradio MCP Playground.
 """
 
 import json
-import os
-from pathlib import Path
-from typing import Dict, Any, Optional, List
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+# Import secure storage
+try:
+    from .secure_storage import SecureTokenStorage
+
+    HAS_SECURE_STORAGE = True
+except ImportError:
+    HAS_SECURE_STORAGE = False
 
 
 class ConfigManager:
@@ -20,6 +27,16 @@ class ConfigManager:
         self.connections_path = self.config_dir / "connections.json"
         self._ensure_config_dir()
         self._load_config()
+
+        # Initialize secure storage if available
+        if HAS_SECURE_STORAGE:
+            try:
+                self.secure_storage = SecureTokenStorage(self.config_dir)
+            except Exception as e:
+                print(f"Warning: Could not initialize secure storage: {e}")
+                self.secure_storage = None
+        else:
+            self.secure_storage = None
 
     def _ensure_config_dir(self) -> None:
         """Ensure configuration directory exists"""
@@ -71,32 +88,42 @@ class ConfigManager:
     # Server management
 
     def list_servers(self) -> List[Dict[str, Any]]:
-        """List all registered servers"""
-        if not self.servers_path.exists():
-            return []
-
-        with open(self.servers_path) as f:
-            servers_data = json.load(f)
-
-        # Add runtime status
-        from .server_manager import GradioMCPServer
-
-        running_servers = GradioMCPServer.find_running_servers()
-        running_map = {s["app_path"]: s for s in running_servers}
-
+        """List all registered servers including Claude Desktop servers"""
         servers = []
-        for server in servers_data.get("servers", []):
-            server_info = server.copy()
 
-            # Check if running
-            if server_info.get("path") in running_map:
-                server_info["running"] = running_map[server_info["path"]]["running"]
-                server_info["pid"] = running_map[server_info["path"]].get("pid")
-                server_info["port"] = running_map[server_info["path"]].get("port")
-            else:
-                server_info["running"] = False
+        # Get locally registered servers
+        if self.servers_path.exists():
+            with open(self.servers_path) as f:
+                servers_data = json.load(f)
 
-            servers.append(server_info)
+            # Add runtime status for local servers
+            from .server_manager import GradioMCPServer
+
+            running_servers = GradioMCPServer.find_running_servers()
+            running_map = {s["app_path"]: s for s in running_servers}
+
+            for server in servers_data.get("servers", []):
+                server_info = server.copy()
+                server_info["source"] = "local"
+
+                # Check if running
+                if server_info.get("path") in running_map:
+                    server_info["running"] = running_map[server_info["path"]]["running"]
+                    server_info["pid"] = running_map[server_info["path"]].get("pid")
+                    server_info["port"] = running_map[server_info["path"]].get("port")
+                else:
+                    server_info["running"] = False
+
+                servers.append(server_info)
+
+        # Add Claude Desktop servers
+        try:
+            from .server_manager import GradioMCPServer
+
+            claude_servers = GradioMCPServer.find_claude_desktop_servers()
+            servers.extend(claude_servers)
+        except Exception as e:
+            print(f"Warning: Could not load Claude Desktop servers: {e}")
 
         return servers
 
@@ -302,3 +329,89 @@ class ConfigManager:
     def hf_token(self) -> Optional[str]:
         """Get Hugging Face token"""
         return self.config.get("hf_token")
+
+    # Secure token storage methods
+
+    def save_secure_token(self, service: str, token: str) -> bool:
+        """Save a token securely using encryption
+
+        Args:
+            service: Service name (e.g., 'huggingface', 'openai')
+            token: Token to save securely
+
+        Returns:
+            bool: True if saved successfully, False otherwise
+        """
+        if not self.secure_storage:
+            return False
+
+        try:
+            return self.secure_storage.save_token(service, token)
+        except Exception as e:
+            print(f"Error saving secure token for {service}: {e}")
+            return False
+
+    def load_secure_token(self, service: str) -> Optional[str]:
+        """Load a token securely from encrypted storage
+
+        Args:
+            service: Service name (e.g., 'huggingface', 'openai')
+
+        Returns:
+            str: Decrypted token if found, None otherwise
+        """
+        if not self.secure_storage:
+            return None
+
+        try:
+            return self.secure_storage.load_token(service)
+        except Exception as e:
+            print(f"Error loading secure token for {service}: {e}")
+            return None
+
+    def delete_secure_token(self, service: str) -> bool:
+        """Delete a securely stored token
+
+        Args:
+            service: Service name (e.g., 'huggingface', 'openai')
+
+        Returns:
+            bool: True if deleted successfully, False otherwise
+        """
+        if not self.secure_storage:
+            return False
+
+        try:
+            return self.secure_storage.delete_token(service)
+        except Exception as e:
+            print(f"Error deleting secure token for {service}: {e}")
+            return False
+
+    def clear_secure_tokens(self) -> bool:
+        """Clear all securely stored tokens
+
+        Returns:
+            bool: True if cleared successfully, False otherwise
+        """
+        if not self.secure_storage:
+            return False
+
+        try:
+            # Get list of services and delete each token
+            services = ["huggingface", "openai", "anthropic"]  # Common services
+            success = True
+            for service in services:
+                if not self.secure_storage.delete_token(service):
+                    success = False
+            return success
+        except Exception as e:
+            print(f"Error clearing secure tokens: {e}")
+            return False
+
+    def has_secure_storage(self) -> bool:
+        """Check if secure storage is available
+
+        Returns:
+            bool: True if secure storage is available, False otherwise
+        """
+        return self.secure_storage is not None

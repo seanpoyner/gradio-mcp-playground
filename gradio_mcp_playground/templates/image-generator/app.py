@@ -4,8 +4,8 @@ AI image generation MCP server using Stable Diffusion.
 """
 
 import gradio as gr
-from PIL import Image
 import numpy as np
+from PIL import Image
 
 
 def generate_image(

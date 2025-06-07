@@ -3,15 +3,13 @@
 Utility functions for the Gradio MCP Playground.
 """
 
-import os
+import hashlib
 import socket
 import subprocess
 import sys
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Tuple
-import json
-import hashlib
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 # Optional imports
 try:

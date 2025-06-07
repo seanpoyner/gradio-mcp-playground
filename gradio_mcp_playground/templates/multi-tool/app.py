@@ -3,11 +3,12 @@
 An MCP server with multiple tools organized in tabs.
 """
 
-import gradio as gr
-import json
 import base64
+import json
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Any, Dict
+
+import gradio as gr
 
 
 def text_analyzer(text: str) -> Dict[str, Any]:

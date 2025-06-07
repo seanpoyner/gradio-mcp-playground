@@ -49,7 +49,8 @@ dependencies = [
     "psutil>=5.9.0",
     "anthropic>=0.18.0",
     "huggingface-hub>=0.20.0",
-    "gradio-client>=1.0.0"
+    "gradio-client>=1.0.0",
+    "cryptography>=41.0.0"
 ]
 
 [project.optional-dependencies]
@@ -74,6 +75,12 @@ all = [
     "diffusers>=0.20.0"
 ]
 
+ai = [
+    "llama-index>=0.10.0",
+    "llama-index-llms-huggingface-api>=0.1.0",
+    "llama-index-embeddings-huggingface>=0.2.0"
+]
+
 docs = [
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.0.0",
@@ -89,9 +96,10 @@ Issues = "https://github.com/gradio-mcp-playground/gradio-mcp-playground/issues"
 [project.scripts]
 gmp = "gradio_mcp_playground.cli:main"
 gradio-mcp = "gradio_mcp_playground.cli:main"
+gmp-setup-path = "gradio_mcp_playground.setup_path:main"
 
-[tool.setuptools]
-packages = ["gradio_mcp_playground"]
+[tool.setuptools.packages.find]
+include = ["gradio_mcp_playground*"]
 
 [tool.setuptools.package-data]
 gradio_mcp_playground = [

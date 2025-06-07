@@ -3,9 +3,9 @@
 A calculator with multiple mathematical tools exposed as MCP functions.
 """
 
-import gradio as gr
 import math
-from typing import Union
+
+import gradio as gr
 
 
 def basic_calculator(expression: str) -> str:
