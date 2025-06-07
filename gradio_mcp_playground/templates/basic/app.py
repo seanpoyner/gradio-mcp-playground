@@ -32,7 +32,10 @@ demo = gr.Interface(
 
 # Launch as MCP server
 if __name__ == "__main__":
+    import os
+    # Use port from environment variable or default to 7860
+    port = int(os.environ.get("GRADIO_SERVER_PORT", 7860))
     # The mcp_server=True flag enables MCP protocol support
     demo.launch(
-        server_port=7860, mcp_server=True, server_name="0.0.0.0"  # Allow external connections
+        server_port=port, mcp_server=True, server_name="0.0.0.0"  # Allow external connections
     )

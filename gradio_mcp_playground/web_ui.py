@@ -157,6 +157,13 @@ def create_dashboard():
                             scale=4,
                         )
                         send_btn = gr.Button("Send", variant="primary", scale=1)
+                    
+                    with gr.Row():
+                        show_thinking = gr.Checkbox(
+                            label="🧠 Show AI Thinking Steps", 
+                            value=False,
+                            info="Display the AI's reasoning process step-by-step"
+                        )
 
                     # Quick action buttons
                     gr.Markdown("#### Quick Actions")
@@ -227,7 +234,12 @@ def create_dashboard():
                             with gr.Column(scale=1):
                                 gr.Markdown("### Server Actions")
                                 server_dropdown = gr.Dropdown(
-                                    label="Select Server", choices=[], value=None, interactive=True
+                                    label="Select Server", 
+                                    choices=[], 
+                                    value=None, 
+                                    interactive=True,
+                                    allow_custom_value=False,
+                                    info="Select a server to manage"
                                 )
                                 selected_server = gr.Textbox(
                                     label="Selected Server", interactive=False
@@ -534,18 +546,33 @@ def create_dashboard():
 
         if coding_agent:
 
-            def send_message(message, history):
+            def send_message(message, history, show_thinking_steps):
                 """Send message to AI assistant"""
                 if not coding_agent.is_configured():
                     bot_response = (
                         "Please configure a model first by providing your HuggingFace token."
                     )
+                    history.append({"role": "user", "content": message})
+                    history.append({"role": "assistant", "content": bot_response})
+                    return history, ""
+                
+                if show_thinking_steps:
+                    # Use the detailed method that shows thinking steps
+                    steps, bot_response = coding_agent.chat_with_steps(message)
+                    
+                    # Combine thinking steps with final response
+                    if steps:
+                        thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                        full_response = thinking_section + "## 💬 Final Response\n\n" + bot_response
+                    else:
+                        full_response = bot_response
                 else:
-                    bot_response = coding_agent.chat(message)
+                    # Use the regular chat method
+                    full_response = coding_agent.chat(message)
 
                 # Convert to messages format for new Gradio chatbot
                 history.append({"role": "user", "content": message})
-                history.append({"role": "assistant", "content": bot_response})
+                history.append({"role": "assistant", "content": full_response})
                 return history, ""
 
             def reset_conversation():
@@ -554,60 +581,90 @@ def create_dashboard():
                     coding_agent.reset_conversation()
                 return []
 
-            def quick_mcp_help(history):
+            def quick_mcp_help(history, show_thinking_steps):
                 """Quick MCP help"""
                 message = "What is MCP and how do I get started with MCP development?"
                 if coding_agent.is_configured():
-                    response = coding_agent.chat(message)
+                    if show_thinking_steps:
+                        steps, response = coding_agent.chat_with_steps(message)
+                        if steps:
+                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            response = thinking_section + "## 💬 Final Response\n\n" + response
+                    else:
+                        response = coding_agent.chat(message)
                 else:
                     response = "Please configure a model first."
                 history.append({"role": "user", "content": message})
                 history.append({"role": "assistant", "content": response})
                 return history
 
-            def quick_gradio_help(history):
+            def quick_gradio_help(history, show_thinking_steps):
                 """Quick Gradio help"""
                 message = (
                     "How do I create a basic Gradio interface and what are the main components?"
                 )
                 if coding_agent.is_configured():
-                    response = coding_agent.chat(message)
+                    if show_thinking_steps:
+                        steps, response = coding_agent.chat_with_steps(message)
+                        if steps:
+                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            response = thinking_section + "## 💬 Final Response\n\n" + response
+                    else:
+                        response = coding_agent.chat(message)
                 else:
                     response = "Please configure a model first."
                 history.append({"role": "user", "content": message})
                 history.append({"role": "assistant", "content": response})
                 return history
 
-            def quick_analyze_help(history):
+            def quick_analyze_help(history, show_thinking_steps):
                 """Quick code analysis help"""
                 message = "How can I analyze my code for potential issues and improvements?"
                 if coding_agent.is_configured():
-                    response = coding_agent.chat(message)
+                    if show_thinking_steps:
+                        steps, response = coding_agent.chat_with_steps(message)
+                        if steps:
+                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            response = thinking_section + "## 💬 Final Response\n\n" + response
+                    else:
+                        response = coding_agent.chat(message)
                 else:
                     response = "Please configure a model first."
                 history.append({"role": "user", "content": message})
                 history.append({"role": "assistant", "content": response})
                 return history
 
-            def quick_best_practices(history):
+            def quick_best_practices(history, show_thinking_steps):
                 """Quick best practices"""
                 message = "What are the best practices for MCP server development?"
                 if coding_agent.is_configured():
-                    response = coding_agent.chat(message)
+                    if show_thinking_steps:
+                        steps, response = coding_agent.chat_with_steps(message)
+                        if steps:
+                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            response = thinking_section + "## 💬 Final Response\n\n" + response
+                    else:
+                        response = coding_agent.chat(message)
                 else:
                     response = "Please configure a model first."
                 history.append({"role": "user", "content": message})
                 history.append({"role": "assistant", "content": response})
                 return history
 
-            def analyze_code_directly(code, language, history):
+            def analyze_code_directly(code, language, history, show_thinking_steps):
                 """Analyze code directly"""
                 if not code.strip():
                     return history
 
                 message = f"Please analyze this {language} code for issues and improvements:\n\n```{language}\n{code}\n```"
                 if coding_agent.is_configured():
-                    response = coding_agent.chat(message)
+                    if show_thinking_steps:
+                        steps, response = coding_agent.chat_with_steps(message)
+                        if steps:
+                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            response = thinking_section + "## 💬 Final Response\n\n" + response
+                    else:
+                        response = coding_agent.chat(message)
                 else:
                     response = "Please configure a model first."
 
@@ -617,9 +674,17 @@ def create_dashboard():
 
         def update_server_dropdown():
             """Update the server dropdown with current servers"""
-            servers = config_manager.list_servers()
-            server_names = [server.get("name", "Unknown") for server in servers]
-            return gr.update(choices=server_names, value=None)
+            try:
+                servers = config_manager.list_servers()
+                server_names = [server.get("name", "Unknown") for server in servers]
+                # Ensure we always return a valid state
+                if not server_names:
+                    return gr.update(choices=[], value=None)
+                else:
+                    return gr.update(choices=server_names, value=None)
+            except Exception as e:
+                print(f"DEBUG: Error updating server dropdown: {e}")
+                return gr.update(choices=[], value=None)
 
         def on_server_dropdown_change(selected_name):
             """Handle server selection from dropdown"""
@@ -1126,25 +1191,25 @@ def create_dashboard():
 
             # Chat functionality
             send_btn.click(
-                send_message, inputs=[chat_input, chatbot], outputs=[chatbot, chat_input]
+                send_message, inputs=[chat_input, chatbot, show_thinking], outputs=[chatbot, chat_input]
             )
 
             chat_input.submit(
-                send_message, inputs=[chat_input, chatbot], outputs=[chatbot, chat_input]
+                send_message, inputs=[chat_input, chatbot, show_thinking], outputs=[chatbot, chat_input]
             )
 
             reset_chat_btn.click(reset_conversation, outputs=chatbot)
 
             # Quick action buttons
-            help_mcp_btn.click(quick_mcp_help, inputs=chatbot, outputs=chatbot)
-            help_gradio_btn.click(quick_gradio_help, inputs=chatbot, outputs=chatbot)
-            analyze_btn.click(quick_analyze_help, inputs=chatbot, outputs=chatbot)
-            best_practices_btn.click(quick_best_practices, inputs=chatbot, outputs=chatbot)
+            help_mcp_btn.click(quick_mcp_help, inputs=[chatbot, show_thinking], outputs=chatbot)
+            help_gradio_btn.click(quick_gradio_help, inputs=[chatbot, show_thinking], outputs=chatbot)
+            analyze_btn.click(quick_analyze_help, inputs=[chatbot, show_thinking], outputs=chatbot)
+            best_practices_btn.click(quick_best_practices, inputs=[chatbot, show_thinking], outputs=chatbot)
 
             # Direct code analysis
             analyze_code_btn.click(
                 analyze_code_directly,
-                inputs=[code_input, language_select, chatbot],
+                inputs=[code_input, language_select, chatbot, show_thinking],
                 outputs=chatbot,
             )
 

@@ -521,6 +521,101 @@ Ready to help with any coding challenge or MCP development task!""",
                 else:
                     return f"❌ Error processing message: {error_msg}\n\n💡 Try switching to 'Zephyr 7B Beta' model which is confirmed to work."
 
+        def chat_with_steps(self, message: str):
+            """Send a message to the coding agent and return both steps and final response"""
+            if not self.agent:
+                return [], "Please configure a model first by providing your HuggingFace API token and selecting a model."
+
+            try:
+                # Create a custom handler to capture steps
+                steps = []
+                
+                # Store the original verbose setting
+                original_verbose = getattr(self.agent, '_verbose', True)
+                
+                # Override the agent's step method to capture thinking
+                original_step = getattr(self.agent, '_run_step', None)
+                
+                def capture_step(step_input, **kwargs):
+                    """Capture reasoning steps"""
+                    if hasattr(step_input, 'input'):
+                        user_input = str(step_input.input)
+                        if user_input and user_input != "None":
+                            steps.append(f"🤔 **Input**: {user_input}")
+                    
+                    # Call original step method
+                    result = original_step(step_input, **kwargs) if original_step else None
+                    
+                    # Extract thinking and action from the step
+                    if result and hasattr(result, 'output'):
+                        output_str = str(result.output)
+                        
+                        # Parse ReAct format (Thought: ... Action: ... Action Input: ... Observation: ...)
+                        lines = output_str.split('\n')
+                        current_section = None
+                        section_content = []
+                        
+                        for line in lines:
+                            line = line.strip()
+                            if line.startswith('Thought:'):
+                                if current_section and section_content:
+                                    steps.append(f"💭 **{current_section}**: {' '.join(section_content)}")
+                                current_section = "Thought"
+                                section_content = [line[8:].strip()]  # Remove "Thought:" prefix
+                            elif line.startswith('Action:'):
+                                if current_section and section_content:
+                                    steps.append(f"💭 **{current_section}**: {' '.join(section_content)}")
+                                current_section = "Action"
+                                section_content = [line[7:].strip()]  # Remove "Action:" prefix
+                            elif line.startswith('Action Input:'):
+                                if current_section and section_content:
+                                    steps.append(f"🎯 **{current_section}**: {' '.join(section_content)}")
+                                current_section = "Action Input"
+                                section_content = [line[13:].strip()]  # Remove "Action Input:" prefix
+                            elif line.startswith('Observation:'):
+                                if current_section and section_content:
+                                    steps.append(f"📝 **{current_section}**: {' '.join(section_content)}")
+                                current_section = "Observation"
+                                section_content = [line[12:].strip()]  # Remove "Observation:" prefix
+                            elif line and current_section:
+                                section_content.append(line)
+                        
+                        # Add the last section
+                        if current_section and section_content:
+                            icon = "🎯" if current_section == "Action" else "📝" if current_section == "Observation" else "💭"
+                            steps.append(f"{icon} **{current_section}**: {' '.join(section_content)}")
+                    
+                    return result
+                
+                # Temporarily override the step method
+                if hasattr(self.agent, '_run_step'):
+                    self.agent._run_step = capture_step
+                
+                # Get the response
+                response = self.agent.chat(message)
+                response_str = str(response)
+
+                # Restore original method
+                if original_step:
+                    self.agent._run_step = original_step
+
+                # Truncate very long responses to prevent UI issues
+                if len(response_str) > 6000:
+                    response_str = response_str[:6000] + "\n\n... (response truncated for display)"
+
+                return steps, response_str
+                
+            except Exception as e:
+                error_msg = str(e)
+                if "404" in error_msg and "not found" in error_msg.lower():
+                    return [], f"❌ Model endpoint not available. Try using 'Zephyr 7B Beta' which is confirmed to work.\n\nOriginal error: {error_msg}"
+                elif "401" in error_msg or "unauthorized" in error_msg.lower():
+                    return [], f"❌ Authentication failed. Please check your HuggingFace token has the correct permissions.\n\nOriginal error: {error_msg}"
+                elif "503" in error_msg or "temporarily unavailable" in error_msg.lower():
+                    return [], f"❌ Model is temporarily unavailable. Please try again in a few minutes.\n\nOriginal error: {error_msg}"
+                else:
+                    return [], f"❌ Error processing message: {error_msg}\n\n💡 Try switching to 'Zephyr 7B Beta' model which is confirmed to work."
+
         def get_available_models(self) -> Dict[str, Dict[str, Any]]:
             """Get list of available models"""
             return self.available_models

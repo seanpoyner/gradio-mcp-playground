@@ -273,8 +273,16 @@ class GradioMCPServer:
         if public:
             env["GRADIO_SHARE"] = "true"
 
-        # Start process
-        self.process = subprocess.Popen(cmd, env=env, cwd=str(self.app_path.parent))
+        # Start process in background with suppressed output
+        self.process = subprocess.Popen(
+            cmd, 
+            env=env, 
+            cwd=str(self.app_path.parent),
+            stdout=subprocess.DEVNULL,  # Suppress stdout
+            stderr=subprocess.DEVNULL,  # Suppress stderr
+            stdin=subprocess.DEVNULL,   # No input
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0  # Hide window on Windows
+        )
 
         # Save process info
         self._save_process_info(port)

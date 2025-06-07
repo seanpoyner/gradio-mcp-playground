@@ -112,6 +112,35 @@ class MCPServerManager:
             if result.returncode == 0:
                 return True, result.stdout
             else:
+                # Check if it's just warnings (common Pydantic warnings)
+                stderr_lower = (result.stderr or "").lower()
+                stdout_content = result.stdout or ""
+                
+                # Handle Pydantic warnings more comprehensively
+                if "warning" in stderr_lower and "pydantic" in stderr_lower:
+                    # Check if the only error content is Pydantic warnings and "Aborted!"
+                    stderr_lines = result.stderr.split('\n') if result.stderr else []
+                    non_warning_errors = []
+                    for line in stderr_lines:
+                        line_lower = line.lower().strip()
+                        if (line_lower and 
+                            not line_lower.startswith('c:\\programdata\\anaconda3\\lib\\site-packages\\pydantic') and
+                            not 'userwarning:' in line_lower and
+                            not 'warnings.warn(' in line_lower and
+                            not 'field "model_name" has conflict' in line_lower and
+                            not 'you may be able to resolve this warning' in line_lower and
+                            line_lower != 'aborted!'):
+                            non_warning_errors.append(line)
+                    
+                    # If only Pydantic warnings and possibly "Aborted!", treat as success for server operations
+                    if not non_warning_errors and any(cmd in args for cmd in ["create", "server", "start", "stop"]):
+                        return True, "Command completed successfully (Pydantic warnings ignored)"
+                    
+                    # If command has stdout content and no real errors
+                    if (stdout_content.strip() and 
+                        not any(error_word in stdout_content.lower() for error_word in ["error:", "failed", "traceback"])):
+                        return True, stdout_content
+                
                 return False, f"Command failed: {result.stderr or result.stdout}"
 
         except subprocess.TimeoutExpired:
@@ -146,51 +175,130 @@ class MCPServerManager:
             return f"❌ Failed to create server '{name}': {output}"
 
     def start_server(self, name: str, port: Optional[int] = None) -> str:
-        """Start an MCP server"""
+        """Start an MCP server using the proper server management system"""
         try:
-            gmp_path = self._get_gmp_path()
-            args = ["server", "start", name]
-            if port:
-                args.extend(["--port", str(port)])
+            # Get server configuration
+            from .config_manager import ConfigManager
+            from .server_manager import GradioMCPServer
+            
+            config_manager = ConfigManager()
+            server_config = config_manager.get_server(name)
+            
+            if not server_config:
+                # List available servers to help user
+                servers = config_manager.list_servers()
+                local_servers = [s for s in servers if s.get("source") == "local"]
+                if local_servers:
+                    available_list = []
+                    for server in local_servers:
+                        port_info = f"port {server.get('port', 'N/A')}" if server.get('port') else "no port configured"
+                        available_list.append(f"- {server.get('name')} ({port_info})")
+                    available = "\n".join(available_list)
+                    return f"❌ Server '{name}' not found in configuration.\n\nAvailable local servers:\n{available}\n\n💡 Suggestion: Use start_mcp_server() with one of the available server names, or use create_mcp_server() to create a new server."
+                else:
+                    return f"❌ Server '{name}' not found in configuration.\n\nNo local servers available. Use create_mcp_server() to create a new server first.\n\nExample: create_mcp_server(name='basic_server', template='basic', port=7862)"
+            
+            server_directory = server_config.get("directory")
+            if not server_directory:
+                return f"❌ No directory specified in server configuration"
+            
+            # Convert relative path to absolute path
+            server_path = Path(server_directory)
+            if not server_path.is_absolute():
+                server_path = Path.cwd() / server_directory
+                
+            if not server_path.exists():
+                return f"❌ Server directory not found: {server_path}"
+            
+            # Determine port - avoid dashboard ports
+            if not port:
+                configured_port = server_config.get("port", 7862)
+                # Check if configured port conflicts with dashboard or other common ports
+                dashboard_ports = [7860, 7861, 8080, 8081]
+                if configured_port in dashboard_ports:
+                    # Find a safe port
+                    safe_port = 7862
+                    while safe_port in dashboard_ports:
+                        safe_port += 1
+                    port = safe_port
+                    return f"⚠️ Server '{name}' is configured to use port {configured_port}, which may conflict with the dashboard.\n\nSuggested fix: Update the server configuration to use port {safe_port}\n\nRun: create_mcp_server(name='{name}', template='basic', port={safe_port}) to create a new server with a safe port."
+                else:
+                    port = configured_port
+            
+            # Check if app.py exists
+            app_path = server_path / "app.py"
+            if not app_path.exists():
+                return f"❌ Server app.py not found: {app_path}"
 
-            command_parts = gmp_path.split() + args
+            # Use the proper server manager to start the server
+            server_manager = GradioMCPServer(app_path)
+            process = server_manager.start(port=port)
 
-            # Set environment for non-interactive mode
-            env = dict(os.environ)
-            env["PYTHONIOENCODING"] = "utf-8"
-            env["PYTHONUTF8"] = "1"
-            env["RICH_FORCE_TERMINAL"] = "0"
-            env["NO_COLOR"] = "1"
-            env["CI"] = "1"
-            env["TERM"] = "dumb"
-
-            # Start process in background and return immediately
-            process = subprocess.Popen(
-                command_parts,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.DEVNULL,
-                shell=True,
-                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-            )
-
-            port_info = f" on port {port}" if port else ""
-            return f"🚀 Server '{name}' is starting{port_info}...\n\nProcess ID: {process.pid}\nUse 'gmp server list' to check status.\n\n⚠️ Note: The server is running in the background. Use the dashboard's Server Management tab to stop it."
+            # Give it a moment to start
+            import time
+            time.sleep(2)
+            
+            # Check if process is still running
+            if process.poll() is None:
+                return f"🚀 Server '{name}' started successfully on port {port}!\n\nProcess ID: {process.pid}\nURL: http://localhost:{port}\n\n✅ Server is running in the background and properly tracked."
+            else:
+                # Process exited, get error info
+                stdout, stderr = process.communicate()
+                error_msg = stderr.decode('utf-8', errors='replace') if stderr else "Unknown error"
+                return f"❌ Server '{name}' failed to start:\n{error_msg}"
 
         except Exception as e:
             return f"❌ Failed to start server '{name}': {str(e)}"
 
     def stop_server(self, name: str) -> str:
-        """Stop an MCP server"""
-        success, output = self._execute_gmp_command(
-            ["server", "stop", name], f"Stop MCP server '{name}'"
-        )
+        """Stop an MCP server using the proper server management system"""
+        try:
+            from .config_manager import ConfigManager
+            from .server_manager import GradioMCPServer
+            
+            config_manager = ConfigManager()
+            server_config = config_manager.get_server(name)
+            
+            if not server_config:
+                return f"❌ Server '{name}' not found in configuration."
+            
+            # Safety check: Don't stop servers that might be the dashboard
+            server_port = server_config.get("port", 7860)
+            dashboard_ports = [7861, 8080, 8081]  # Common dashboard ports
+            
+            # Check if this server might be the current dashboard
+            if server_port in dashboard_ports:
+                return f"🛡️ Safety Protection: Cannot stop server '{name}' on port {server_port} as it may be the dashboard server.\n\nTo stop the dashboard, use Ctrl+C in the terminal where you started 'gmp dashboard'."
+            
+            # Additional safety: Check if server is actually the dashboard by looking at its directory
+            server_directory = server_config.get("directory", "")
+            if "dashboard" in server_directory.lower() or "web_ui" in server_directory.lower():
+                return f"🛡️ Safety Protection: Cannot stop server '{name}' as it appears to be a dashboard server.\n\nTo stop the dashboard, use Ctrl+C in the terminal where you started 'gmp dashboard'."
+            
+            if not server_directory:
+                return f"❌ No directory specified in server configuration"
+            
+            # Convert relative path to absolute path
+            server_path = Path(server_directory)
+            if not server_path.is_absolute():
+                server_path = Path.cwd() / server_directory
+                
+            if not server_path.exists():
+                return f"❌ Server directory not found: {server_path}"
+            
+            # Check if app.py exists
+            app_path = server_path / "app.py"
+            if not app_path.exists():
+                return f"❌ Server app.py not found: {app_path}"
 
-        if success:
-            return f"⏹️ Server '{name}' stopped successfully:\n{output}"
-        else:
-            return f"❌ Failed to stop server '{name}': {output}"
+            # Use the proper server manager to stop the server
+            server_manager = GradioMCPServer(app_path)
+            server_manager.stop()
+            
+            return f"⏹️ Server '{name}' stopped successfully and process tracking updated."
+
+        except Exception as e:
+            return f"❌ Failed to stop server '{name}': {str(e)}"
 
     def delete_server(self, name: str) -> str:
         """Delete an MCP server"""
@@ -225,16 +333,63 @@ class MCPServerManager:
         else:
             return f"❌ Failed to list templates: {output}"
 
-    def connect_client(self, url: str, name: Optional[str] = None) -> str:
-        """Connect to an MCP server as a client"""
-        args = ["client", "connect", url]
+    def start_pure_mcp_server(self) -> str:
+        """Start a pure MCP server for tool communication (not web interface)"""
+        success, output = self._execute_gmp_command(
+            ["mcp"], "Start pure MCP server for tool communication"
+        )
+
+        if success:
+            return f"🔗 Pure MCP server started successfully:\n{output}\n\n💡 This server uses stdio protocol for tool communication, not HTTP.\nConnect to it using the stdio protocol."
+        else:
+            return f"❌ Failed to start pure MCP server: {output}"
+
+    def create_and_start_server(self, name: str, template: str = "basic", port: Optional[int] = None) -> str:
+        """Create a new server and start it immediately with safe defaults"""
+        try:
+            # Use safe default port
+            if not port:
+                port = 7862
+                
+            # First create the server
+            create_result = self.create_server(name, template, port)
+            if "❌" in create_result:
+                return create_result
+                
+            # Then start it
+            start_result = self.start_server(name, port)
+            
+            return f"{create_result}\n\n{start_result}"
+            
+        except Exception as e:
+            return f"❌ Failed to create and start server '{name}': {str(e)}"
+
+    def connect_client(self, url: str, name: Optional[str] = None, protocol: str = "stdio") -> str:
+        """Connect to an MCP server as a client
+        
+        Note: This connects to pure MCP servers, not Gradio web interfaces.
+        For Gradio servers, use test_gradio_server() instead.
+        """
+        # Ensure protocol is valid (stdio or sse only)
+        if protocol == "auto":
+            protocol = "stdio"  # Default to stdio
+        elif protocol not in ["stdio", "sse"]:
+            protocol = "stdio"
+            
+        # Check if this looks like a Gradio HTTP server URL
+        if url.startswith("http://") or url.startswith("https://"):
+            return f"⚠️ Warning: '{url}' appears to be an HTTP URL.\n\nFor Gradio web servers:\n- Use test_gradio_server_http() to test HTTP connectivity\n- The web interface is accessible in your browser\n\nFor MCP tool communication:\n- Use start_pure_mcp_server() to start a pure MCP server\n- Then connect using stdio protocol"
+
+        args = ["client", "connect", url, "--protocol", protocol]
         if name:
             args.extend(["--name", name])
 
-        success, output = self._execute_gmp_command(args, f"Connect to MCP server at '{url}'")
+        success, output = self._execute_gmp_command(
+            args, f"Connect to MCP server at '{url}' using {protocol}"
+        )
 
         if success:
-            return f"🔗 Connected to server at '{url}':\n{output}"
+            return f"🔗 Connected to server at '{url}' using {protocol} protocol:\n{output}"
         else:
             return f"❌ Failed to connect to '{url}': {output}"
 
@@ -270,6 +425,31 @@ class MCPServerManager:
             return f"🧪 Connection test for '{url}':\n{output}"
         else:
             return f"❌ Connection test failed for '{url}': {output}"
+
+    def test_gradio_server(self, url: str) -> str:
+        """Test HTTP connection to a Gradio server"""
+        try:
+            import requests
+            
+            # Test basic HTTP connectivity
+            response = requests.get(url, timeout=10)
+            
+            if response.status_code == 200:
+                # Check if it's a Gradio server
+                content = response.text.lower()
+                if "gradio" in content:
+                    return f"✅ Gradio server at '{url}' is accessible!\n\n🌐 Web interface: {url}\n📊 HTTP Status: {response.status_code}\n🎯 Server Type: Gradio Web Interface\n\n💡 Note: For MCP tool connections, use 'gmp mcp' to start a pure MCP server."
+                else:
+                    return f"✅ HTTP server at '{url}' is accessible (Status: {response.status_code})\n⚠️ However, this doesn't appear to be a Gradio server."
+            else:
+                return f"❌ HTTP server returned status {response.status_code} for '{url}'"
+                
+        except requests.exceptions.ConnectionError:
+            return f"❌ Cannot connect to '{url}' - server may not be running or URL is incorrect"
+        except requests.exceptions.Timeout:
+            return f"❌ Connection to '{url}' timed out"
+        except Exception as e:
+            return f"❌ Error testing connection to '{url}': {str(e)}"
 
     def get_help(self, command: Optional[str] = None) -> str:
         """Get help for gmp commands"""
@@ -384,17 +564,18 @@ def create_mcp_management_tools():
         return manager.list_templates()
 
     # Client connection tools
-    def connect_to_mcp_server(url: str, name: str = None) -> str:
+    def connect_to_mcp_server(url: str, name: str = None, protocol: str = "stdio") -> str:
         """Connect to an MCP server as a client.
 
         Args:
             url: URL of the MCP server to connect to
             name: Optional name for the connection
+            protocol: Communication protocol to use (stdio, sse)
 
         Returns:
             str: Result of connection attempt
         """
-        return manager.connect_client(url, name)
+        return manager.connect_client(url, name, protocol)
 
     def disconnect_from_mcp_server(name: str) -> str:
         """Disconnect from an MCP server.
@@ -426,6 +607,17 @@ def create_mcp_management_tools():
         """
         return manager.test_connection(url)
 
+    def test_gradio_server_http(url: str) -> str:
+        """Test HTTP connection to a Gradio web server.
+
+        Args:
+            url: HTTP URL of the Gradio server (e.g., http://localhost:7860)
+
+        Returns:
+            str: Result of HTTP connection test
+        """
+        return manager.test_gradio_server(url)
+
     def get_mcp_help(command: str = None) -> str:
         """Get help for MCP server management commands.
 
@@ -436,6 +628,27 @@ def create_mcp_management_tools():
             str: Help information
         """
         return manager.get_help(command)
+
+    def start_pure_mcp_server() -> str:
+        """Start a pure MCP server for tool communication (not web interface).
+
+        Returns:
+            str: Result of starting the pure MCP server
+        """
+        return manager.start_pure_mcp_server()
+
+    def create_and_start_mcp_server(name: str, template: str = "basic", port: int = None) -> str:
+        """Create a new MCP server and start it immediately with safe defaults.
+
+        Args:
+            name: Name for the new server
+            template: Template to use (basic, calculator, multi-tool, image-generator)
+            port: Optional port number (defaults to 7862 for safety)
+
+        Returns:
+            str: Result of creating and starting the server
+        """
+        return manager.create_and_start_server(name, template, port)
 
     # Create tools
     tools.extend(
@@ -455,6 +668,9 @@ def create_mcp_management_tools():
             ),
             FunctionTool.from_defaults(fn=list_mcp_connections, name="list_mcp_connections"),
             FunctionTool.from_defaults(fn=test_mcp_connection, name="test_mcp_connection"),
+            FunctionTool.from_defaults(fn=test_gradio_server_http, name="test_gradio_server_http"),
+            FunctionTool.from_defaults(fn=start_pure_mcp_server, name="start_pure_mcp_server"),
+            FunctionTool.from_defaults(fn=create_and_start_mcp_server, name="create_and_start_mcp_server"),
             # Help tools
             FunctionTool.from_defaults(fn=get_mcp_help, name="get_mcp_help"),
         ]
