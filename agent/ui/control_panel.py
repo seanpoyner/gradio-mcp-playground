@@ -2,13 +2,6 @@
 """
 🤖 Gradio Control Panel for Agent Management System
 Production-ready interface with advanced agent lifecycle management.
-
-Features:
-- Real-time dashboard with glassmorphism design
-- 6 pre-built agent templates with one-click deployment
-- Live monitoring with system metrics
-- Emergency controls with safety confirmations
-- Professional UI matching platform design standards
 """
 
 import gradio as gr
@@ -418,73 +411,91 @@ class ControlPanelUI:
         return templates
     
     def _extract_agent_metadata(self, code_content: str, display_name: str) -> Dict[str, Any]:
-        """Extract metadata from agent code content"""
+        """Extract metadata from agent code content AGENT_INFO dictionary"""
         
-        # Default metadata based on agent type
-        metadata_defaults = {
-            "🧮 Calculator Pro": {
-                "description": "Advanced mathematical operations with scientific functions",
-                "category": "Productivity",
-                "difficulty": "Beginner", 
-                "features": ["Basic arithmetic", "Scientific functions", "History tracking", "Expression evaluation"]
-            },
-            "🕷️ Web Scraper Pro": {
-                "description": "Advanced web scraping with content analysis and export",
-                "category": "Data Collection",
-                "difficulty": "Intermediate",
-                "features": ["Multi-format extraction", "Content analysis", "Batch processing", "Export options"]
-            },
-            "📊 Data Processor Pro": {
-                "description": "Advanced data analysis with visualization and ML insights", 
-                "category": "Data Science",
-                "difficulty": "Advanced",
-                "features": ["Multi-format support", "Statistical analysis", "Visualizations", "ML predictions"]
-            },
-            "💬 Chat Bot Pro": {
-                "description": "Advanced conversational AI with memory, personality, and context awareness",
-                "category": "AI Assistant", 
-                "difficulty": "Advanced",
-                "features": ["Conversation memory", "Personality modes", "Context awareness", "Export chat logs"]
-            },
-            "📁 File Monitor Pro": {
-                "description": "Advanced file system monitoring with real-time alerts, filtering, and analytics",
-                "category": "System Tools",
-                "difficulty": "Advanced",
-                "features": ["Real-time monitoring", "Smart filtering", "Event analytics", "Alert system"]
-            },
-            "🔌 API Wrapper Pro": {
-                "description": "Advanced REST API client with authentication, rate limiting, and response transformation",
-                "category": "Integration",
-                "difficulty": "Advanced", 
-                "features": ["Authentication support", "Rate limiting", "Response transformation", "Request history"]
-            }
+        # Default fallback metadata
+        default_metadata = {
+            "description": "Custom agent template",
+            "category": "Custom",
+            "difficulty": "Unknown", 
+            "features": ["Custom functionality"]
         }
         
-        # Try to extract metadata from code comments/docstrings
         try:
-            # Look for title and description in comments
-            lines = code_content.split('\n')
-            for line in lines[:20]:  # Check first 20 lines
-                if '# ' in line and any(keyword in line.lower() for keyword in ['advanced', 'pro', 'agent']):
-                    # Found a description line
-                    break
+            # Extract AGENT_INFO from docstring
+            import re
+            import ast
             
-            # For now, use the defaults but in future could parse from docstrings
-            return metadata_defaults.get(display_name, {
-                "description": "Custom agent template",
-                "category": "Custom",
-                "difficulty": "Unknown", 
-                "features": ["Custom functionality"]
-            })
+            # Look for AGENT_INFO in the docstring (triple quoted string at the top)
+            docstring_pattern = r'"""[\s\S]*?AGENT_INFO\s*=\s*({[\s\S]*?})[\s\S]*?"""'
+            match = re.search(docstring_pattern, code_content)
+            
+            if match:
+                # Extract the dictionary string
+                dict_str = match.group(1)
+                
+                # Parse the dictionary safely
+                try:
+                    # Clean up the string for parsing
+                    dict_str = dict_str.replace('\n', ' ').strip()
+                    agent_info = ast.literal_eval(dict_str)
+                    
+                    # Extract the relevant metadata
+                    return {
+                        "description": agent_info.get("description", default_metadata["description"]),
+                        "category": agent_info.get("category", default_metadata["category"]),
+                        "difficulty": agent_info.get("difficulty", default_metadata["difficulty"]),
+                        "features": agent_info.get("features", default_metadata["features"])
+                    }
+                except (SyntaxError, ValueError) as parse_error:
+                    logger.warning(f"Failed to parse AGENT_INFO for {display_name}: {parse_error}")
+            
+            # If no AGENT_INFO found, try alternative pattern (multiline)
+            # Look for AGENT_INFO = { ... } spanning multiple lines
+            agent_info_pattern = r'AGENT_INFO\s*=\s*{\s*([\s\S]*?)\s*}'
+            match = re.search(agent_info_pattern, code_content)
+            
+            if match:
+                # Build dictionary from key-value pairs
+                content = match.group(1)
+                agent_info = {}
+                
+                # Extract key-value pairs with improved regex
+                kv_pattern = r'"([^"]+)"\s*:\s*("([^"]*)"|(\[[^\]]*\])|([^,\n]+))'
+                for kv_match in re.finditer(kv_pattern, content):
+                    key = kv_match.group(1)
+                    value_str = kv_match.group(2).strip()
+                    
+                    # Parse different value types
+                    if value_str.startswith('[') and value_str.endswith(']'):
+                        # List value
+                        try:
+                            value = ast.literal_eval(value_str)
+                        except:
+                            value = [value_str.strip('[]"')]
+                    elif value_str.startswith('"') and value_str.endswith('"'):
+                        # String value
+                        value = value_str.strip('"')
+                    else:
+                        # Other value
+                        value = value_str.strip('"')
+                    
+                    agent_info[key] = value
+                
+                if agent_info:
+                    return {
+                        "description": agent_info.get("description", default_metadata["description"]),
+                        "category": agent_info.get("category", default_metadata["category"]),
+                        "difficulty": agent_info.get("difficulty", default_metadata["difficulty"]),
+                        "features": agent_info.get("features", default_metadata["features"])
+                    }
+            
+            logger.info(f"No AGENT_INFO found for {display_name}, using defaults")
+            return default_metadata
             
         except Exception as e:
             logger.warning(f"Error extracting metadata from {display_name}: {e}")
-            return metadata_defaults.get(display_name, {
-                "description": "Agent template",
-                "category": "Custom", 
-                "difficulty": "Unknown",
-                "features": ["Custom functionality"]
-            })
+            return default_metadata
     
     def _format_uptime(self, seconds: float) -> str:
         """Format uptime in human readable format"""
@@ -695,7 +706,7 @@ class ControlPanelUI:
         return f"[{current_time}] Logs cleared"
     
     def _get_template_info(self, template_name: str) -> str:
-        """Get information about a selected template"""
+        """Get information about a selected template using dynamic metadata"""
         if not template_name:
             return "## 📚 Available Templates\n\nSelect a template to see details and preview code."
         
@@ -705,33 +716,17 @@ class ControlPanelUI:
         
         info = f"## {template_name}\n\n"
         info += f"**Description:** {template['description']}\n\n"
-        info += "**Features:**\n"
+        info += f"**Category:** {template.get('category', 'Custom')}\n"
+        info += f"**Difficulty:** {template.get('difficulty', 'Unknown')}\n\n"
         
-        # Add template-specific features
-        if "Calculator" in template_name:
-            info += "- Basic mathematical operations (add, subtract, multiply, divide)\n"
-            info += "- Power and square root functions\n"
-            info += "- Error handling for invalid operations\n"
-        elif "Web Scraper" in template_name:
-            info += "- Extract text content from web pages\n"
-            info += "- Extract links and images\n"
-            info += "- Handle different content types\n"
-        elif "Data Processor" in template_name:
-            info += "- Process CSV and JSON files\n"
-            info += "- Generate data summaries and statistics\n"
-            info += "- Handle missing data analysis\n"
-        elif "Chat Bot" in template_name:
-            info += "- Simple conversational AI\n"
-            info += "- Memory of conversation history\n"
-            info += "- Personality and context awareness\n"
-        elif "File Monitor" in template_name:
-            info += "- Real-time directory monitoring\n"
-            info += "- Detect file creation, deletion, modification\n"
-            info += "- Event logging and notifications\n"
-        elif "API Wrapper" in template_name:
-            info += "- Make HTTP requests (GET, POST, PUT, DELETE)\n"
-            info += "- Transform and format responses\n"
-            info += "- Handle headers and request bodies\n"
+        # Use dynamic features from metadata
+        features = template.get('features', [])
+        if features and isinstance(features, list):
+            info += "**Features:**\n"
+            for feature in features:
+                info += f"- {feature}\n"
+        else:
+            info += "**Features:** Custom functionality\n"
         
         info += f"\n**Ready to deploy:** One-click deployment available\n"
         info += f"**Port:** Auto-assigned (typically 786x)\n"

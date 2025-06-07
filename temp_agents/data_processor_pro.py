@@ -1,3 +1,24 @@
+"""
+📊 Data Processor Pro Agent
+
+AGENT_INFO = {
+    "name": "📊 Data Processor Pro",
+    "description": "Advanced data analysis with visualization, statistical insights, and machine learning predictions",
+    "category": "Data Science",
+    "difficulty": "Advanced",
+    "features": [
+        "Multi-format data support (CSV, JSON, Excel)",
+        "Statistical analysis and data profiling",
+        "Interactive data visualizations",
+        "Machine learning predictions and clustering",
+        "Data cleaning and preprocessing",
+        "Export processed data and insights"
+    ],
+    "version": "1.0.0",
+    "author": "Agent System"
+}
+"""
+
 import gradio as gr
 import pandas as pd
 import numpy as np

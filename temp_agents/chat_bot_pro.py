@@ -1,3 +1,24 @@
+"""
+💬 Chat Bot Pro Agent
+
+AGENT_INFO = {
+    "name": "💬 Chat Bot Pro",
+    "description": "Advanced conversational AI with memory, multiple personalities, and context awareness",
+    "category": "AI Assistant",
+    "difficulty": "Advanced",
+    "features": [
+        "Conversation memory and context tracking",
+        "Multiple personality modes (Friendly, Professional, Witty, Sage)",
+        "Sentiment analysis and topic extraction",
+        "Conversation export and history management",
+        "Contextual response generation",
+        "Real-time chat interface with timestamps"
+    ],
+    "version": "1.0.0",
+    "author": "Agent System"
+}
+"""
+
 import gradio as gr
 import random
 import datetime

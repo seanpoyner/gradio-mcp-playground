@@ -1,3 +1,24 @@
+"""
+🕷️ Web Scraper Pro Agent
+
+AGENT_INFO = {
+    "name": "🕷️ Web Scraper Pro",
+    "description": "Advanced web scraping with content analysis, multiple extraction modes, and export capabilities",
+    "category": "Data Collection",
+    "difficulty": "Intermediate",
+    "features": [
+        "Multi-format content extraction (text, links, images, tables)",
+        "Custom CSS selector support",
+        "Content analysis and filtering",
+        "Batch processing capabilities",
+        "Export to CSV, JSON, and Excel formats",
+        "Built-in rate limiting and error handling"
+    ],
+    "version": "1.0.0",
+    "author": "Agent System"
+}
+"""
+
 import gradio as gr
 import requests
 from bs4 import BeautifulSoup

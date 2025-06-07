@@ -1,3 +1,24 @@
+"""
+📁 File Monitor Pro Agent
+
+AGENT_INFO = {
+    "name": "📁 File Monitor Pro",
+    "description": "Advanced file system monitoring with real-time alerts, intelligent filtering, and comprehensive analytics",
+    "category": "System Tools",
+    "difficulty": "Advanced",
+    "features": [
+        "Real-time directory monitoring and alerts",
+        "Smart filtering with pattern matching",
+        "File event analytics and statistics",
+        "Multi-directory monitoring support",
+        "Event history and logging",
+        "Configurable monitoring intervals"
+    ],
+    "version": "1.0.0",
+    "author": "Agent System"
+}
+"""
+
 import gradio as gr
 import os
 import time

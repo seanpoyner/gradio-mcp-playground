@@ -1,3 +1,24 @@
+"""
+🔌 API Wrapper Pro Agent
+
+AGENT_INFO = {
+    "name": "🔌 API Wrapper Pro",
+    "description": "Advanced REST API client with authentication, rate limiting, and intelligent response transformation",
+    "category": "Integration",
+    "difficulty": "Advanced",
+    "features": [
+        "Full REST API support (GET, POST, PUT, DELETE, PATCH)",
+        "Multiple authentication methods (API Key, Bearer Token, Basic Auth)",
+        "Built-in rate limiting and retry logic",
+        "Response transformation and formatting",
+        "Request history and analytics",
+        "Batch API operations and testing"
+    ],
+    "version": "1.0.0",
+    "author": "Agent System"
+}
+"""
+
 import gradio as gr
 import requests
 import json

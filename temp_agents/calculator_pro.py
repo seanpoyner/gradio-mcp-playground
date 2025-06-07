@@ -1,3 +1,23 @@
+"""
+🧮 Calculator Pro Agent
+
+AGENT_INFO = {
+    "name": "🧮 Calculator Pro",
+    "description": "Advanced mathematical operations with scientific functions and expression evaluation",
+    "category": "Productivity",
+    "difficulty": "Beginner",
+    "features": [
+        "Basic arithmetic operations (add, subtract, multiply, divide)",
+        "Advanced math functions (power, square root, trigonometry)",
+        "Expression evaluation with mathematical constants",
+        "Calculation history tracking",
+        "Error handling and validation"
+    ],
+    "version": "1.0.0",
+    "author": "Agent System"
+}
+"""
+
 import gradio as gr
 import math
 import numpy as np
