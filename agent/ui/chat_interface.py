@@ -26,8 +26,9 @@ class ChatInterface:
                 show_label=True,
                 container=True,
                 bubble_full_width=False,
+                type="messages",
                 value=[
-                    (None, "👋 Hello! I'm the GMP Agent, your intelligent assistant for building MCP servers. How can I help you today?")
+                    {"role": "assistant", "content": "👋 Hello! I'm the GMP Agent, your intelligent assistant for building MCP servers. How can I help you today?"}
                 ]
             )
             
@@ -129,21 +130,21 @@ class ChatInterface:
             outputs=[self.chatbot, self.context_display]
         )
     
-    async def _handle_message(self, message: str, chat_history: List[List[str]]) -> Tuple[List[List[str]], str, Dict[str, Any], str]:
+    async def _handle_message(self, message: str, chat_history: List[Dict]) -> Tuple[List[Dict], str, Dict[str, Any], str]:
         """Handle user message and generate response"""
         
         if not message.strip():
             return chat_history, "", {}, ""
         
         # Add user message to chat
-        chat_history.append([message, None])
+        chat_history.append({"role": "user", "content": message})
         
         try:
             # Process message with agent
             response, metadata = await self.agent.process_message(message)
             
-            # Update chat with agent response
-            chat_history[-1][1] = response
+            # Add agent response to chat
+            chat_history.append({"role": "assistant", "content": response})
             
             # Update context display
             context_info = {
@@ -161,11 +162,11 @@ class ChatInterface:
         except Exception as e:
             # Handle errors gracefully
             error_response = f"I encountered an error: {str(e)}. Please try rephrasing your request or ask for help."
-            chat_history[-1][1] = error_response
+            chat_history.append({"role": "assistant", "content": error_response})
             
             return chat_history, "", {"error": str(e)}, "Try asking for help or rephrasing your request."
     
-    def _handle_example_selection(self, selected_example: str, chat_history: List[List[str]]) -> Tuple[List[List[str]], str, str, Dict[str, Any], str]:
+    def _handle_example_selection(self, selected_example: str, chat_history: List[Dict]) -> Tuple[List[Dict], str, str, Dict[str, Any], str]:
         """Handle selection of an example prompt"""
         
         if not selected_example:
@@ -174,16 +175,17 @@ class ChatInterface:
         # Set the example as the current message
         return chat_history, selected_example, "", {}, ""
     
-    def _clear_conversation(self) -> Tuple[List[List[str]], Dict[str, Any], str]:
+    def _clear_conversation(self) -> Tuple[List[Dict], Dict[str, Any], str]:
         """Clear the conversation history"""
         
         self.agent.clear_conversation()
         
-        initial_message = [
-            (None, "👋 Hello! I'm the GMP Agent, your intelligent assistant for building MCP servers. How can I help you today?")
+        # Return initial state with system message
+        initial_history = [
+            {"role": "assistant", "content": "👋 Hello! I'm the GMP Agent, your intelligent assistant for building MCP servers. How can I help you today?"}
         ]
         
-        return initial_message, {}, "**Ready to help you build something amazing!**"
+        return initial_history, {}, ""
     
     def _save_conversation(self) -> str:
         """Save conversation to file"""

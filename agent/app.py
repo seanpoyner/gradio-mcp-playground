@@ -21,6 +21,7 @@ from core.agent import GMPAgent
 from ui.chat_interface import ChatInterface
 from ui.pipeline_view import PipelineView
 from ui.server_manager import ServerManager
+from ui.control_panel import ControlPanelUI
 
 console = Console()
 
@@ -56,6 +57,7 @@ def create_agent_interface() -> gr.Interface:
     chat_interface = ChatInterface(agent)
     pipeline_view = PipelineView(agent)
     server_manager = ServerManager(agent)
+    control_panel = ControlPanelUI()
     
     # Custom CSS for better styling
     css = """
@@ -132,6 +134,11 @@ def create_agent_interface() -> gr.Interface:
             # Servers Tab - Server management
             with gr.Tab("🖥️ Server Manager", id="servers"):
                 server_manager.create_interface()
+            
+            # Control Panel Tab - Agent control and monitoring
+            with gr.Tab("🤖 Agent Control Panel", id="control"):
+                # Embed the control panel components directly
+                control_panel.create_components()
             
             # Help Tab - Documentation and examples
             with gr.Tab("📚 Help & Examples", id="help"):
@@ -259,9 +266,7 @@ def main():
             server_port=args.port,
             share=args.share,
             show_api=args.dev,
-            debug=args.dev,
-            enable_queue=True,
-            max_threads=10
+            debug=args.dev
         )
         
     except KeyboardInterrupt:
