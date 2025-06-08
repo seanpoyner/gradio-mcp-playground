@@ -115,6 +115,12 @@ if HAS_LLAMAINDEX:
                     "mcp_server": "An MCP server exposes tools and resources that AI models can use. Servers implement specific capabilities like file operations, API access, or data processing.",
                     "mcp_tools": "MCP tools are functions that AI models can call to perform actions. Each tool has a schema defining its inputs and outputs.",
                     "gradio_integration": "Gradio MCP Playground helps you build Gradio apps that function as MCP servers, making it easy to create interactive UIs for your MCP tools.",
+                    "memory_server": "The Memory MCP server provides a knowledge graph-based persistent memory system. It allows storing and retrieving information across conversations with tools like store_memory(), retrieve_memory(), and search_memories(). It's designed for external MCP clients like Claude Desktop.",
+                    "filesystem_server": "The Filesystem MCP server provides secure file operations with configurable access controls. It includes tools for reading, writing, listing directories, and managing files. It requires a path parameter to specify which directory to provide access to.",
+                    "sequential_thinking": "The Sequential Thinking server enables dynamic and reflective problem-solving through thought sequences. It provides advanced reasoning capabilities for breaking down complex problems into steps.",
+                    "brave_search": "The Brave Search server provides web search capabilities using the Brave Search API. It requires a BRAVE_API_KEY environment variable. Tools include web_search() and get_search_results().",
+                    "github_server": "The GitHub server provides access to GitHub repositories, issues, PRs, and code. It requires a GITHUB_TOKEN environment variable. Tools include list_repos(), get_issues(), create_pr(), and more.",
+                    "time_server": "The Time server provides time and timezone utilities. It requires a timezone parameter (e.g., 'UTC', 'America/New_York'). Tools include get_current_time(), convert_timezone(), and format_date().",
                     "best_practices": [
                         "Always validate inputs in your MCP tools",
                         "Provide clear descriptions for tools and parameters",
@@ -126,7 +132,20 @@ if HAS_LLAMAINDEX:
 
                 query_lower = query.lower()
 
-                if "what is mcp" in query_lower or "what's mcp" in query_lower:
+                # Check for specific server queries
+                if "memory" in query_lower and ("server" in query_lower or "mcp" in query_lower):
+                    return mcp_knowledge["memory_server"]
+                elif "filesystem" in query_lower or "file system" in query_lower:
+                    return mcp_knowledge["filesystem_server"]
+                elif "sequential" in query_lower or "thinking" in query_lower:
+                    return mcp_knowledge["sequential_thinking"]
+                elif "brave" in query_lower or "search" in query_lower:
+                    return mcp_knowledge["brave_search"]
+                elif "github" in query_lower:
+                    return mcp_knowledge["github_server"]
+                elif "time" in query_lower and "server" in query_lower:
+                    return mcp_knowledge["time_server"]
+                elif "what is mcp" in query_lower or "what's mcp" in query_lower:
                     return mcp_knowledge["what_is_mcp"]
                 elif "server" in query_lower:
                     return mcp_knowledge["mcp_server"]
@@ -566,23 +585,28 @@ if HAS_LLAMAINDEX:
                         llm=self.llm,
                         memory=self.memory,
                         verbose=True,
-                        max_iterations=50,  # High limit for development
-                        system_prompt="""You are a coding assistant with tools for MCP servers, file operations, and code analysis.
+                        max_iterations=5,  # Reasonable limit to prevent loops
+                        system_prompt="""You are a coding assistant. Be concise and efficient.
 
-**RULES - Follow exactly:**
-1. Use ONE tool per request, then STOP
-2. "Connect to filesystem MCP" → install_mcp_server_from_registry('filesystem') → STOP
-3. "Create directory X" → create_directory('X') → STOP  
-4. "What projects?" → list_home_directory() → STOP
-5. "Can you X?" → Answer directly, no tools
+**CRITICAL RULES:**
+1. Registry MCP servers (memory, filesystem, etc) are for EXTERNAL clients only - you CANNOT use them directly
+2. After install_mcp_server_from_registry(), just explain what the server does - DO NOT try to connect or demonstrate
+3. Use ONE tool maximum per request
+4. STOP immediately after getting a result
 
-**NEVER:**
-- Use connect_to_mcp_server() or get_mcp_server_info() for registry servers
-- Create MCP servers when asked to create directories
-- Use the same tool twice
-- Continue after getting the answer
+**For common requests:**
+- "What can X server do?" → Explain its purpose without installing
+- "Install X server" → install_mcp_server_from_registry('X') → Explain it's ready for external use
+- "Demonstrate X server" → Say "I cannot directly use MCP servers - they're for external clients like Claude Desktop"
+- "Create directory" → create_directory() 
+- "List files" → list_home_directory()
 
-Be direct and efficient.""",
+**NEVER use these for registry servers:**
+- connect_to_mcp_server()
+- create_and_start_mcp_server() 
+- start_pure_mcp_server()
+
+Be helpful but know your limitations.""",
                     )
                     print("DEBUG: ReActAgent created successfully")
                 except Exception as e:
