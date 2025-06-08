@@ -348,7 +348,7 @@ class MCPServerManager:
         
         Args:
             server_id: ID of the server in the registry (e.g., 'filesystem', 'memory', 'github')
-            **kwargs: Additional arguments like 'path' for filesystem server
+            **kwargs: Additional arguments like 'path' for filesystem server, or environment variables
             
         Returns:
             str: Installation result and connection instructions
@@ -364,6 +364,13 @@ class MCPServerManager:
             server_info = registry.get_server_info(server_id)
             if not server_info:
                 return f"❌ Server '{server_id}' not found in registry"
+
+            # Special handling for environment variables passed as arguments
+            # For brave-search, convert 'token' to 'BRAVE_API_KEY'
+            if server_id == 'brave-search' and 'token' in kwargs:
+                kwargs['BRAVE_API_KEY'] = kwargs.pop('token')
+            elif server_id == 'github' and 'token' in kwargs:
+                kwargs['GITHUB_TOKEN'] = kwargs.pop('token')
 
             # Auto-detect and set default arguments for specific servers
             if server_id == 'filesystem' and 'path' not in kwargs:
@@ -868,8 +875,12 @@ def create_mcp_management_tools():
         """Install an MCP server from the registry and automatically start it.
 
         Args:
-            server_id: ID of the server to install (e.g., 'filesystem', 'memory', 'github')
-            **kwargs: Additional arguments for the server. For 'filesystem' server, 'path' is optional - if not provided, the user's home directory will be auto-detected.
+            server_id: ID of the server to install (e.g., 'filesystem', 'memory', 'github', 'brave-search')
+            **kwargs: Additional arguments for the server:
+                - For 'filesystem': 'path' (optional, defaults to home directory)
+                - For 'brave-search': 'token' (your Brave API key)
+                - For 'github': 'token' (your GitHub personal access token)
+                - For 'time': 'timezone' (e.g., 'UTC', 'America/New_York')
 
         Returns:
             str: Server status and connection information

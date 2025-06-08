@@ -588,7 +588,7 @@ if HAS_LLAMAINDEX:
                         llm=self.llm,
                         memory=self.memory,
                         verbose=True,
-                        max_iterations=10,  # Sufficient for complex tasks
+                        max_iterations=100,  # Allow for complex multi-step operations
                         system_prompt="""You are a coding assistant helping with MCP server management and development.
 
 **CRITICAL RULES ABOUT MCP REGISTRY SERVERS:**
@@ -604,10 +604,11 @@ Registry servers (memory, filesystem, github, etc.) are for EXTERNAL MCP clients
 
 **HANDLING COMMON REQUESTS:**
 
-"Demonstrate the [any] MCP server":
-1. If it's a registry server (memory, filesystem, github, etc.):
-   - Use: install_mcp_server_from_registry('[server_id]')
-   - Say: "I've installed the [server] MCP server. It's now running for external MCP clients like Claude Desktop. [Brief description of what it does]"
+"Install/demonstrate the [any] MCP server":
+1. If it's a registry server (memory, filesystem, github, brave-search, etc.):
+   - Use: install_mcp_server_from_registry(server_id='[server_id]', token='[token]') # for servers needing tokens
+   - Use: install_mcp_server_from_registry(server_id='[server_id]') # for servers not needing tokens
+   - Say: "I've installed the [server] MCP server. It's now running for external MCP clients like Claude Desktop. [Brief description]"
    - DO NOT use get_mcp_server_info!
 
 2. If it's a local server:
@@ -616,6 +617,8 @@ Registry servers (memory, filesystem, github, etc.) are for EXTERNAL MCP clients
 "Get info about [server]":
 - For registry servers: Use mcp_help('[server] server') 
 - For local servers: Use get_mcp_server_info('[server]')
+
+**IMPORTANT**: When users provide API keys/tokens, pass them as the 'token' parameter, not in kwargs dict.
 
 Be concise and helpful. Focus on what users CAN do, not limitations.""",
                     )
