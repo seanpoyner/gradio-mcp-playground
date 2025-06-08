@@ -591,38 +591,28 @@ if HAS_LLAMAINDEX:
                         max_iterations=100,  # Allow for complex multi-step operations
                         system_prompt="""You are a coding assistant helping with MCP server management and development.
 
-**CRITICAL RULES ABOUT MCP REGISTRY SERVERS:**
-Registry servers (memory, filesystem, github, etc.) are for EXTERNAL MCP clients only. You CANNOT connect to or use them directly.
+**MCP SERVER INTEGRATION:**
+When you install a registry MCP server using install_mcp_server_from_registry, its tools become available to you:
+- brave-search → brave_search() tool for web searches
+- filesystem → filesystem_read_file(), filesystem_write_file(), etc.
+- Other servers will have their specific tools added
 
-**FORBIDDEN TOOLS for registry servers:**
-❌ NEVER use: get_mcp_server_info, connect_to_mcp_server, test_mcp_connection, start_mcp_server
+**WORKFLOW:**
+1. Install server: install_mcp_server_from_registry(server_id="brave-search", token="YOUR_KEY")
+2. Use its tools: brave_search(query="search term")
 
-**ALLOWED TOOLS for registry servers:**
-✅ install_mcp_server_from_registry() - installs and starts the server
-✅ stop_mcp_registry_server() - stops a running registry server
-✅ mcp_help() - explains server capabilities
-
-**TOOL USAGE - VERY IMPORTANT:**
-The install_mcp_server_from_registry function has these parameters:
+**TOOL PARAMETERS:**
 - server_id: Required (e.g., "brave-search", "memory", "filesystem", "github")
 - token: Optional, for API authentication
 - path: Optional, for filesystem server
 - timezone: Optional, for time server
 
 **EXAMPLES:**
-User: "Install brave search with token ABC123"
-Action: install_mcp_server_from_registry
-Action Input: {"server_id": "brave-search", "token": "ABC123"}
+User: "Search for GitHub profiles of seanpoyner"
+1. Install brave-search if needed
+2. Use: brave_search(query="GitHub seanpoyner profile")
 
-User: "Install memory server"
-Action: install_mcp_server_from_registry  
-Action Input: {"server_id": "memory"}
-
-User: "Install filesystem for /home/user"
-Action: install_mcp_server_from_registry
-Action Input: {"server_id": "filesystem", "path": "/home/user"}
-
-Be concise and helpful. Focus on what users CAN do, not limitations.""",
+Be concise and helpful. Always use available tools when possible.""",
                     )
                     print("DEBUG: ReActAgent created successfully")
                 except Exception as e:
@@ -843,6 +833,40 @@ Be concise and helpful. Focus on what users CAN do, not limitations.""",
                     FunctionTool.from_defaults(fn=list_directory_tool, name="filesystem_list_directory"),
                     FunctionTool.from_defaults(fn=create_directory_tool, name="filesystem_create_directory"),
                 ])
+
+            elif connection_id == "brave-search":
+                # Create actual brave search tool
+                def brave_search_tool(query: str, count: int = 10) -> str:
+                    """Search the web using Brave Search API"""
+                    try:
+                        import requests
+                        import os
+                        
+                        api_key = os.environ.get('BRAVE_API_KEY')
+                        if not api_key:
+                            return "Error: BRAVE_API_KEY environment variable not set"
+                        
+                        url = "https://api.search.brave.com/res/v1/web/search"
+                        headers = {"X-Subscription-Token": api_key}
+                        params = {"q": query, "count": count}
+                        
+                        response = requests.get(url, headers=headers, params=params)
+                        if response.status_code == 200:
+                            data = response.json()
+                            results = []
+                            for idx, result in enumerate(data.get('web', {}).get('results', [])[:count], 1):
+                                results.append(f"{idx}. {result.get('title', 'No title')}\n   URL: {result.get('url', 'No URL')}\n   {result.get('description', 'No description')}")
+                            
+                            return f"Brave Search Results for '{query}':\n\n" + "\n\n".join(results) if results else "No results found"
+                        else:
+                            return f"Error: Brave Search API returned status {response.status_code}"
+                    except Exception as e:
+                        return f"Error performing brave search: {str(e)}"
+
+                tools.append(
+                    FunctionTool.from_defaults(fn=brave_search_tool, name="brave_search", 
+                                             description="Search the web using Brave Search")
+                )
 
             else:
                 # For other connections, create placeholder tools

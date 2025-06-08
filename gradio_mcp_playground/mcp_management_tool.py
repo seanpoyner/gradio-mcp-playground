@@ -450,6 +450,22 @@ class MCPServerManager:
                             'pid': process.pid
                         }
                         
+                        # Add connection to coding agent if available
+                        try:
+                            from .coding_agent import CodingAgent
+                            # Get global coding agent instance if available
+                            import gradio_mcp_playground.web_ui as web_ui
+                            if hasattr(web_ui, 'coding_agent') and web_ui.coding_agent:
+                                connection_info = {
+                                    'name': server_info.get('name', server_id),
+                                    'tools': ['search'] if server_id == 'brave-search' else [],
+                                    'env': env
+                                }
+                                web_ui.coding_agent.add_mcp_connection(server_id, connection_info)
+                                print(f"Added {server_id} connection to coding agent")
+                        except Exception as e:
+                            print(f"Could not add connection to coding agent: {e}")
+                        
                         return f"""✅ MCP Server '{server_id}' started automatically!{path_info}
 
 **🚀 Server Running:**
