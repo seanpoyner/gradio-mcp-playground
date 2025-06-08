@@ -871,20 +871,27 @@ def create_mcp_management_tools():
         """
         return manager.start_pure_mcp_server()
 
-    def install_mcp_server_from_registry(server_id: str, **kwargs) -> str:
+    def install_mcp_server_from_registry(server_id: str, token: str = None, path: str = None, timezone: str = None) -> str:
         """Install an MCP server from the registry and automatically start it.
 
         Args:
             server_id: ID of the server to install (e.g., 'filesystem', 'memory', 'github', 'brave-search')
-            **kwargs: Additional arguments for the server:
-                - For 'filesystem': 'path' (optional, defaults to home directory)
-                - For 'brave-search': 'token' (your Brave API key)
-                - For 'github': 'token' (your GitHub personal access token)
-                - For 'time': 'timezone' (e.g., 'UTC', 'America/New_York')
+            token: API token for servers that require authentication (brave-search, github)
+            path: Path parameter for filesystem server (optional, defaults to home directory)
+            timezone: Timezone for time server (e.g., 'UTC', 'America/New_York')
 
         Returns:
             str: Server status and connection information
         """
+        # Build kwargs from explicit parameters
+        kwargs = {}
+        if token is not None:
+            kwargs['token'] = token
+        if path is not None:
+            kwargs['path'] = path
+        if timezone is not None:
+            kwargs['timezone'] = timezone
+            
         return manager.install_mcp_server_from_registry(server_id, **kwargs)
     
     def stop_mcp_registry_server(server_id: str) -> str:

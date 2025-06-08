@@ -603,12 +603,11 @@ Registry servers (memory, filesystem, github, etc.) are for EXTERNAL MCP clients
 ✅ mcp_help() - explains server capabilities
 
 **TOOL USAGE - VERY IMPORTANT:**
-When calling install_mcp_server_from_registry, use this EXACT format:
-- With token: {"server_id": "brave-search", "token": "YOUR_API_KEY"}
-- Without token: {"server_id": "memory"}
-- With path: {"server_id": "filesystem", "path": "/home/user"}
-
-NEVER use nested kwargs or AttributedDict!
+The install_mcp_server_from_registry function has these parameters:
+- server_id: Required (e.g., "brave-search", "memory", "filesystem", "github")
+- token: Optional, for API authentication
+- path: Optional, for filesystem server
+- timezone: Optional, for time server
 
 **EXAMPLES:**
 User: "Install brave search with token ABC123"
@@ -618,6 +617,10 @@ Action Input: {"server_id": "brave-search", "token": "ABC123"}
 User: "Install memory server"
 Action: install_mcp_server_from_registry  
 Action Input: {"server_id": "memory"}
+
+User: "Install filesystem for /home/user"
+Action: install_mcp_server_from_registry
+Action Input: {"server_id": "filesystem", "path": "/home/user"}
 
 Be concise and helpful. Focus on what users CAN do, not limitations.""",
                     )
