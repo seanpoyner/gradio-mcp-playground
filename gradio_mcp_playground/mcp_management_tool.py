@@ -460,9 +460,18 @@ class MCPServerManager:
                             # Get global coding agent instance if available
                             import gradio_mcp_playground.web_ui as web_ui
                             if hasattr(web_ui, 'coding_agent') and web_ui.coding_agent:
+                                # Define tools for each server type
+                                tools_map = {
+                                    'brave-search': ['search'],
+                                    'memory': ['store', 'retrieve', 'search'],
+                                    'filesystem': ['read', 'write', 'list', 'create'],
+                                    'github': ['repos', 'issues', 'prs'],
+                                    'time': ['current', 'convert', 'format']
+                                }
+                                
                                 connection_info = {
                                     'name': server_info.get('name', server_id),
-                                    'tools': ['search'] if server_id == 'brave-search' else [],
+                                    'tools': tools_map.get(server_id, []),
                                     'env': env
                                 }
                                 web_ui.coding_agent.add_mcp_connection(server_id, connection_info)

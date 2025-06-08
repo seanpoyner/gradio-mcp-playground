@@ -4,6 +4,7 @@ Provides an intelligent coding assistant that can help with MCP server developme
 code analysis, and general programming tasks.
 """
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
@@ -631,23 +632,27 @@ if HAS_LLAMAINDEX:
                         max_iterations=100,  # Allow for complex multi-step operations
                         system_prompt="""You are a coding assistant helping with MCP server management and development.
 
-**IMPORTANT - BRAVE SEARCH WORKFLOW:**
-1. First install: install_mcp_server_from_registry(server_id="brave-search", token="YOUR_KEY")
-2. After successful installation, use: brave_search(query="your search term")
+**MCP SERVER WORKFLOWS:**
 
-**DO NOT** try to connect to MCP servers with test_mcp_connection, connect_to_mcp_server, or get_mcp_server_info.
-Once installed, the brave_search tool is automatically available!
+1. **BRAVE SEARCH:**
+   - Install: install_mcp_server_from_registry(server_id="brave-search", token="YOUR_KEY")
+   - Use: brave_search(query="search term")
 
-**EXAMPLE - User asks to search the web:**
-Step 1: install_mcp_server_from_registry(server_id="brave-search", token="BSAcIbrB5nHtrlV5iqt98NaYDhfjOCh")
-Step 2: brave_search(query="GitHub seanpoyner profile")
+2. **MEMORY SERVER (Conversation Logging):**
+   - Install: install_mcp_server_from_registry(server_id="memory")
+   - Store: memory_store_conversation(topic="topic_name", content="conversation content")
+   - Retrieve: memory_retrieve_conversation(topic="topic_name", limit=10)
+   - Search: memory_search_conversations(query="search term")
 
-**AVAILABLE TOOLS AFTER INSTALLATION:**
-- brave-search → brave_search(query, count)
-- filesystem → filesystem_read_file(path), filesystem_write_file(path, content)
-- Other servers have their specific tools
+3. **FILESYSTEM:**
+   - Install: install_mcp_server_from_registry(server_id="filesystem", path="/path/to/dir")
+   - Use: filesystem_read_file(path), filesystem_write_file(path, content)
 
-Be direct and use tools immediately after installation.""",
+**IMPORTANT:** Once installed, tools are immediately available. DO NOT use connection tools.
+
+**CONVERSATION LOGGING:** When users want to save conversations, use the memory server to store them with appropriate topics.
+
+Be direct and helpful.""",
                     )
                     print("DEBUG: ReActAgent created successfully")
                 except Exception as e:
@@ -902,6 +907,146 @@ Be direct and use tools immediately after installation.""",
                     FunctionTool.from_defaults(fn=brave_search_tool, name="brave_search", 
                                              description="Search the web using Brave Search")
                 )
+                
+            elif connection_id == "memory":
+                # Create memory server tools for conversation logging
+                def store_conversation(topic: str, content: str, metadata: Dict[str, Any] = None) -> str:
+                    """Store conversation in memory server's knowledge graph"""
+                    try:
+                        import json
+                        import os
+                        
+                        # Create a structured memory entry
+                        memory_entry = {
+                            "topic": topic,
+                            "content": content,
+                            "timestamp": datetime.now().isoformat(),
+                            "type": "conversation",
+                            "metadata": metadata or {}
+                        }
+                        
+                        # Store in the memory server's data directory
+                        memory_dir = os.path.join(os.path.expanduser('~'), '.memory_server_bin')
+                        os.makedirs(memory_dir, exist_ok=True)
+                        
+                        # Create a JSON file for the conversation
+                        filename = f"{topic.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                        filepath = os.path.join(memory_dir, filename)
+                        
+                        with open(filepath, 'w', encoding='utf-8') as f:
+                            json.dump(memory_entry, f, indent=2)
+                        
+                        return f"✅ Stored conversation under topic '{topic}' in memory server"
+                    except Exception as e:
+                        return f"Error storing conversation: {str(e)}"
+                
+                def retrieve_conversation(topic: str = None, limit: int = 10) -> str:
+                    """Retrieve conversations from memory server"""
+                    try:
+                        import os
+                        import json
+                        from pathlib import Path
+                        
+                        memory_dir = os.path.join(os.path.expanduser('~'), '.memory_server_bin')
+                        if not os.path.exists(memory_dir):
+                            return "No conversations found - memory server directory does not exist"
+                        
+                        # Get all JSON files
+                        json_files = list(Path(memory_dir).glob("*.json"))
+                        conversations = []
+                        
+                        for file_path in json_files:
+                            try:
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    data = json.load(f)
+                                    if topic is None or data.get('topic', '').lower() == topic.lower():
+                                        conversations.append(data)
+                            except:
+                                continue
+                        
+                        # Sort by timestamp (newest first)
+                        conversations.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+                        conversations = conversations[:limit]
+                        
+                        if conversations:
+                            output = f"📚 Retrieved {len(conversations)} conversations:\n\n"
+                            for conv in conversations:
+                                output += f"**Topic**: {conv.get('topic', 'Unknown')}\n"
+                                output += f"**Time**: {conv.get('timestamp', 'Unknown')}\n"
+                                output += f"**Content**: {conv.get('content', 'No content')}\n"
+                                if conv.get('metadata'):
+                                    output += f"**Metadata**: {json.dumps(conv.get('metadata'), indent=2)}\n"
+                                output += "-" * 50 + "\n\n"
+                            return output
+                        else:
+                            return "No conversations found in memory"
+                    except Exception as e:
+                        return f"Error retrieving conversations: {str(e)}"
+                
+                def search_conversations(query: str) -> str:
+                    """Search conversations in memory server"""
+                    try:
+                        import os
+                        import json
+                        from pathlib import Path
+                        
+                        memory_dir = os.path.join(os.path.expanduser('~'), '.memory_server_bin')
+                        if not os.path.exists(memory_dir):
+                            return "No conversations found - memory server directory does not exist"
+                        
+                        # Get all JSON files
+                        json_files = list(Path(memory_dir).glob("*.json"))
+                        results = []
+                        query_lower = query.lower()
+                        
+                        for file_path in json_files:
+                            try:
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    data = json.load(f)
+                                    content = data.get('content', '').lower()
+                                    topic = data.get('topic', '').lower()
+                                    
+                                    # Simple relevance scoring
+                                    score = 0
+                                    if query_lower in topic:
+                                        score += 2
+                                    if query_lower in content:
+                                        score += content.count(query_lower)
+                                    
+                                    if score > 0:
+                                        data['relevance_score'] = score
+                                        results.append(data)
+                            except:
+                                continue
+                        
+                        # Sort by relevance score
+                        results.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
+                        
+                        if results:
+                            output = f"🔍 Found {len(results)} matching conversations for '{query}':\n\n"
+                            for res in results[:10]:  # Limit to top 10 results
+                                output += f"**Topic**: {res.get('topic', 'Unknown')}\n"
+                                output += f"**Relevance**: {res.get('relevance_score', 0)}\n"
+                                output += f"**Time**: {res.get('timestamp', 'Unknown')}\n"
+                                content_preview = res.get('content', 'No content')
+                                if len(content_preview) > 200:
+                                    content_preview = content_preview[:200] + "..."
+                                output += f"**Content**: {content_preview}\n"
+                                output += "-" * 50 + "\n\n"
+                            return output
+                        else:
+                            return f"No conversations found matching '{query}'"
+                    except Exception as e:
+                        return f"Error searching conversations: {str(e)}"
+                
+                tools.extend([
+                    FunctionTool.from_defaults(fn=store_conversation, name="memory_store_conversation",
+                                             description="Store conversation in memory server"),
+                    FunctionTool.from_defaults(fn=retrieve_conversation, name="memory_retrieve_conversation",
+                                             description="Retrieve conversations from memory server"),
+                    FunctionTool.from_defaults(fn=search_conversations, name="memory_search_conversations",
+                                             description="Search conversations in memory server")
+                ])
 
             else:
                 # For other connections, create placeholder tools
