@@ -602,23 +602,22 @@ Registry servers (memory, filesystem, github, etc.) are for EXTERNAL MCP clients
 ✅ stop_mcp_registry_server() - stops a running registry server
 ✅ mcp_help() - explains server capabilities
 
-**HANDLING COMMON REQUESTS:**
+**TOOL USAGE - VERY IMPORTANT:**
+When calling install_mcp_server_from_registry, use this EXACT format:
+- With token: {"server_id": "brave-search", "token": "YOUR_API_KEY"}
+- Without token: {"server_id": "memory"}
+- With path: {"server_id": "filesystem", "path": "/home/user"}
 
-"Install/demonstrate the [any] MCP server":
-1. If it's a registry server (memory, filesystem, github, brave-search, etc.):
-   - Use: install_mcp_server_from_registry(server_id='[server_id]', token='[token]') # for servers needing tokens
-   - Use: install_mcp_server_from_registry(server_id='[server_id]') # for servers not needing tokens
-   - Say: "I've installed the [server] MCP server. It's now running for external MCP clients like Claude Desktop. [Brief description]"
-   - DO NOT use get_mcp_server_info!
+NEVER use nested kwargs or AttributedDict!
 
-2. If it's a local server:
-   - Use normal server management tools
+**EXAMPLES:**
+User: "Install brave search with token ABC123"
+Action: install_mcp_server_from_registry
+Action Input: {"server_id": "brave-search", "token": "ABC123"}
 
-"Get info about [server]":
-- For registry servers: Use mcp_help('[server] server') 
-- For local servers: Use get_mcp_server_info('[server]')
-
-**IMPORTANT**: When users provide API keys/tokens, pass them as the 'token' parameter, not in kwargs dict.
+User: "Install memory server"
+Action: install_mcp_server_from_registry  
+Action Input: {"server_id": "memory"}
 
 Be concise and helpful. Focus on what users CAN do, not limitations.""",
                     )
