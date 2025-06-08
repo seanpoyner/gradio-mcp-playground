@@ -543,6 +543,9 @@ if HAS_LLAMAINDEX:
                         token=clean_token,
                         context_window=self.available_models[model_name]["context_window"],
                         timeout=60.0,
+                        max_new_tokens=2048,  # Ensure complete responses
+                        temperature=0.7,
+                        top_p=0.95,
                     )
                     print("DEBUG: HuggingFaceInferenceAPI created successfully")
 
@@ -586,35 +589,35 @@ if HAS_LLAMAINDEX:
                         memory=self.memory,
                         verbose=True,
                         max_iterations=10,  # Sufficient for complex tasks
-                        system_prompt="""You are a coding assistant. You CANNOT directly connect to or use MCP registry servers.
+                        system_prompt="""You are a coding assistant helping with MCP server management and development.
 
-**HARD RULES - NO EXCEPTIONS:**
-1. If asked to "demonstrate" ANY MCP server → Use mcp_help() then explain you cannot demonstrate
-2. If asked to "connect" to memory/filesystem/etc → Say "I cannot connect to registry MCP servers"
-3. If asked to "store data" in memory server → Say "I cannot interact with the memory server - it's for external clients"
-4. NEVER use: connect_to_mcp_server, get_mcp_server_info, test_mcp_connection, start_mcp_server on registry servers
+**CRITICAL RULES ABOUT MCP REGISTRY SERVERS:**
+Registry servers (memory, filesystem, github, etc.) are for EXTERNAL MCP clients only. You CANNOT connect to or use them directly.
 
-**EXACT RESPONSES FOR COMMON REQUESTS:**
+**FORBIDDEN TOOLS for registry servers:**
+❌ NEVER use: get_mcp_server_info, connect_to_mcp_server, test_mcp_connection, start_mcp_server
 
-"Demonstrate the memory MCP server":
-1. Use: mcp_help('memory server')
-2. Say: "I cannot directly demonstrate the Memory MCP server. It's a knowledge graph-based persistent memory system for external MCP clients like Claude Desktop. It provides tools like store_memory(), retrieve_memory(), and search_memories(). I can install it for you if needed."
+**ALLOWED TOOLS for registry servers:**
+✅ install_mcp_server_from_registry() - installs and starts the server
+✅ stop_mcp_registry_server() - stops a running registry server
+✅ mcp_help() - explains server capabilities
 
-"Connect to the server and store context":
-Say: "I cannot connect to or store data in the memory server - it uses stdio protocol for external MCP clients only. The memory server must be used through Claude Desktop or similar MCP clients."
+**HANDLING COMMON REQUESTS:**
 
-"Install memory server":
-1. Use: install_mcp_server_from_registry('memory')
-2. Say: "✅ Memory server installed and running! Configure Claude Desktop to use it."
+"Demonstrate the [any] MCP server":
+1. If it's a registry server (memory, filesystem, github, etc.):
+   - Use: install_mcp_server_from_registry('[server_id]')
+   - Say: "I've installed the [server] MCP server. It's now running for external MCP clients like Claude Desktop. [Brief description of what it does]"
+   - DO NOT use get_mcp_server_info!
 
-**ONLY THESE TOOLS WORK WITH REGISTRY SERVERS:**
-- mcp_help() - explain capabilities
-- install_mcp_server_from_registry() - install/start
-- stop_mcp_registry_server() - stop
-- list_home_directory() - for YOUR file access
-- create_directory() - for YOUR directory creation
+2. If it's a local server:
+   - Use normal server management tools
 
-Be helpful but honest about your limitations.""",
+"Get info about [server]":
+- For registry servers: Use mcp_help('[server] server') 
+- For local servers: Use get_mcp_server_info('[server]')
+
+Be concise and helpful. Focus on what users CAN do, not limitations.""",
                     )
                     print("DEBUG: ReActAgent created successfully")
                 except Exception as e:
@@ -643,8 +646,8 @@ Be helpful but honest about your limitations.""",
                 response_str = str(response)
 
                 # Truncate very long responses to prevent UI issues
-                if len(response_str) > 8000:
-                    response_str = response_str[:8000] + "\n\n... (response truncated for display)"
+                if len(response_str) > 15000:
+                    response_str = response_str[:15000] + "\n\n... (response truncated for display)"
 
                 return response_str
             except Exception as e:
@@ -737,8 +740,8 @@ Be helpful but honest about your limitations.""",
                     self.agent._run_step = original_step
 
                 # Truncate very long responses to prevent UI issues
-                if len(response_str) > 6000:
-                    response_str = response_str[:6000] + "\n\n... (response truncated for display)"
+                if len(response_str) > 15000:
+                    response_str = response_str[:15000] + "\n\n... (response truncated for display)"
 
                 return steps, response_str
 
