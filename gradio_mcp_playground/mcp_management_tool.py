@@ -354,6 +354,9 @@ class MCPServerManager:
             str: Installation result and connection instructions
         """
         try:
+            import os
+            import platform
+            import sys
             from .registry import ServerRegistry
             registry = ServerRegistry()
 
@@ -365,8 +368,6 @@ class MCPServerManager:
             # Auto-detect and set default arguments for specific servers
             if server_id == 'filesystem' and 'path' not in kwargs:
                 # Auto-detect home directory based on OS
-                import os
-                import platform
                 
                 system = platform.system().lower()
                 if system == 'windows':
