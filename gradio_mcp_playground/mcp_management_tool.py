@@ -630,14 +630,21 @@ Add this to your Claude Desktop config:
 
     def test_connection(self, url: str) -> str:
         """Test connection to an MCP server"""
-        success, output = self._execute_gmp_command(
-            ["client", "test", url], f"Test connection to MCP server at '{url}'"
-        )
-
-        if success:
-            return f"🧪 Connection test for '{url}':\n{output}"
+        # Since 'gmp client test' doesn't exist, we'll provide guidance instead
+        if url.startswith("http"):
+            return self.test_gradio_server(url)
         else:
-            return f"❌ Connection test failed for '{url}': {output}"
+            return f"""ℹ️ MCP Server Connection Info for '{url}':
+
+MCP servers using stdio protocol cannot be tested directly from this interface.
+They are designed for external MCP clients like Claude Desktop.
+
+**To use this server:**
+1. Ensure the server is running (check with 'list_mcp_servers')
+2. Configure your MCP client (e.g., Claude Desktop) with the server command
+3. The client will handle the stdio communication
+
+**Note:** This is not a limitation - it's how MCP servers are designed to work!"""
 
     def test_gradio_server(self, url: str) -> str:
         """Test HTTP connection to a Gradio server"""
