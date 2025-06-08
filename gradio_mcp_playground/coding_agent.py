@@ -826,6 +826,12 @@ if HAS_LLAMAINDEX:
 - Store conversations about user preferences/identity in memory server
 - API keys are encrypted and stored securely after the user provides them
 
+**ACCESSING EXTERNAL MCP SERVERS:**
+- Servers like Obsidian, Filesystem (via registry) run EXTERNALLY and cannot be accessed from this chat
+- To access Obsidian vault contents, use: list_home_directory(subdirectory='vault-name')
+- To read Obsidian notes, use: read_project_file('vault-name/note.md')
+- Only Brave Search and Memory servers have integrated tools in this chat
+
 Be helpful and proactive about finding the right tools.""",
                     )
                     print("DEBUG: ReActAgent created successfully")

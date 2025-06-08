@@ -29,6 +29,41 @@ class MCPServerManager:
 
     def __init__(self):
         pass
+    
+    def _get_server_specific_guidance(self, server_id: str, kwargs: dict) -> str:
+        """Get server-specific guidance for users"""
+        guidance = ""
+        
+        if server_id == 'obsidian':
+            vault_path = kwargs.get('vault_path1', '')
+            if vault_path:
+                # Extract just the folder name from the path
+                import os
+                vault_folder = os.path.basename(vault_path)
+                guidance = f"""\n**⚠️ Note:** The Obsidian MCP server runs externally and cannot be accessed from this chat.
+To explore your vault from this chat, you can use:
+- `list_home_directory(subdirectory='{vault_folder}')` to see files
+- `read_project_file('{vault_folder}/note.md')` to read a specific note"""
+        
+        elif server_id == 'filesystem':
+            path = kwargs.get('path', '')
+            if path:
+                guidance = f"""\n**⚠️ Note:** The Filesystem MCP server runs externally.
+To access files from this chat, you can use:
+- `list_home_directory()` to explore directories
+- `read_project_file('path/to/file')` to read files"""
+        
+        elif server_id == 'brave-search':
+            guidance = """\n**✅ Good news:** You can use `brave_search(query='your search')` directly in this chat!
+The Brave Search functionality is available both here and in external MCP clients."""
+        
+        elif server_id == 'memory':
+            guidance = """\n**✅ Good news:** You can use memory functions directly in this chat:
+- `memory_store_conversation(topic='topic', content='content')` to store
+- `memory_retrieve_conversation(topic='topic')` to retrieve
+- `memory_search_conversations(query='search term')` to search"""
+        
+        return guidance
 
     def _get_gmp_path(self) -> str:
         """Get the path to the gmp command"""
@@ -514,7 +549,6 @@ class MCPServerManager:
 
 **📝 Important:** This server is now ready for external MCP clients (like Claude Desktop).
 - **DO NOT** try to connect to this server within this chat
-- **For filesystem access in this chat:** Use list_home_directory() instead
 - **To stop the server:** Use stop_mcp_registry_server('{server_id}')
 
 **🔌 For Claude Desktop users:**
@@ -528,6 +562,8 @@ Add this to your Claude Desktop config:
 ```
 
 **Description:** {server_info.get('description', server_info.get('example_usage', 'No description available'))}
+
+{self._get_server_specific_guidance(server_id, kwargs)}
 """
                     else:
                         # Process exited, get error

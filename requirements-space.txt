@@ -1,5 +1,4 @@
 # Hugging Face Space Requirements
-# Optimized for Track 3: Agentic Demo
 
 # Core Gradio dependency
 gradio>=4.44.0
