@@ -1292,6 +1292,27 @@ def create_dashboard():
                     history.append({"role": "user", "content": message})
                     history.append({"role": "assistant", "content": bot_response})
                     return history, ""
+                
+                # Check if user is providing an API key in a natural way
+                import re
+                
+                # Pattern 1: "install brave search with key YOUR_KEY"
+                brave_key_match = re.search(r"install brave search with (?:key|token) ([\w-]+)", message, re.IGNORECASE)
+                if brave_key_match:
+                    api_key = brave_key_match.group(1)
+                    message = f"install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
+                
+                # Pattern 2: "install github with token YOUR_TOKEN"
+                github_key_match = re.search(r"install github with (?:key|token) ([\w-]+)", message, re.IGNORECASE)
+                if github_key_match:
+                    api_key = github_key_match.group(1)
+                    message = f"install_mcp_server_from_registry(server_id='github', token='{api_key}')"
+                
+                # Pattern 3: "my brave api key is YOUR_KEY"
+                brave_key_statement = re.search(r"(?:my )?brave (?:api )?key (?:is |= ?)([\w-]+)", message, re.IGNORECASE)
+                if brave_key_statement:
+                    api_key = brave_key_statement.group(1)
+                    message = f"I have your Brave API key. Let me install the brave search server: install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
 
                 if show_thinking_steps:
                     # Use the detailed method that shows thinking steps
@@ -1309,6 +1330,51 @@ def create_dashboard():
                     # Use the regular chat method
                     full_response = coding_agent.chat(message)
 
+                # Check if the response indicates missing API keys or if Brave search needs API key
+                if "Missing required arguments:" in full_response and "Example for" in full_response:
+                    # Extract server ID and missing arguments
+                    import re
+                    server_match = re.search(r"Example for ([\w-]+):", full_response)
+                    args_match = re.search(r"Missing required arguments: \[([^\]]+)\]", full_response)
+                    
+                    if server_match and args_match:
+                        server_id = server_match.group(1)
+                        missing_args = [arg.strip().strip("'") for arg in args_match.group(1).split(",")]
+                        
+                        # Create a helpful prompt for the user
+                        api_key_prompt = f"\n\n🔑 **API Key Required**\n\n"
+                        api_key_prompt += f"The {server_id} server requires the following:"
+                        
+                        for arg in missing_args:
+                            if "token" in arg.lower() or "key" in arg.lower():
+                                api_key_prompt += f"\n- **{arg}**: Please provide your API key"
+                            else:
+                                api_key_prompt += f"\n- **{arg}**: Please provide the required value"
+                        
+                        api_key_prompt += "\n\nPlease provide the required information in your next message."
+                        api_key_prompt += "\n\nExample: `install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
+                        
+                        full_response += api_key_prompt
+                
+                # Check if Brave Search API key is needed
+                elif "BRAVE_API_KEY not set" in full_response:
+                    api_key_prompt = f"\n\n🔑 **Brave Search API Key Required**\n\n"
+                    api_key_prompt += "To use Brave Search, you need to provide an API key.\n\n"
+                    api_key_prompt += "🌐 **Get your API key:**\n"
+                    api_key_prompt += "1. Visit https://brave.com/search/api/\n"
+                    api_key_prompt += "2. Sign up for a free account\n"
+                    api_key_prompt += "3. Copy your API key\n\n"
+                    api_key_prompt += "🔧 **To install with your key:**\n"
+                    api_key_prompt += "Please type: `install brave search with key YOUR_API_KEY_HERE`\n\n"
+                    api_key_prompt += "Or use the exact command:\n"
+                    api_key_prompt += "`install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
+                    
+                    # Replace the error message with the helpful prompt
+                    if "Error: BRAVE_API_KEY not set" in full_response:
+                        full_response = full_response.split("Error: BRAVE_API_KEY not set")[0] + api_key_prompt
+                    else:
+                        full_response += api_key_prompt
+                
                 # Convert to messages format for new Gradio chatbot
                 history.append({"role": "user", "content": message})
                 history.append({"role": "assistant", "content": full_response})

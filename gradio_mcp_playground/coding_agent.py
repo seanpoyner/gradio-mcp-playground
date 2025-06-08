@@ -680,6 +680,7 @@ if HAS_LLAMAINDEX:
 1. When users ask for tools/servers for specific tasks, ALWAYS search the registry first using search_mcp_registry()
 2. API keys are stored securely and reused automatically - no need to ask again
 3. Store important conversations in memory server for future reference
+4. **IMPORTANT**: When installing servers that require API keys (like brave-search), you MUST ask the user for their API key first!
 
 **MCP SERVER WORKFLOWS:**
 
@@ -688,9 +689,11 @@ if HAS_LLAMAINDEX:
    - Install: Follow the suggested install command from search results
 
 2. **BRAVE SEARCH:**
-   - Install: install_mcp_server_from_registry(server_id="brave-search", token="YOUR_KEY")
-   - Use: brave_search(query="search term")
+   - **STEP 1**: Ask user for their Brave Search API key
+   - **STEP 2**: Install with the key: install_mcp_server_from_registry(server_id="brave-search", token="USER_PROVIDED_KEY")
+   - **STEP 3**: Use: brave_search(query="search term")
    - Note: API key is stored securely after first use
+   - Get API key from: https://brave.com/search/api/
 
 3. **MEMORY SERVER (Conversation Logging):**
    - Install: install_mcp_server_from_registry(server_id="memory")
@@ -701,10 +704,17 @@ if HAS_LLAMAINDEX:
    - Install: install_mcp_server_from_registry(server_id="obsidian", vault_path1="path/to/vault")
    - Tools will be available after installation
 
-**IMPORTANT:** 
+5. **GITHUB:**
+   - **STEP 1**: Ask user for their GitHub personal access token
+   - **STEP 2**: Install: install_mcp_server_from_registry(server_id="github", token="USER_PROVIDED_TOKEN")
+   - Get token from: https://github.com/settings/tokens
+
+**IMPORTANT RULES:** 
 - Always search registry when users need specific functionality
+- **NEVER** try to install servers with API keys without asking the user first
+- If a server requires an API key (brave-search, github, etc.), ALWAYS ask the user to provide it
 - Store conversations about user preferences/identity in memory server
-- API keys are encrypted and stored securely
+- API keys are encrypted and stored securely after the user provides them
 
 Be helpful and proactive about finding the right tools.""",
                     )

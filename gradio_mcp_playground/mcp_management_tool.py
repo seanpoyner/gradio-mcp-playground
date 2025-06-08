@@ -421,7 +421,13 @@ class MCPServerManager:
                 if required_args:
                     missing_args = [arg for arg in required_args if arg not in kwargs]
                     if missing_args:
-                        return f"❌ Missing required arguments: {missing_args}\n\nExample for {server_id}:\n{server_info['setup_help']}"
+                        # Special handling for servers that need API keys
+                        if server_id == 'brave-search' and 'token' not in kwargs and 'BRAVE_API_KEY' not in kwargs:
+                            return f"❌ Missing required arguments: {missing_args}\n\nExample for {server_id}:\n{server_info['setup_help']}\n\n🔑 **API Key Required**\n\nTo use Brave Search, you need an API key:\n1. Get your free API key from https://brave.com/search/api/\n2. Install with: install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY')"
+                        elif server_id == 'github' and 'token' not in kwargs and 'GITHUB_TOKEN' not in kwargs:
+                            return f"❌ Missing required arguments: {missing_args}\n\nExample for {server_id}:\n{server_info['setup_help']}\n\n🔑 **GitHub Token Required**\n\nTo use GitHub server, you need a personal access token:\n1. Create a token at https://github.com/settings/tokens\n2. Install with: install_mcp_server_from_registry(server_id='github', token='YOUR_TOKEN')"
+                        else:
+                            return f"❌ Missing required arguments: {missing_args}\n\nExample for {server_id}:\n{server_info['setup_help']}"
                 return f"❌ Failed to generate install command for '{server_id}'"
 
             # Execute installation
