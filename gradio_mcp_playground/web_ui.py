@@ -607,49 +607,65 @@ def create_dashboard():
                     "Connect to multiple MCP servers simultaneously for enhanced capabilities"
                 )
 
-                # Predefined MCP server configurations
+                # Predefined MCP server configurations with auto-install
                 predefined_servers = {
                     "memory": {
                         "name": "Memory Server",
-                        "url": "python -m mcp_server_memory",
+                        "server_id": "memory",
+                        "url": "npx -y @modelcontextprotocol/server-memory",
                         "protocol": "stdio",
                         "description": "Persistent memory storage for conversations and data",
                         "icon": "🧠",
+                        "auto_install": True,
                     },
                     "sequential-thinking": {
                         "name": "Sequential Thinking",
-                        "url": "python -m mcp_server_sequential_thinking",
+                        "server_id": "sequential-thinking",
+                        "url": "npx -y @modelcontextprotocol/server-sequential-thinking",
                         "protocol": "stdio",
                         "description": "Step-by-step reasoning and problem solving",
                         "icon": "🤔",
+                        "auto_install": True,
                     },
                     "filesystem": {
                         "name": "File System",
-                        "url": "npx @modelcontextprotocol/server-filesystem /",
+                        "server_id": "filesystem",
+                        "url": "npx -y @modelcontextprotocol/server-filesystem",
                         "protocol": "stdio",
                         "description": "File system access and manipulation",
                         "icon": "📁",
+                        "auto_install": True,
+                        "requires_path": True,
                     },
                     "brave-search": {
                         "name": "Brave Search",
-                        "url": "python -m mcp_server_brave_search",
+                        "server_id": "brave-search",
+                        "url": "npx -y @modelcontextprotocol/server-brave-search",
                         "protocol": "stdio",
                         "description": "Web search capabilities using Brave",
                         "icon": "🔍",
+                        "auto_install": True,
+                        "requires_env": ["BRAVE_API_KEY"],
                     },
                     "github": {
                         "name": "GitHub",
-                        "url": "python -m mcp_server_github",
+                        "server_id": "github",
+                        "url": "npx -y @modelcontextprotocol/server-github",
                         "protocol": "stdio",
                         "description": "GitHub repository and issue management",
                         "icon": "🐙",
+                        "auto_install": True,
+                        "requires_env": ["GITHUB_TOKEN"],
                     },
                     "time": {
                         "name": "Time Server",
-                        "url": "python -m mcp_server_time",
+                        "server_id": "time",
+                        "url": "uvx mcp-server-time",
                         "protocol": "stdio",
                         "description": "Time and date utilities",
                         "icon": "⏰",
+                        "auto_install": True,
+                        "requires_timezone": True,
                     },
                 }
 
@@ -1914,16 +1930,92 @@ def create_dashboard():
 
         # MCP Connection functions
         def install_and_connect_mcp(server_id):
-            """Install MCP server package and connect"""
+            """Install MCP server package and connect using registry"""
             import subprocess
             import time
+            import os
+            from .mcp_management_tool import get_mcp_manager
 
             server_info = predefined_servers.get(server_id)
             if not server_info:
                 return "❌ Unknown server"
 
-            # For now, let's focus on getting filesystem working since it shows potential
-            if server_id == "filesystem":
+            progress = f"📦 Installing {server_info['name']}...\n"
+            
+            try:
+                # Get the MCP manager
+                manager = get_mcp_manager()
+                
+                # Prepare kwargs based on server requirements
+                kwargs = {}
+                
+                # Handle filesystem path
+                if server_id == "filesystem" and server_info.get("requires_path"):
+                    # Auto-detect home directory
+                    import platform
+                    system = platform.system().lower()
+                    if system == 'windows':
+                        home_path = os.environ.get('USERPROFILE', os.path.expanduser('~'))
+                    else:
+                        home_path = os.path.expanduser('~')
+                    kwargs['path'] = home_path
+                    progress += f"🏠 Using home directory: {home_path}\n"
+                
+                # Handle time server timezone
+                elif server_id == "time" and server_info.get("requires_timezone"):
+                    kwargs['timezone'] = 'UTC'  # Default to UTC
+                    progress += "🕐 Using timezone: UTC\n"
+                
+                # Check for required environment variables
+                if server_info.get("requires_env"):
+                    missing_env = []
+                    for env_var in server_info["requires_env"]:
+                        if not os.environ.get(env_var):
+                            missing_env.append(env_var)
+                    
+                    if missing_env:
+                        progress += f"⚠️ Missing environment variables: {', '.join(missing_env)}\n"
+                        if server_id == "brave-search":
+                            progress += "\n📝 To use Brave Search:\n"
+                            progress += "1. Get API key from https://brave.com/search/api/\n"
+                            progress += f"2. Set environment variable: BRAVE_API_KEY=your_key_here\n"
+                        elif server_id == "github":
+                            progress += "\n📝 To use GitHub:\n"
+                            progress += "1. Create token at https://github.com/settings/tokens\n"
+                            progress += f"2. Set environment variable: GITHUB_TOKEN=your_token_here\n"
+                        progress += "\n❌ Cannot install without required environment variables\n"
+                        return progress
+                
+                # Use the registry's install_mcp_server_from_registry function
+                progress += "🚀 Starting installation via registry...\n"
+                result = manager.install_mcp_server_from_registry(server_id, **kwargs)
+                progress += result + "\n"
+                
+                # Check if installation was successful
+                if "✅" in result and "started automatically" in result:
+                    progress += "\n🎉 Installation and startup successful!\n"
+                    
+                    # Update connection status
+                    if not hasattr(quick_connect_mcp, "connections"):
+                        quick_connect_mcp.connections = {}
+                    
+                    quick_connect_mcp.connections[server_id] = {
+                        "name": server_info["name"],
+                        "url": server_info["url"],
+                        "protocol": server_info["protocol"],
+                        "status": "running",
+                        "auto_started": True,
+                    }
+                    
+                    return progress
+                else:
+                    return progress + "\n❌ Installation failed\n"
+                    
+            except Exception as e:
+                return progress + f"\n❌ Error during installation: {str(e)}\n"
+            
+            # Keep the old filesystem-specific implementation as fallback
+            if server_id == "filesystem" and "✅" not in progress:
                 progress = f"📦 Installing {server_info['name']}...\n"
 
                 # Check if we have Node.js for filesystem server
@@ -2111,6 +2203,12 @@ For others, please install manually using the command above."""
                 server_info = predefined_servers.get(server_id)
                 if not server_info:
                     return "❌ Unknown server"
+
+                # Check if server is already running from auto-install
+                if hasattr(quick_connect_mcp, "connections") and server_id in quick_connect_mcp.connections:
+                    conn_info = quick_connect_mcp.connections[server_id]
+                    if conn_info.get("auto_started") and conn_info.get("status") == "running":
+                        return f"✅ {server_info['name']} is already running!\n\nThis server was auto-started and is ready for use by external MCP clients."
 
                 # Try to connect using the actual MCP client
                 try:
@@ -2692,9 +2790,24 @@ For others, please install manually using the command above."""
 
                     return install_handler
 
+                # Update status display after installation
+                def update_server_status_handler(sid):
+                    def handler(install_output):
+                        if "✅" in install_output and "started automatically" in install_output:
+                            return f"✅ Running (Auto-started)"
+                        elif "❌" in install_output:
+                            return "❌ Installation Failed"
+                        else:
+                            return "⏳ Installing..."
+                    return handler
+                
                 server_install_buttons[server_id].click(
                     fn=lambda: gr.update(visible=True), outputs=[mcp_install_progress]
                 ).then(fn=create_install_handler(server_id), outputs=[mcp_install_progress]).then(
+                    fn=update_server_status_handler(server_id), 
+                    inputs=[mcp_install_progress],
+                    outputs=[server_statuses[server_id]]
+                ).then(
                     fn=get_mcp_connections_data, outputs=[mcp_connections_table]
                 ).then(
                     fn=get_mcp_connection_choices, outputs=[selected_mcp_connection]

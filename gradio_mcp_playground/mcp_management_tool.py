@@ -440,16 +440,24 @@ class MCPServerManager:
 **🚀 Server Running:**
 - Process ID: {process.pid}
 - Command: `{cmd_str}`
-- Status: Running
+- Status: Running in background for external MCP clients
 
-**🔌 Connection Ready:**
-You can now connect to this server using:
-- Protocol: stdio
-- Command: `{cmd_str}`
+**📝 Important:** This server is now ready for external MCP clients (like Claude Desktop).
+- **DO NOT** try to connect to this server within this chat
+- **For filesystem access in this chat:** Use list_home_directory() instead
+- **To stop the server:** Use stop_mcp_registry_server('{server_id}')
 
-**📝 Note:** The server is running in the background. Use stop_mcp_registry_server('{server_id}') to stop it.
+**🔌 For Claude Desktop users:**
+Add this to your Claude Desktop config:
+```json
+{{
+  "{server_id}": {{
+    "command": "{cmd_str.replace('"', '\\"')}"
+  }}
+}}
+```
 
-**Usage:** {server_info['example_usage']}
+**Description:** {server_info.get('description', server_info.get('example_usage', 'No description available'))}
 """
                     else:
                         # Process exited, get error

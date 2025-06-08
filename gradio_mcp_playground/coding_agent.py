@@ -95,6 +95,7 @@ if HAS_LLAMAINDEX:
                 self._create_gradio_helper_tool(),
                 self._create_file_reader_tool(),
                 self._create_home_directory_tool(),
+                self._create_directory_tool(),
             ]
 
             # Add MCP server management tools
@@ -395,6 +396,37 @@ if HAS_LLAMAINDEX:
 
             return FunctionTool.from_defaults(fn=list_home_directory, name="list_home_directory")
 
+        def _create_directory_tool(self):
+            """Create a tool for creating directories"""
+            def create_directory(path: str) -> str:
+                """Create a directory at the specified path.
+
+                Args:
+                    path: Path where to create the directory (can be relative to home or absolute)
+                """
+                try:
+                    import os
+                    from pathlib import Path
+                    
+                    # If path doesn't start with /, assume it's relative to home
+                    if not path.startswith(('/', 'C:\\', 'C:/', '\\\\')):
+                        home_path = Path.home()
+                        full_path = home_path / path
+                    else:
+                        full_path = Path(path)
+                    
+                    # Create directory (including parents if needed)
+                    full_path.mkdir(parents=True, exist_ok=True)
+                    
+                    return f"✅ Directory created successfully: {full_path}"
+                    
+                except PermissionError:
+                    return f"❌ Permission denied: Cannot create directory at {full_path}"
+                except Exception as e:
+                    return f"❌ Error creating directory: {str(e)}"
+            
+            return FunctionTool.from_defaults(fn=create_directory, name="create_directory")
+
         def _add_mcp_management_tools(self):
             """Add MCP server management tools to the agent"""
             try:
@@ -534,52 +566,23 @@ if HAS_LLAMAINDEX:
                         llm=self.llm,
                         memory=self.memory,
                         verbose=True,
-                        max_iterations=5,
-                        system_prompt="""You are an expert software engineer and coding assistant specializing in:
+                        max_iterations=50,  # High limit for development
+                        system_prompt="""You are a coding assistant with tools for MCP servers, file operations, and code analysis.
 
-🎯 **Core Expertise:**
-- MCP (Model Context Protocol) development and server creation
-- Gradio application development and UI design
-- Python programming and best practices
-- Code analysis, debugging, and optimization
-- Software architecture and design patterns
-- MCP server management and deployment
+**RULES - Follow exactly:**
+1. Use ONE tool per request, then STOP
+2. "Connect to filesystem MCP" → install_mcp_server_from_registry('filesystem') → STOP
+3. "Create directory X" → create_directory('X') → STOP  
+4. "What projects?" → list_home_directory() → STOP
+5. "Can you X?" → Answer directly, no tools
 
-🛠 **Your Capabilities:**
-- Analyze code for bugs, security issues, and improvements
-- Generate clean, efficient, and well-documented code
-- Explain complex programming concepts clearly
-- Provide step-by-step implementation guidance
-- Review and suggest architectural improvements
-- **Manage MCP servers**: create, start, stop, delete, and connect to MCP servers
-- **Server operations**: list available servers, templates, and active connections
-- **Registry access**: Install MCP servers from the comprehensive registry (filesystem, memory, github, etc.)
-- **Filesystem access**: Use the list_home_directory() tool to directly list contents of the user's home directory and find projects. No server setup needed!
+**NEVER:**
+- Use connect_to_mcp_server() or get_mcp_server_info() for registry servers
+- Create MCP servers when asked to create directories
+- Use the same tool twice
+- Continue after getting the answer
 
-📋 **MCP Server Installation Guidelines:**
-- When installing MCP servers from registry, use install_mcp_server_from_registry() which automatically starts the server
-- **IMPORTANT**: Do NOT attempt to connect to stdio-based MCP servers using connect_to_mcp_server() - these are meant for external MCP clients
-- After installing a server, inform the user that it's running and ready for use by external MCP clients
-- For filesystem access within this chat, use list_home_directory() instead of the MCP filesystem server
-- **STOP CONDITION**: After successfully installing an MCP server, do NOT try to connect to it - just confirm it's running
-
-📋 **General Guidelines:**
-- Always use your available tools to provide accurate, specific information
-- When showing code, explain the logic and reasoning behind it
-- Focus on practical, working solutions
-- Consider security, performance, and maintainability
-- Ask clarifying questions when requirements are unclear
-- **EFFICIENCY**: If a task cannot be completed with available tools, provide a direct answer explaining alternative approaches
-- **STOP CONDITION**: After 3-4 tool attempts, provide the best answer possible rather than continuing to iterate
-
-🚀 **Communication Style:**
-- Be concise but thorough
-- Use code examples liberally
-- Structure responses with clear headings and bullet points
-- Provide actionable next steps
-- Focus on teaching and explaining, not just providing answers
-
-Ready to help with any coding challenge or MCP development task!""",
+Be direct and efficient.""",
                     )
                     print("DEBUG: ReActAgent created successfully")
                 except Exception as e:
