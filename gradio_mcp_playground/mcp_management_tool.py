@@ -379,6 +379,13 @@ class MCPServerManager:
                 auto_detected_path = True
             else:
                 auto_detected_path = False
+            
+            # Create directory for memory server if needed
+            if server_id == 'memory':
+                memory_dir = os.path.join(os.path.expanduser('~'), '.memory_server_bin')
+                if not os.path.exists(memory_dir):
+                    os.makedirs(memory_dir, exist_ok=True)
+                    print(f"Created memory server directory: {memory_dir}")
 
             # Generate install command with user arguments (including auto-detected ones)
             install_config = registry.generate_install_command(server_id, kwargs)
