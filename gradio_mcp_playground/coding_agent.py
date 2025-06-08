@@ -99,6 +99,7 @@ if HAS_LLAMAINDEX:
                 self._create_directory_tool(),
                 self._create_brave_search_tool(),  # Add brave search tool
                 self._create_registry_search_tool(),  # Add registry search tool
+                self._create_check_server_requirements_tool(),  # Add requirements checker
             ]
 
             # Add MCP server management tools
@@ -531,6 +532,110 @@ if HAS_LLAMAINDEX:
             
             return FunctionTool.from_defaults(fn=search_mcp_registry, name="search_mcp_registry")
 
+        def _create_check_server_requirements_tool(self) -> FunctionTool:
+            """Create tool to check server requirements before installation"""
+            def check_server_requirements(server_id: str) -> str:
+                """Check what requirements are needed to install an MCP server.
+                
+                Args:
+                    server_id: ID of the server to check (e.g., 'brave-search', 'filesystem')
+                    
+                Returns:
+                    Information about required arguments and environment variables
+                """
+                try:
+                    from .registry import ServerRegistry
+                    from .secure_storage import SecureTokenStorage
+                    
+                    registry = ServerRegistry()
+                    storage = SecureTokenStorage()
+                    
+                    # Get server info
+                    server_info = registry.get_server_info(server_id)
+                    if not server_info:
+                        return f"❌ Server '{server_id}' not found in registry"
+                    
+                    output = f"📋 **Requirements for {server_info['name']}**\n\n"
+                    
+                    # Check required arguments
+                    required_args = server_info.get('required_args', [])
+                    if required_args:
+                        output += "**Required Arguments:**\n"
+                        for arg in required_args:
+                            output += f"- `{arg}`: "
+                            if arg == 'path':
+                                output += "Directory path to provide access to\n"
+                            elif arg == 'timezone':
+                                output += "Timezone (e.g., 'UTC', 'America/New_York')\n"
+                            elif arg == 'vault_path1':
+                                output += "Path to your Obsidian vault\n"
+                            else:
+                                output += "Required value\n"
+                    
+                    # Check environment variables
+                    env_vars = server_info.get('env_vars', {})
+                    if env_vars:
+                        output += "\n**Required Environment Variables:**\n"
+                        
+                        # Check if we have stored keys
+                        stored_keys = storage.retrieve_server_keys(server_id)
+                        
+                        for env_var, description in env_vars.items():
+                            output += f"- `{env_var}`: {description}\n"
+                            
+                            # Check if we already have this key stored
+                            if env_var in stored_keys:
+                                output += f"  ✅ Already stored securely\n"
+                            else:
+                                output += f"  ❌ Not yet provided\n"
+                                
+                                # Add instructions for getting the key
+                                if server_id == 'brave-search':
+                                    output += f"  📝 Get your API key from: https://brave.com/search/api/\n"
+                                elif server_id == 'github':
+                                    output += f"  📝 Create a token at: https://github.com/settings/tokens\n"
+                    
+                    # Add setup help
+                    if server_info.get('setup_help'):
+                        output += f"\n**Setup Help:** {server_info['setup_help']}\n"
+                    
+                    # Add example installation command
+                    output += "\n**Example Installation:**\n```\n"
+                    
+                    # Build example command
+                    example_args = {}
+                    for arg in required_args:
+                        if arg == 'path':
+                            example_args[arg] = '/home/user/workspace'
+                        elif arg == 'timezone':
+                            example_args[arg] = 'UTC'
+                        elif arg == 'vault_path1':
+                            example_args[arg] = '/path/to/obsidian/vault'
+                        else:
+                            example_args[arg] = f'YOUR_{arg.upper()}'
+                    
+                    # Add tokens for env vars
+                    if 'BRAVE_API_KEY' in env_vars:
+                        example_args['token'] = 'YOUR_BRAVE_API_KEY'
+                    elif 'GITHUB_TOKEN' in env_vars:
+                        example_args['token'] = 'YOUR_GITHUB_TOKEN'
+                    
+                    # Format the command
+                    if example_args:
+                        args_str = ', '.join([f"{k}='{v}'" for k, v in example_args.items()])
+                        output += f"install_mcp_server_from_registry(server_id='{server_id}', {args_str})\n"
+                    else:
+                        output += f"install_mcp_server_from_registry(server_id='{server_id}')\n"
+                    
+                    output += "```"
+                    
+                    return output
+                    
+                except Exception as e:
+                    return f"Error checking requirements: {str(e)}"
+            
+            return FunctionTool.from_defaults(fn=check_server_requirements, name="check_server_requirements")
+
         def _add_mcp_management_tools(self):
             """Add MCP server management tools to the agent"""
             try:
@@ -678,36 +783,41 @@ if HAS_LLAMAINDEX:
 
 **KEY BEHAVIORS:**
 1. When users ask for tools/servers for specific tasks, ALWAYS search the registry first using search_mcp_registry()
-2. API keys are stored securely and reused automatically - no need to ask again
-3. Store important conversations in memory server for future reference
-4. **IMPORTANT**: When installing servers that require API keys (like brave-search), you MUST ask the user for their API key first!
+2. Before installing ANY server, ALWAYS use check_server_requirements() to see what's needed
+3. If a server requires arguments or API keys, you MUST ask the user for them before attempting installation
+4. API keys are stored securely and reused automatically - no need to ask again if already stored
+5. Store important conversations in memory server for future reference
 
-**MCP SERVER WORKFLOWS:**
+**MCP SERVER INSTALLATION WORKFLOW:**
 
-1. **FINDING SERVERS:**
-   - Search: search_mcp_registry("obsidian") to find relevant servers
-   - Install: Follow the suggested install command from search results
+1. **ALWAYS CHECK REQUIREMENTS FIRST:**
+   - Use: check_server_requirements("server-id") to see what's needed
+   - This shows required arguments, environment variables, and whether keys are already stored
+   - NEVER skip this step!
 
-2. **BRAVE SEARCH:**
-   - **STEP 1**: Ask user for their Brave Search API key
-   - **STEP 2**: Install with the key: install_mcp_server_from_registry(server_id="brave-search", token="USER_PROVIDED_KEY")
-   - **STEP 3**: Use: brave_search(query="search term")
-   - Note: API key is stored securely after first use
-   - Get API key from: https://brave.com/search/api/
+2. **FINDING SERVERS:**
+   - Search: search_mcp_registry("search-term") to find relevant servers
+   - Check: check_server_requirements("server-id") before installing
 
-3. **MEMORY SERVER (Conversation Logging):**
-   - Install: install_mcp_server_from_registry(server_id="memory")
-   - Store: memory_store_conversation(topic="topic_name", content="conversation content")
-   - Retrieve: memory_retrieve_conversation(topic="topic_name", limit=10)
+3. **EXAMPLE: BRAVE SEARCH:**
+   - **STEP 1**: check_server_requirements("brave-search")
+   - **STEP 2**: If API key not stored, ask user for it
+   - **STEP 3**: Install: install_mcp_server_from_registry(server_id="brave-search", token="USER_PROVIDED_KEY")
+   - **STEP 4**: Use: brave_search(query="search term")
 
-4. **OBSIDIAN:**
-   - Install: install_mcp_server_from_registry(server_id="obsidian", vault_path1="path/to/vault")
-   - Tools will be available after installation
+4. **EXAMPLE: FILESYSTEM:**
+   - **STEP 1**: check_server_requirements("filesystem")
+   - **STEP 2**: Ask user which directory to provide access to
+   - **STEP 3**: Install: install_mcp_server_from_registry(server_id="filesystem", path="/user/provided/path")
 
-5. **GITHUB:**
-   - **STEP 1**: Ask user for their GitHub personal access token
-   - **STEP 2**: Install: install_mcp_server_from_registry(server_id="github", token="USER_PROVIDED_TOKEN")
-   - Get token from: https://github.com/settings/tokens
+5. **EXAMPLE: MEMORY SERVER:**
+   - **STEP 1**: check_server_requirements("memory")
+   - **STEP 2**: Install directly (no requirements): install_mcp_server_from_registry(server_id="memory")
+
+6. **EXAMPLE: OBSIDIAN:**
+   - **STEP 1**: check_server_requirements("obsidian")
+   - **STEP 2**: Ask user for vault path
+   - **STEP 3**: Install: install_mcp_server_from_registry(server_id="obsidian", vault_path1="/path/to/vault")
 
 **IMPORTANT RULES:** 
 - Always search registry when users need specific functionality

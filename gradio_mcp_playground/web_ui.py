@@ -1313,6 +1313,24 @@ def create_dashboard():
                 if brave_key_statement:
                     api_key = brave_key_statement.group(1)
                     message = f"I have your Brave API key. Let me install the brave search server: install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
+                
+                # Pattern 4: "use path /home/user/workspace" (for filesystem server)
+                path_statement = re.search(r"(?:use |provide )?path (?:is |= ?)?([/\\][^\s]+)", message, re.IGNORECASE)
+                if path_statement:
+                    path = path_statement.group(1)
+                    message = f"I'll use path '{path}' for the filesystem server: install_mcp_server_from_registry(server_id='filesystem', path='{path}')"
+                
+                # Pattern 5: "my obsidian vault is at /path/to/vault"
+                vault_statement = re.search(r"(?:my )?obsidian vault (?:is )?(?:at |in )?([/\\][^\s]+)", message, re.IGNORECASE)
+                if vault_statement:
+                    vault_path = vault_statement.group(1)
+                    message = f"I'll use your Obsidian vault at '{vault_path}': install_mcp_server_from_registry(server_id='obsidian', vault_path1='{vault_path}')"
+                
+                # Pattern 6: "my github token is YOUR_TOKEN"
+                github_token_statement = re.search(r"(?:my )?github (?:token|pat|personal access token) (?:is |= ?)([\w-]+)", message, re.IGNORECASE)
+                if github_token_statement:
+                    token = github_token_statement.group(1)
+                    message = f"I have your GitHub token. Let me install the GitHub server: install_mcp_server_from_registry(server_id='github', token='{token}')"
 
                 if show_thinking_steps:
                     # Use the detailed method that shows thinking steps
@@ -1374,6 +1392,30 @@ def create_dashboard():
                         full_response = full_response.split("Error: BRAVE_API_KEY not set")[0] + api_key_prompt
                     else:
                         full_response += api_key_prompt
+                
+                # Check if the response shows server requirements
+                elif "Requirements for" in full_response and "Required Arguments:" in full_response:
+                    # Add a helpful prompt for providing requirements
+                    requirements_prompt = "\n\n📝 **Please provide the required information:**\n\n"
+                    
+                    # Extract what's needed from the response
+                    if "path" in full_response and "Directory path" in full_response:
+                        requirements_prompt += "For **filesystem** server, please specify the directory path:\n"
+                        requirements_prompt += "Example: `use path /home/user/workspace`\n\n"
+                    
+                    if "vault_path1" in full_response:
+                        requirements_prompt += "For **Obsidian** server, please specify your vault path:\n"
+                        requirements_prompt += "Example: `my obsidian vault is at /path/to/vault`\n\n"
+                    
+                    if "BRAVE_API_KEY" in full_response and "❌ Not yet provided" in full_response:
+                        requirements_prompt += "For **Brave Search**, please provide your API key:\n"
+                        requirements_prompt += "Example: `my brave api key is YOUR_KEY_HERE`\n\n"
+                    
+                    if "GITHUB_TOKEN" in full_response and "❌ Not yet provided" in full_response:
+                        requirements_prompt += "For **GitHub**, please provide your personal access token:\n"
+                        requirements_prompt += "Example: `my github token is YOUR_TOKEN_HERE`\n\n"
+                    
+                    full_response += requirements_prompt
                 
                 # Convert to messages format for new Gradio chatbot
                 history.append({"role": "user", "content": message})
