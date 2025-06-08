@@ -5,7 +5,7 @@ code analysis, and general programming tasks.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 # Optional imports
 try:
@@ -94,6 +94,7 @@ if HAS_LLAMAINDEX:
                 self._create_code_analyzer_tool(),
                 self._create_gradio_helper_tool(),
                 self._create_file_reader_tool(),
+                self._create_home_directory_tool(),
             ]
 
             # Add MCP server management tools
@@ -303,6 +304,97 @@ if HAS_LLAMAINDEX:
 
             return FunctionTool.from_defaults(fn=read_project_file, name="read_project_file")
 
+        def _create_home_directory_tool(self) -> FunctionTool:
+            """Create tool for listing home directory contents"""
+
+            def list_home_directory(subdirectory: str = "") -> str:
+                """List contents of the user's home directory or a subdirectory within it.
+
+                Args:
+                    subdirectory: Optional subdirectory within home to list (e.g., "Documents", "Projects")
+                """
+                try:
+                    import os
+                    from pathlib import Path
+                    
+                    # Get home directory
+                    home_path = Path.home()
+                    
+                    # If subdirectory specified, append it
+                    if subdirectory:
+                        target_path = home_path / subdirectory
+                    else:
+                        target_path = home_path
+                    
+                    if not target_path.exists():
+                        return f"Error: Directory '{target_path}' does not exist"
+                    
+                    if not target_path.is_dir():
+                        return f"Error: '{target_path}' is not a directory"
+                    
+                    # List all items
+                    items = list(target_path.iterdir())
+                    
+                    # Separate directories and files
+                    directories = []
+                    files = []
+                    
+                    for item in items:
+                        try:
+                            if item.is_dir():
+                                # Check if it's a git repository
+                                git_marker = " (git repo)" if (item / ".git").exists() else ""
+                                directories.append(f"📁 {item.name}{git_marker}")
+                            else:
+                                # Add file size
+                                size = item.stat().st_size
+                                if size < 1024:
+                                    size_str = f"{size}B"
+                                elif size < 1024 * 1024:
+                                    size_str = f"{size/1024:.1f}KB"
+                                else:
+                                    size_str = f"{size/(1024*1024):.1f}MB"
+                                files.append(f"📄 {item.name} ({size_str})")
+                        except (PermissionError, OSError):
+                            # Skip items we can't access
+                            continue
+                    
+                    # Sort alphabetically
+                    directories.sort()
+                    files.sort()
+                    
+                    # Build result
+                    result = f"📂 Contents of: {target_path}\n"
+                    result += f"🏠 Home Directory: {home_path}\n\n"
+                    
+                    if directories:
+                        result += f"**Directories ({len(directories)}):**\n"
+                        result += "\n".join(directories[:50])  # Limit to 50 to avoid huge outputs
+                        if len(directories) > 50:
+                            result += f"\n... and {len(directories) - 50} more directories"
+                        result += "\n\n"
+                    
+                    if files:
+                        result += f"**Files ({len(files)}):**\n"
+                        result += "\n".join(files[:30])  # Limit files to 30
+                        if len(files) > 30:
+                            result += f"\n... and {len(files) - 30} more files"
+                    
+                    # Look for git projects specifically
+                    git_projects = [d for d in directories if " (git repo)" in d]
+                    if git_projects:
+                        result += f"\n\n**🔧 Git Projects Found ({len(git_projects)}):**\n"
+                        result += "\n".join([f"- {proj.replace('📁 ', '').replace(' (git repo)', '')}" for proj in git_projects[:20]])
+                        if len(git_projects) > 20:
+                            result += f"\n... and {len(git_projects) - 20} more git projects"
+                    
+                    return result
+
+                except Exception as e:
+                    return f"Error accessing home directory: {str(e)}"
+
+            return FunctionTool.from_defaults(fn=list_home_directory, name="list_home_directory")
+
         def _add_mcp_management_tools(self):
             """Add MCP server management tools to the agent"""
             try:
@@ -442,6 +534,7 @@ if HAS_LLAMAINDEX:
                         llm=self.llm,
                         memory=self.memory,
                         verbose=True,
+                        max_iterations=5,
                         system_prompt="""You are an expert software engineer and coding assistant specializing in:
 
 🎯 **Core Expertise:**
@@ -460,16 +553,24 @@ if HAS_LLAMAINDEX:
 - Review and suggest architectural improvements
 - **Manage MCP servers**: create, start, stop, delete, and connect to MCP servers
 - **Server operations**: list available servers, templates, and active connections
-- **Client connections**: connect to and test MCP server endpoints
+- **Registry access**: Install MCP servers from the comprehensive registry (filesystem, memory, github, etc.)
+- **Filesystem access**: Use the list_home_directory() tool to directly list contents of the user's home directory and find projects. No server setup needed!
 
+📋 **MCP Server Installation Guidelines:**
+- When installing MCP servers from registry, use install_mcp_server_from_registry() which automatically starts the server
+- **IMPORTANT**: Do NOT attempt to connect to stdio-based MCP servers using connect_to_mcp_server() - these are meant for external MCP clients
+- After installing a server, inform the user that it's running and ready for use by external MCP clients
+- For filesystem access within this chat, use list_home_directory() instead of the MCP filesystem server
+- **STOP CONDITION**: After successfully installing an MCP server, do NOT try to connect to it - just confirm it's running
 
-📋 **Guidelines:**
+📋 **General Guidelines:**
 - Always use your available tools to provide accurate, specific information
 - When showing code, explain the logic and reasoning behind it
 - Focus on practical, working solutions
 - Consider security, performance, and maintainability
 - Ask clarifying questions when requirements are unclear
-- **IMPORTANT**: When you see "APPROVAL_REQUIRED", explain to the user what command needs approval and ask for their permission
+- **EFFICIENCY**: If a task cannot be completed with available tools, provide a direct answer explaining alternative approaches
+- **STOP CONDITION**: After 3-4 tool attempts, provide the best answer possible rather than continuing to iterate
 
 🚀 **Communication Style:**
 - Be concise but thorough
@@ -530,32 +631,32 @@ Ready to help with any coding challenge or MCP development task!""",
             try:
                 # Create a custom handler to capture steps
                 steps = []
-                
+
                 # Store the original verbose setting
                 original_verbose = getattr(self.agent, '_verbose', True)
-                
+
                 # Override the agent's step method to capture thinking
                 original_step = getattr(self.agent, '_run_step', None)
-                
+
                 def capture_step(step_input, **kwargs):
                     """Capture reasoning steps"""
                     if hasattr(step_input, 'input'):
                         user_input = str(step_input.input)
                         if user_input and user_input != "None":
                             steps.append(f"🤔 **Input**: {user_input}")
-                    
+
                     # Call original step method
                     result = original_step(step_input, **kwargs) if original_step else None
-                    
+
                     # Extract thinking and action from the step
                     if result and hasattr(result, 'output'):
                         output_str = str(result.output)
-                        
+
                         # Parse ReAct format (Thought: ... Action: ... Action Input: ... Observation: ...)
                         lines = output_str.split('\n')
                         current_section = None
                         section_content = []
-                        
+
                         for line in lines:
                             line = line.strip()
                             if line.startswith('Thought:'):
@@ -580,18 +681,18 @@ Ready to help with any coding challenge or MCP development task!""",
                                 section_content = [line[12:].strip()]  # Remove "Observation:" prefix
                             elif line and current_section:
                                 section_content.append(line)
-                        
+
                         # Add the last section
                         if current_section and section_content:
                             icon = "🎯" if current_section == "Action" else "📝" if current_section == "Observation" else "💭"
                             steps.append(f"{icon} **{current_section}**: {' '.join(section_content)}")
-                    
+
                     return result
-                
+
                 # Temporarily override the step method
                 if hasattr(self.agent, '_run_step'):
                     self.agent._run_step = capture_step
-                
+
                 # Get the response
                 response = self.agent.chat(message)
                 response_str = str(response)
@@ -605,7 +706,7 @@ Ready to help with any coding challenge or MCP development task!""",
                     response_str = response_str[:6000] + "\n\n... (response truncated for display)"
 
                 return steps, response_str
-                
+
             except Exception as e:
                 error_msg = str(e)
                 if "404" in error_msg and "not found" in error_msg.lower():
@@ -635,34 +736,34 @@ Ready to help with any coding challenge or MCP development task!""",
             """Add an MCP connection to the coding agent"""
             try:
                 self.mcp_connections[connection_id] = connection_info
-                
+
                 # Create a tool for this MCP connection
                 if connection_info.get('tools'):
                     self._create_mcp_tools(connection_id, connection_info)
-                    
+
                 # Recreate agent with new tools if already configured
                 if self.is_configured():
                     self._recreate_agent_with_mcp_tools()
-                    
+
             except Exception as e:
                 raise Exception(f"Failed to add MCP connection {connection_id}: {str(e)}")
 
         def _create_mcp_tools(self, connection_id: str, connection_info: Dict[str, Any]):
             """Create LlamaIndex tools for MCP connection"""
             tools = []
-            
+
             # For filesystem connection, create actual working tools
             if connection_id == "filesystem":
                 def read_file_tool(path: str) -> str:
                     """Read contents of a file"""
                     try:
                         import os
-                        with open(path, 'r', encoding='utf-8') as f:
+                        with open(path, encoding='utf-8') as f:
                             content = f.read()
                         return f"File content from {os.path.abspath(path)}:\n\n{content}"
                     except Exception as e:
                         return f"Error reading file: {str(e)}"
-                
+
                 def write_file_tool(path: str, content: str) -> str:
                     """Write content to a file"""
                     try:
@@ -672,7 +773,7 @@ Ready to help with any coding challenge or MCP development task!""",
                         return f"Successfully wrote {len(content)} characters to {os.path.abspath(path)}"
                     except Exception as e:
                         return f"Error writing file: {str(e)}"
-                
+
                 def list_directory_tool(path: str = ".") -> str:
                     """List contents of a directory"""
                     try:
@@ -683,7 +784,7 @@ Ready to help with any coding challenge or MCP development task!""",
                         return f"Directory contents of {abs_path} ({len(files)} items):\n{file_list}"
                     except Exception as e:
                         return f"Error listing directory: {str(e)}"
-                
+
                 def create_directory_tool(path: str) -> str:
                     """Create a directory"""
                     try:
@@ -692,14 +793,14 @@ Ready to help with any coding challenge or MCP development task!""",
                         return f"Successfully created directory: {os.path.abspath(path)}"
                     except Exception as e:
                         return f"Error creating directory: {str(e)}"
-                
+
                 tools.extend([
                     FunctionTool.from_defaults(fn=read_file_tool, name="filesystem_read_file"),
                     FunctionTool.from_defaults(fn=write_file_tool, name="filesystem_write_file"),
                     FunctionTool.from_defaults(fn=list_directory_tool, name="filesystem_list_directory"),
                     FunctionTool.from_defaults(fn=create_directory_tool, name="filesystem_create_directory"),
                 ])
-            
+
             else:
                 # For other connections, create placeholder tools
                 for tool_name in connection_info.get('tools', []):
@@ -707,15 +808,15 @@ Ready to help with any coding challenge or MCP development task!""",
                         def placeholder_func(**kwargs) -> str:
                             """Placeholder MCP tool"""
                             return f"Tool {tool_n} from {conn_id} called with args: {kwargs}\n\nNote: This is a placeholder. Install the actual MCP server for full functionality."
-                        
+
                         return FunctionTool.from_defaults(
                             fn=placeholder_func,
                             name=f"{conn_id}_{tool_n}",
                             description=f"Call {tool_n} tool from {connection_info['name']} MCP server"
                         )
-                    
+
                     tools.append(create_placeholder_tool(connection_id, tool_name))
-            
+
             # Store tools for this connection
             if not hasattr(self, 'mcp_tools'):
                 self.mcp_tools = {}
@@ -725,7 +826,7 @@ Ready to help with any coding challenge or MCP development task!""",
             """Recreate the agent with MCP tools included"""
             if not self.is_configured():
                 return
-                
+
             try:
                 # Get all existing tools
                 all_tools = [
@@ -734,12 +835,12 @@ Ready to help with any coding challenge or MCP development task!""",
                     self._create_code_analysis_tool(),
                     self._create_gradio_helper_tool(),
                 ]
-                
+
                 # Add MCP tools
                 if hasattr(self, 'mcp_tools'):
                     for connection_tools in self.mcp_tools.values():
                         all_tools.extend(connection_tools)
-                
+
                 # Recreate agent
                 self.agent = ReActAgent.from_tools(
                     all_tools,
@@ -748,8 +849,8 @@ Ready to help with any coding challenge or MCP development task!""",
                     verbose=True,
                     max_iterations=10,
                 )
-                
-            except Exception as e:
+
+            except Exception:
                 # If recreation fails, just continue with existing agent
                 pass
 
@@ -761,10 +862,10 @@ Ready to help with any coding challenge or MCP development task!""",
             """Remove an MCP connection"""
             if connection_id in self.mcp_connections:
                 del self.mcp_connections[connection_id]
-            
+
             if hasattr(self, 'mcp_tools') and connection_id in self.mcp_tools:
                 del self.mcp_tools[connection_id]
-                
+
             # Recreate agent without this connection's tools
             if self.is_configured():
                 self._recreate_agent_with_mcp_tools()

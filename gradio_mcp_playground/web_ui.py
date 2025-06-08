@@ -66,7 +66,10 @@ def create_dashboard():
         coding_agent = None
         coding_agent_error = "LlamaIndex not available"
 
-    with gr.Blocks(title="Gradio MCP Playground", theme=gr.themes.Soft(), css="""
+    with gr.Blocks(
+        title="Gradio MCP Playground",
+        theme=gr.themes.Soft(),
+        css="""
         .mcp-connection-card {
             border: 1px solid #e1e5e9;
             border-radius: 8px;
@@ -89,7 +92,8 @@ def create_dashboard():
             color: #dc3545;
             font-weight: bold;
         }
-    """) as dashboard:
+    """,
+    ) as dashboard:
         gr.Markdown(
             """
             # 🚀 Gradio MCP Playground
@@ -180,12 +184,12 @@ def create_dashboard():
                             scale=4,
                         )
                         send_btn = gr.Button("Send", variant="primary", scale=1)
-                    
+
                     with gr.Row():
                         show_thinking = gr.Checkbox(
-                            label="🧠 Show AI Thinking Steps", 
+                            label="🧠 Show AI Thinking Steps",
                             value=False,
-                            info="Display the AI's reasoning process step-by-step"
+                            info="Display the AI's reasoning process step-by-step",
                         )
 
                     # Quick action buttons
@@ -257,12 +261,12 @@ def create_dashboard():
                             with gr.Column(scale=1):
                                 gr.Markdown("### Server Actions")
                                 server_dropdown = gr.Dropdown(
-                                    label="Select Server", 
-                                    choices=[], 
-                                    value=None, 
+                                    label="Select Server",
+                                    choices=[],
+                                    value=None,
                                     interactive=True,
-                                    allow_custom_value=False,
-                                    info="Select a server to manage"
+                                    allow_custom_value=True,
+                                    info="Select a server to manage",
                                 )
                                 selected_server = gr.Textbox(
                                     label="Selected Server", interactive=False
@@ -312,6 +316,7 @@ def create_dashboard():
                                     choices=[],
                                     value=None,
                                     interactive=True,
+                                    allow_custom_value=True,
                                 )
                                 selected_connection = gr.Textbox(
                                     label="Selected Connection", interactive=False
@@ -390,31 +395,186 @@ def create_dashboard():
 
                         connection_output = gr.Textbox(label="Connection Output", visible=False)
 
-            # Registry Tab
-            with gr.Tab("📦 Registry"):
-                gr.Markdown("### Browse Available MCP Servers")
+            # Registry Tab - Enhanced MCP Server Registry
+            with gr.Tab("📦 MCP Server Registry"):
+                gr.Markdown("### 🚀 Discover & Install MCP Servers")
+                gr.Markdown(
+                    "Browse 80+ official and community MCP servers. Install with one click and connect to your coding agent."
+                )
 
+                with gr.Tabs():
+                    # Search & Browse Tab
+                    with gr.Tab("🔍 Search & Browse"):
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                registry_search_query = gr.Textbox(
+                                    label="Search Servers",
+                                    placeholder="Search for filesystem, github, database, AI tools...",
+                                    value="",
+                                )
+                            with gr.Column(scale=1):
+                                registry_category_filter = gr.Dropdown(
+                                    choices=["all"] + registry.list_categories("mcp_server"),
+                                    label="Category",
+                                    value="all",
+                                )
+                            with gr.Column(scale=1):
+                                registry_server_type = gr.Dropdown(
+                                    choices=["mcp_server", "template", "all"],
+                                    label="Type",
+                                    value="mcp_server",
+                                )
+
+                        with gr.Row():
+                            registry_search_btn = gr.Button("🔍 Search", variant="primary", scale=1)
+                            registry_show_all_btn = gr.Button(
+                                "📋 Show All", variant="secondary", scale=1
+                            )
+                            registry_show_popular_btn = gr.Button(
+                                "⭐ Popular", variant="secondary", scale=1
+                            )
+
+                        # Search Results
+                        registry_results_df = gr.Dataframe(
+                            headers=["Name", "Category", "Description", "Type", "Package"],
+                            datatype=["str", "str", "str", "str", "str"],
+                            interactive=False,
+                            label="Available Servers",
+                            wrap=True,
+                            column_widths=[200, 100, 400, 100, 200],
+                        )
+
+                    # Server Details Tab
+                    with gr.Tab("📋 Server Details"):
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                registry_server_selector = gr.Dropdown(
+                                    label="Select Server",
+                                    choices=[],
+                                    value=None,
+                                    interactive=True,
+                                    allow_custom_value=True,
+                                )
+
+                                # Server Information Display
+                                registry_server_name = gr.Textbox(
+                                    label="Server Name", interactive=False
+                                )
+                                registry_server_description = gr.Textbox(
+                                    label="Description", lines=3, interactive=False
+                                )
+                                registry_server_category = gr.Textbox(
+                                    label="Category", interactive=False
+                                )
+                                registry_server_package = gr.Textbox(
+                                    label="Package", interactive=False
+                                )
+                                registry_server_install_method = gr.Textbox(
+                                    label="Install Method", interactive=False
+                                )
+                                registry_server_homepage = gr.Textbox(
+                                    label="Homepage", interactive=False
+                                )
+
+                                # Setup Requirements
+                                gr.Markdown("#### Setup Requirements")
+                                registry_server_setup_help = gr.Textbox(
+                                    label="Setup Help", lines=3, interactive=False
+                                )
+                                registry_server_example_usage = gr.Textbox(
+                                    label="Example Usage", lines=2, interactive=False
+                                )
+
+                            with gr.Column(scale=1):
+                                gr.Markdown("#### Installation")
+
+                                # Required Arguments
+                                registry_required_args = gr.JSON(
+                                    label="Required Arguments", value={}
+                                )
+                                registry_env_vars = gr.JSON(label="Environment Variables", value={})
+
+                                # User Input for Arguments
+                                gr.Markdown("#### Configuration")
+                                registry_user_args = gr.JSON(
+                                    label="Provide Required Arguments & Environment Variables",
+                                    value={},
+                                )
+
+                                # Install Actions
+                                with gr.Row():
+                                    registry_install_btn = gr.Button(
+                                        "📦 Install & Connect", variant="primary"
+                                    )
+                                    registry_copy_command_btn = gr.Button(
+                                        "📋 Copy Command", variant="secondary"
+                                    )
+
+                                registry_install_status = gr.Textbox(
+                                    label="Installation Status", interactive=False, lines=8
+                                )
+
+                    # Categories Tab
+                    with gr.Tab("📂 Categories"):
+                        gr.Markdown("### Browse by Category")
+
+                        with gr.Row():
+                            with gr.Column():
+                                gr.Markdown("#### 🏢 Official Servers")
+                                official_servers_list = gr.Dataframe(
+                                    headers=["Name", "Description"],
+                                    datatype=["str", "str"],
+                                    interactive=False,
+                                    wrap=True,
+                                )
+
+                            with gr.Column():
+                                gr.Markdown("#### 🌟 Community Servers")
+                                community_servers_list = gr.Dataframe(
+                                    headers=["Name", "Description"],
+                                    datatype=["str", "str"],
+                                    interactive=False,
+                                    wrap=True,
+                                )
+
+                        refresh_categories_btn = gr.Button("🔄 Refresh Categories")
+
+                    # Popular Servers Tab
+                    with gr.Tab("⭐ Popular"):
+                        gr.Markdown("### Most Popular MCP Servers")
+
+                        popular_servers_grid = gr.HTML(
+                            """
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 16px 0;">
+                            <div class="mcp-connection-card">
+                                <h4>📁 Filesystem Server</h4>
+                                <p>Secure file operations with configurable access controls. Most essential MCP server.</p>
+                                <button onclick="populateServer('filesystem')" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Install</button>
+                            </div>
+                            <div class="mcp-connection-card">
+                                <h4>🧠 Memory Server</h4>
+                                <p>Knowledge graph-based persistent memory system for conversations.</p>
+                                <button onclick="populateServer('memory')" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Install</button>
+                            </div>
+                            <div class="mcp-connection-card">
+                                <h4>🐙 GitHub Server</h4>
+                                <p>Access GitHub repositories, issues, PRs, and code management.</p>
+                                <button onclick="populateServer('github')" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Install</button>
+                            </div>
+                            <div class="mcp-connection-card">
+                                <h4>🔍 Brave Search</h4>
+                                <p>Web search capabilities with privacy focus using Brave Search API.</p>
+                                <button onclick="populateServer('brave-search')" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Install</button>
+                            </div>
+                        </div>
+                        """
+                        )
+
+                # Quick Popular Servers Actions
                 with gr.Row():
-                    search_query = gr.Textbox(
-                        label="Search", placeholder="Search for servers...", scale=3
-                    )
-                    category_filter = gr.Dropdown(
-                        choices=["all"] + registry.list_categories(),
-                        label="Category",
-                        value="all",
-                        scale=1,
-                    )
-
-                search_btn = gr.Button("🔍 Search", variant="primary")
-
-                search_results = gr.JSON(label="Search Results")
-
-                # Server details
-                with gr.Row():
-                    selected_registry_server = gr.Textbox(label="Selected Server ID", visible=False)
-                    install_from_registry_btn = gr.Button(
-                        "📥 Install Selected", variant="primary", visible=False
-                    )
+                    popular_filesystem_btn = gr.Button("📁 Install Filesystem", variant="primary")
+                    popular_memory_btn = gr.Button("🧠 Install Memory", variant="primary")
+                    popular_github_btn = gr.Button("🐙 Install GitHub", variant="primary")
 
             # Tools Testing Tab
             with gr.Tab("🧪 Tool Testing"):
@@ -443,8 +603,10 @@ def create_dashboard():
             # MCP Connections Tab
             with gr.Tab("🔌 MCP Connections"):
                 gr.Markdown("### 🔌 Multiple MCP Server Connections")
-                gr.Markdown("Connect to multiple MCP servers simultaneously for enhanced capabilities")
-                
+                gr.Markdown(
+                    "Connect to multiple MCP servers simultaneously for enhanced capabilities"
+                )
+
                 # Predefined MCP server configurations
                 predefined_servers = {
                     "memory": {
@@ -452,148 +614,151 @@ def create_dashboard():
                         "url": "python -m mcp_server_memory",
                         "protocol": "stdio",
                         "description": "Persistent memory storage for conversations and data",
-                        "icon": "🧠"
+                        "icon": "🧠",
                     },
                     "sequential-thinking": {
                         "name": "Sequential Thinking",
                         "url": "python -m mcp_server_sequential_thinking",
-                        "protocol": "stdio", 
+                        "protocol": "stdio",
                         "description": "Step-by-step reasoning and problem solving",
-                        "icon": "🤔"
+                        "icon": "🤔",
                     },
                     "filesystem": {
                         "name": "File System",
                         "url": "npx @modelcontextprotocol/server-filesystem /",
                         "protocol": "stdio",
                         "description": "File system access and manipulation",
-                        "icon": "📁"
+                        "icon": "📁",
                     },
                     "brave-search": {
                         "name": "Brave Search",
                         "url": "python -m mcp_server_brave_search",
                         "protocol": "stdio",
                         "description": "Web search capabilities using Brave",
-                        "icon": "🔍"
+                        "icon": "🔍",
                     },
                     "github": {
                         "name": "GitHub",
                         "url": "python -m mcp_server_github",
                         "protocol": "stdio",
                         "description": "GitHub repository and issue management",
-                        "icon": "🐙"
+                        "icon": "🐙",
                     },
                     "time": {
                         "name": "Time Server",
                         "url": "python -m mcp_server_time",
                         "protocol": "stdio",
                         "description": "Time and date utilities",
-                        "icon": "⏰"
-                    }
+                        "icon": "⏰",
+                    },
                 }
 
                 with gr.Tabs():
                     # Quick Connect Tab
                     with gr.Tab("⚡ Quick Connect"):
                         gr.Markdown("### 🚀 Quick Connect to Common MCP Servers")
-                        
+
                         # Connection status states for each server
                         server_statuses = {}
                         server_buttons = {}
-                        
+
                         # Create cards for first 3 servers
                         server_install_buttons = {}
                         with gr.Row():
-                            for i, (server_id, server_info) in enumerate(list(predefined_servers.items())[:3]):
+                            for i, (server_id, server_info) in enumerate(
+                                list(predefined_servers.items())[:3]
+                            ):
                                 with gr.Column():
                                     with gr.Group():
-                                        gr.Markdown(f"### {server_info['icon']} {server_info['name']}")
-                                        gr.Markdown(server_info['description'])
-                                        
+                                        gr.Markdown(
+                                            f"### {server_info['icon']} {server_info['name']}"
+                                        )
+                                        gr.Markdown(server_info["description"])
+
                                         server_statuses[server_id] = gr.Textbox(
                                             label="Status",
                                             value="Not Connected",
                                             interactive=False,
-                                            elem_id=f"status_{server_id}"
+                                            elem_id=f"status_{server_id}",
                                         )
-                                        
+
                                         with gr.Row():
                                             server_buttons[server_id] = gr.Button(
                                                 f"Connect",
                                                 variant="primary",
                                                 elem_id=f"connect_{server_id}",
-                                                scale=1
+                                                scale=1,
                                             )
-                                            
+
                                             server_install_buttons[server_id] = gr.Button(
                                                 f"Auto-Install & Connect",
                                                 variant="secondary",
                                                 elem_id=f"install_{server_id}",
-                                                scale=1
+                                                scale=1,
                                             )
-                        
+
                         # Create cards for remaining servers
                         with gr.Row():
-                            for i, (server_id, server_info) in enumerate(list(predefined_servers.items())[3:]):
+                            for i, (server_id, server_info) in enumerate(
+                                list(predefined_servers.items())[3:]
+                            ):
                                 with gr.Column():
                                     with gr.Group():
-                                        gr.Markdown(f"### {server_info['icon']} {server_info['name']}")
-                                        gr.Markdown(server_info['description'])
-                                        
+                                        gr.Markdown(
+                                            f"### {server_info['icon']} {server_info['name']}"
+                                        )
+                                        gr.Markdown(server_info["description"])
+
                                         server_statuses[server_id] = gr.Textbox(
                                             label="Status",
                                             value="Not Connected",
                                             interactive=False,
-                                            elem_id=f"status_{server_id}"
+                                            elem_id=f"status_{server_id}",
                                         )
-                                        
+
                                         with gr.Row():
                                             server_buttons[server_id] = gr.Button(
                                                 f"Connect",
                                                 variant="primary",
                                                 elem_id=f"connect_{server_id}",
-                                                scale=1
+                                                scale=1,
                                             )
-                                            
+
                                             server_install_buttons[server_id] = gr.Button(
                                                 f"Auto-Install & Connect",
                                                 variant="secondary",
                                                 elem_id=f"install_{server_id}",
-                                                scale=1
+                                                scale=1,
                                             )
-                        
+
                         # Bulk actions
                         with gr.Row():
                             connect_all_mcp_btn = gr.Button("🔗 Connect All", variant="primary")
                             disconnect_all_mcp_btn = gr.Button("🔌 Disconnect All", variant="stop")
                             refresh_mcp_status_btn = gr.Button("🔄 Refresh Status")
-                        
+
                         mcp_bulk_status = gr.Textbox(
-                            label="Bulk Action Status",
-                            interactive=False,
-                            lines=3
+                            label="Bulk Action Status", interactive=False, lines=3
                         )
-                        
+
                         # Installation progress display
                         gr.Markdown("### 📦 Installation Progress")
                         mcp_install_progress = gr.Textbox(
-                            label="Installation Progress",
-                            interactive=False,
-                            lines=8,
-                            visible=False
+                            label="Installation Progress", interactive=False, lines=8, visible=False
                         )
 
                     # Active MCP Connections Tab
                     with gr.Tab("🔗 Active MCP Connections"):
                         gr.Markdown("### 📊 Active MCP Server Connections")
-                        
+
                         # MCP Connection list
                         mcp_connections_table = gr.Dataframe(
                             headers=["Server", "Type", "Status", "Tools", "URL"],
                             datatype=["str", "str", "str", "number", "str"],
                             interactive=False,
-                            label="Active MCP Connections"
+                            label="Active MCP Connections",
                         )
-                        
+
                         # MCP Connection details
                         with gr.Row():
                             with gr.Column(scale=2):
@@ -602,85 +767,80 @@ def create_dashboard():
                                     choices=[],
                                     value=None,
                                     interactive=True,
-                                    allow_custom_value=True
+                                    allow_custom_value=True,
                                 )
-                                
+
                                 mcp_connection_details = gr.JSON(
-                                    label="Connection Details",
-                                    value={}
+                                    label="Connection Details", value={}
                                 )
-                                
+
                                 mcp_available_tools = gr.Dataframe(
                                     headers=["Tool Name", "Description", "Parameters"],
                                     datatype=["str", "str", "str"],
                                     interactive=False,
-                                    label="Available Tools"
+                                    label="Available Tools",
                                 )
-                            
+
                             with gr.Column(scale=1):
                                 gr.Markdown("### Actions")
-                                
+
                                 test_mcp_connection_btn = gr.Button("🧪 Test Connection")
                                 disconnect_mcp_btn = gr.Button("🔌 Disconnect", variant="stop")
                                 reconnect_mcp_btn = gr.Button("🔄 Reconnect")
-                                
+
                                 gr.Markdown("### Tool Testing")
-                                
+
                                 mcp_tool_name = gr.Dropdown(
                                     label="Select Tool",
                                     choices=[],
-                                    interactive=True
+                                    interactive=True,
+                                    allow_custom_value=True,
                                 )
-                                
-                                mcp_tool_args = gr.JSON(
-                                    label="Tool Arguments",
-                                    value={}
-                                )
-                                
+
+                                mcp_tool_args = gr.JSON(label="Tool Arguments", value={})
+
                                 call_mcp_tool_btn = gr.Button("📞 Call Tool", variant="primary")
-                                
-                                mcp_tool_result = gr.JSON(
-                                    label="Tool Result",
-                                    value={}
-                                )
+
+                                mcp_tool_result = gr.JSON(label="Tool Result", value={})
 
                     # Custom MCP Connection Tab
                     with gr.Tab("➕ Custom MCP Connection"):
                         gr.Markdown("### 🔧 Connect to Custom MCP Server")
-                        
+
                         with gr.Row():
                             with gr.Column():
                                 custom_mcp_name = gr.Textbox(
                                     label="Connection Name",
                                     placeholder="my-custom-server",
-                                    value=""
+                                    value="",
                                 )
-                                
+
                                 custom_mcp_url = gr.Textbox(
                                     label="Server URL/Command",
                                     placeholder="python -m my_mcp_server or http://localhost:8080/mcp",
                                     value="",
-                                    lines=2
+                                    lines=2,
                                 )
-                                
+
                                 custom_mcp_protocol = gr.Radio(
                                     label="Protocol",
                                     choices=["auto", "stdio", "sse", "gradio"],
-                                    value="auto"
+                                    value="auto",
                                 )
-                                
+
                                 custom_mcp_description = gr.Textbox(
                                     label="Description (optional)",
                                     placeholder="What does this server do?",
                                     value="",
-                                    lines=2
+                                    lines=2,
                                 )
-                                
+
                                 custom_mcp_connect_btn = gr.Button("🔗 Connect", variant="primary")
-                            
+
                             with gr.Column():
                                 gr.Markdown("### 📖 Connection Guide")
-                                gr.Markdown("""
+                                gr.Markdown(
+                                    """
                                 **Supported Protocols:**
                                 - **stdio**: Command-line MCP servers (e.g., `python -m server`)
                                 - **sse**: HTTP SSE endpoints (e.g., `http://localhost:8080/mcp`)
@@ -692,12 +852,11 @@ def create_dashboard():
                                 - Custom script: `python /path/to/my_server.py`
                                 - HTTP endpoint: `http://localhost:8080/mcp/sse`
                                 - Gradio app: `http://localhost:7860`
-                                """)
-                        
+                                """
+                                )
+
                         custom_mcp_status = gr.Textbox(
-                            label="Connection Status",
-                            interactive=False,
-                            lines=3
+                            label="Connection Status", interactive=False, lines=3
                         )
 
             # Settings Tab
@@ -731,6 +890,285 @@ def create_dashboard():
                 settings_output = gr.Textbox(label="Settings Output", visible=False)
 
         # Event handlers
+
+        # Registry Functions
+        def search_registry_servers(query, category, server_type):
+            """Search for servers in the registry"""
+            try:
+                if not query.strip() and category == "all":
+                    # Show popular servers by default
+                    popular_ids = [
+                        "filesystem",
+                        "memory",
+                        "github",
+                        "brave-search",
+                        "sequential-thinking",
+                        "time",
+                    ]
+                    results = []
+                    for server_id in popular_ids:
+                        server = registry.get_mcp_server(server_id)
+                        if server:
+                            results.append(
+                                [
+                                    server["name"],
+                                    server["category"],
+                                    (
+                                        server["description"][:100] + "..."
+                                        if len(server["description"]) > 100
+                                        else server["description"]
+                                    ),
+                                    server["type"],
+                                    server.get("package", ""),
+                                ]
+                            )
+                    return results
+
+                # Search with query/filters
+                if query.strip():
+                    results = registry.search(
+                        query, category if category != "all" else None, server_type
+                    )
+                else:
+                    results = (
+                        registry.get_by_category(category, server_type)
+                        if category != "all"
+                        else registry.get_all(server_type)
+                    )
+
+                data = []
+                for server in results[:50]:  # Limit to 50 results
+                    data.append(
+                        [
+                            server["name"],
+                            server["category"],
+                            (
+                                server["description"][:100] + "..."
+                                if len(server["description"]) > 100
+                                else server["description"]
+                            ),
+                            server["type"],
+                            server.get("package", ""),
+                        ]
+                    )
+
+                return data
+            except Exception as e:
+                return [["Error", "error", f"Error searching registry: {str(e)}", "error", ""]]
+
+        def show_all_servers(server_type):
+            """Show all servers"""
+            try:
+                servers = registry.get_all(server_type)[:50]  # Limit to 50
+                data = []
+                for server in servers:
+                    data.append(
+                        [
+                            server["name"],
+                            server["category"],
+                            (
+                                server["description"][:100] + "..."
+                                if len(server["description"]) > 100
+                                else server["description"]
+                            ),
+                            server["type"],
+                            server.get("package", ""),
+                        ]
+                    )
+                return data
+            except Exception as e:
+                return [["Error", "error", f"Error loading servers: {str(e)}", "error", ""]]
+
+        def show_popular_servers():
+            """Show popular servers"""
+            popular_ids = [
+                "filesystem",
+                "memory",
+                "github",
+                "brave-search",
+                "sequential-thinking",
+                "postgres",
+                "docker",
+                "obsidian",
+            ]
+            data = []
+            for server_id in popular_ids:
+                server = registry.get_mcp_server(server_id)
+                if server:
+                    data.append(
+                        [
+                            server["name"],
+                            server["category"],
+                            (
+                                server["description"][:100] + "..."
+                                if len(server["description"]) > 100
+                                else server["description"]
+                            ),
+                            "mcp_server",
+                            server.get("package", ""),
+                        ]
+                    )
+            return data
+
+        def load_server_details(server_id):
+            """Load detailed information for a selected server"""
+            if not server_id:
+                return "", "", "", "", "", "", "", "", {}, {}, {}
+
+            try:
+                server = registry.get_server_info(server_id)
+                if not server:
+                    return "Server not found", "", "", "", "", "", "", "", {}, {}, {}
+
+                return (
+                    server["name"],
+                    server["description"],
+                    server["category"],
+                    server.get("package", ""),
+                    server.get("install_method", ""),
+                    server.get("homepage", ""),
+                    server.get("setup_help", ""),
+                    server.get("example_usage", ""),
+                    {arg: f"Required argument: {arg}" for arg in server.get("required_args", [])},
+                    server.get("env_vars", {}),
+                    {},  # Empty user args to start
+                )
+            except Exception as e:
+                return f"Error: {str(e)}", "", "", "", "", "", "", "", {}, {}, {}
+
+        def install_registry_server(server_id, user_args):
+            """Install a server from the registry and connect to coding agent"""
+            if not server_id:
+                return "No server selected"
+
+            try:
+                server_info = registry.get_server_info(server_id)
+                if not server_info:
+                    return "❌ Server not found in registry"
+
+                progress = f"📦 Installing {server_info['name']}...\n\n"
+
+                # Generate install command with user arguments
+                install_cmd = registry.generate_install_command(server_id, user_args)
+                if not install_cmd:
+                    return (
+                        progress
+                        + "❌ Failed to generate install command. Check required arguments."
+                    )
+
+                progress += f"📋 Install Method: {install_cmd['install_method']}\n"
+                progress += f"📦 Package: {install_cmd['package']}\n"
+                progress += (
+                    f"🔧 Command: {install_cmd['command']} {' '.join(install_cmd['args'])}\n\n"
+                )
+
+                # Use existing installation function based on server type
+                if server_id in predefined_servers:
+                    # Use existing predefined server installation
+                    result = install_and_connect_mcp(server_id)
+                    if "✅" in result:
+                        progress += result + "\n\n"
+
+                        # Connect to coding agent if available
+                        if coding_agent:
+                            progress += "🤖 Connecting to coding agent...\n"
+                            try:
+                                # Create mock connection info for coding agent
+                                connection_info = {
+                                    "name": server_info["name"],
+                                    "tools": [],  # Will be populated when real connection is made
+                                }
+
+                                coding_agent.add_mcp_connection(server_id, connection_info)
+                                progress += "✅ Connected to coding agent!\n\n"
+                            except Exception as e:
+                                progress += f"⚠️ Coding agent connection failed: {str(e)}\n\n"
+
+                        progress += f"🎉 {server_info['name']} setup completed successfully!\n"
+                        progress += f"💡 {server_info.get('example_usage', 'You can now use this server in the AI Assistant.')}"
+
+                        return progress
+                    else:
+                        return progress + result
+                else:
+                    # Handle registry-only servers with detailed installation instructions
+                    progress += f"📖 Installation Instructions for {server_info['name']}:\n\n"
+
+                    if install_cmd["install_method"] == "npm":
+                        progress += f"Run this command:\n"
+                        progress += f"npm install -g {install_cmd['package']}\n\n"
+                    elif install_cmd["install_method"] == "uvx":
+                        progress += f"Run this command:\n"
+                        progress += f"uvx {install_cmd['package']}\n\n"
+                    elif install_cmd["install_method"] == "git":
+                        progress += f"Run this command:\n"
+                        progress += f"git clone {install_cmd['package']}\n\n"
+
+                    if install_cmd.get("env"):
+                        progress += "Environment variables needed:\n"
+                        for key, value in install_cmd["env"].items():
+                            progress += f"  {key}={value}\n"
+                        progress += "\n"
+
+                    progress += f"🔗 Setup Help: {server_info.get('setup_help', 'See homepage for details')}\n"
+                    progress += f"🌐 Homepage: {server_info.get('homepage', 'N/A')}\n\n"
+                    progress += "After installation, restart the dashboard and the server will be available in MCP Connections."
+
+                    return progress
+
+            except Exception as e:
+                return f"❌ Installation error: {str(e)}"
+
+        def get_registry_server_choices():
+            """Get list of server choices for dropdown"""
+            try:
+                servers = registry.get_all("mcp_server")
+                choices = [
+                    (f"{server['name']} ({server['id']})", server["id"]) for server in servers
+                ]
+                return gr.update(choices=choices)
+            except Exception as e:
+                return gr.update(choices=[])
+
+        def refresh_categories_data():
+            """Refresh category data"""
+            try:
+                official_servers = registry.get_by_category("official", "mcp_server")
+                community_servers = registry.get_by_category("community", "mcp_server")
+
+                official_data = [
+                    [
+                        s["name"],
+                        (
+                            s["description"][:100] + "..."
+                            if len(s["description"]) > 100
+                            else s["description"]
+                        ),
+                    ]
+                    for s in official_servers
+                ]
+                community_data = [
+                    [
+                        s["name"],
+                        (
+                            s["description"][:100] + "..."
+                            if len(s["description"]) > 100
+                            else s["description"]
+                        ),
+                    ]
+                    for s in community_servers
+                ]
+
+                return official_data, community_data
+            except Exception as e:
+                return [["Error", str(e)]], [["Error", str(e)]]
+
+        def quick_install_popular(server_id):
+            """Quick install for popular servers"""
+            try:
+                return install_and_connect_mcp(server_id)
+            except Exception as e:
+                return f"❌ Installation error: {str(e)}"
 
         # AI Assistant event handlers
         def test_hf_token_only(hf_token):
@@ -838,14 +1276,16 @@ def create_dashboard():
                     history.append({"role": "user", "content": message})
                     history.append({"role": "assistant", "content": bot_response})
                     return history, ""
-                
+
                 if show_thinking_steps:
                     # Use the detailed method that shows thinking steps
                     steps, bot_response = coding_agent.chat_with_steps(message)
-                    
+
                     # Combine thinking steps with final response
                     if steps:
-                        thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                        thinking_section = (
+                            "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                        )
                         full_response = thinking_section + "## 💬 Final Response\n\n" + bot_response
                     else:
                         full_response = bot_response
@@ -871,7 +1311,9 @@ def create_dashboard():
                     if show_thinking_steps:
                         steps, response = coding_agent.chat_with_steps(message)
                         if steps:
-                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            thinking_section = (
+                                "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            )
                             response = thinking_section + "## 💬 Final Response\n\n" + response
                     else:
                         response = coding_agent.chat(message)
@@ -890,7 +1332,9 @@ def create_dashboard():
                     if show_thinking_steps:
                         steps, response = coding_agent.chat_with_steps(message)
                         if steps:
-                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            thinking_section = (
+                                "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            )
                             response = thinking_section + "## 💬 Final Response\n\n" + response
                     else:
                         response = coding_agent.chat(message)
@@ -907,7 +1351,9 @@ def create_dashboard():
                     if show_thinking_steps:
                         steps, response = coding_agent.chat_with_steps(message)
                         if steps:
-                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            thinking_section = (
+                                "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            )
                             response = thinking_section + "## 💬 Final Response\n\n" + response
                     else:
                         response = coding_agent.chat(message)
@@ -924,7 +1370,9 @@ def create_dashboard():
                     if show_thinking_steps:
                         steps, response = coding_agent.chat_with_steps(message)
                         if steps:
-                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            thinking_section = (
+                                "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            )
                             response = thinking_section + "## 💬 Final Response\n\n" + response
                     else:
                         response = coding_agent.chat(message)
@@ -944,7 +1392,9 @@ def create_dashboard():
                     if show_thinking_steps:
                         steps, response = coding_agent.chat_with_steps(message)
                         if steps:
-                            thinking_section = "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            thinking_section = (
+                                "## 🧠 AI Thinking Process\n\n" + "\n\n".join(steps) + "\n\n---\n\n"
+                            )
                             response = thinking_section + "## 💬 Final Response\n\n" + response
                     else:
                         response = coding_agent.chat(message)
@@ -1467,146 +1917,182 @@ def create_dashboard():
             """Install MCP server package and connect"""
             import subprocess
             import time
-            
+
             server_info = predefined_servers.get(server_id)
             if not server_info:
                 return "❌ Unknown server"
-            
+
             # For now, let's focus on getting filesystem working since it shows potential
             if server_id == "filesystem":
                 progress = f"📦 Installing {server_info['name']}...\n"
-                
+
                 # Check if we have Node.js for filesystem server
                 try:
-                    node_result = subprocess.run(["node", "--version"], capture_output=True, text=True, timeout=10)
+                    node_result = subprocess.run(
+                        ["node", "--version"], capture_output=True, text=True, timeout=10
+                    )
                     if node_result.returncode != 0:
-                        return progress + "❌ Node.js not found. Please install Node.js first: https://nodejs.org/"
-                    
+                        return (
+                            progress
+                            + "❌ Node.js not found. Please install Node.js first: https://nodejs.org/"
+                        )
+
                     progress += f"✅ Node.js detected: {node_result.stdout.strip()}\n"
-                    
+
                     # Check if npm is available
-                    npm_result = subprocess.run(["npm", "--version"], capture_output=True, text=True, timeout=10, shell=True)
+                    npm_result = subprocess.run(
+                        ["npm", "--version"], capture_output=True, text=True, timeout=10, shell=True
+                    )
                     if npm_result.returncode != 0:
-                        return progress + f"❌ npm not found. Node.js is installed but npm is missing.\n\nTry:\n1. Restart your terminal/PowerShell as Administrator\n2. Or reinstall Node.js from https://nodejs.org/\n3. Or check PATH: where npm"
-                    
+                        return (
+                            progress
+                            + f"❌ npm not found. Node.js is installed but npm is missing.\n\nTry:\n1. Restart your terminal/PowerShell as Administrator\n2. Or reinstall Node.js from https://nodejs.org/\n3. Or check PATH: where npm"
+                        )
+
                     progress += f"✅ npm detected: {npm_result.stdout.strip()}\n"
-                    
+
                     # Install the filesystem server
                     progress += "📦 Installing @modelcontextprotocol/server-filesystem...\n"
-                    
+
                     install_result = subprocess.run(
                         ["npm", "install", "-g", "@modelcontextprotocol/server-filesystem"],
                         capture_output=True,
                         text=True,
                         timeout=120,
-                        shell=True  # Use shell on Windows to help find npm
+                        shell=True,  # Use shell on Windows to help find npm
                     )
-                    
+
                     if install_result.returncode != 0:
                         stderr_output = install_result.stderr or "No error details"
                         stdout_output = install_result.stdout or "No output"
-                        return progress + f"❌ Installation failed:\n\nSTDERR:\n{stderr_output}\n\nSTDOUT:\n{stdout_output}\n\nTry running this command manually in your terminal:\nnpm install -g @modelcontextprotocol/server-filesystem"
-                    
+                        return (
+                            progress
+                            + f"❌ Installation failed:\n\nSTDERR:\n{stderr_output}\n\nSTDOUT:\n{stdout_output}\n\nTry running this command manually in your terminal:\nnpm install -g @modelcontextprotocol/server-filesystem"
+                        )
+
                     progress += "✅ Package installed successfully!\n\n"
                     progress += "🔌 Testing filesystem access...\n"
-                    
+
                     # Test basic filesystem access
                     import os
+
                     test_dir = os.getcwd()
                     files = os.listdir(test_dir)
-                    
+
                     progress += f"✅ Filesystem access working - found {len(files)} items in current directory\n\n"
-                    
+
                     # Store connection info
-                    if not hasattr(quick_connect_mcp, 'connections'):
+                    if not hasattr(quick_connect_mcp, "connections"):
                         quick_connect_mcp.connections = {}
-                    
+
                     quick_connect_mcp.connections[server_id] = {
-                        'name': server_info['name'],
-                        'url': server_info['url'],
-                        'protocol': server_info['protocol'],
-                        'status': 'connected',
-                        'tools': ['read_file', 'write_file', 'list_directory', 'create_directory']
+                        "name": server_info["name"],
+                        "url": server_info["url"],
+                        "protocol": server_info["protocol"],
+                        "status": "connected",
+                        "tools": ["read_file", "write_file", "list_directory", "create_directory"],
                     }
-                    
+
                     # Connect to coding agent if available
                     if coding_agent:
                         progress += "🤖 Connecting to coding agent...\n"
                         try:
-                            coding_agent.add_mcp_connection(server_id, {
-                                'name': server_info['name'],
-                                'tools': ['read_file', 'write_file', 'list_directory', 'create_directory']
-                            })
+                            coding_agent.add_mcp_connection(
+                                server_id,
+                                {
+                                    "name": server_info["name"],
+                                    "tools": [
+                                        "read_file",
+                                        "write_file",
+                                        "list_directory",
+                                        "create_directory",
+                                    ],
+                                },
+                            )
                             progress += "✅ Connected to coding agent!\n\n"
                         except Exception as e:
                             progress += f"⚠️ Coding agent connection failed: {str(e)}\n\n"
-                    
+
                     progress += "🎉 Filesystem server setup completed successfully!\n"
                     progress += "You can now use filesystem tools in the AI Assistant."
-                    
+
                     return progress
-                    
+
                 except FileNotFoundError:
                     # If npm/node not found, fall back to Python-only filesystem
                     progress += "⚠️ Node.js/npm not found, using Python filesystem instead...\n\n"
-                    
+
                     # Test basic filesystem access
                     try:
                         import os
+
                         test_dir = os.getcwd()
                         files = os.listdir(test_dir)
-                        
+
                         progress += f"✅ Python filesystem access working - found {len(files)} items in current directory\n\n"
-                        
+
                         # Store connection info
-                        if not hasattr(quick_connect_mcp, 'connections'):
+                        if not hasattr(quick_connect_mcp, "connections"):
                             quick_connect_mcp.connections = {}
-                        
+
                         quick_connect_mcp.connections[server_id] = {
-                            'name': server_info['name'],
-                            'url': server_info['url'],
-                            'protocol': server_info['protocol'],
-                            'status': 'connected',
-                            'tools': ['read_file', 'write_file', 'list_directory', 'create_directory']
+                            "name": server_info["name"],
+                            "url": server_info["url"],
+                            "protocol": server_info["protocol"],
+                            "status": "connected",
+                            "tools": [
+                                "read_file",
+                                "write_file",
+                                "list_directory",
+                                "create_directory",
+                            ],
                         }
-                        
+
                         # Connect to coding agent if available
                         if coding_agent:
                             progress += "🤖 Connecting to coding agent...\n"
                             try:
-                                coding_agent.add_mcp_connection(server_id, {
-                                    'name': server_info['name'],
-                                    'tools': ['read_file', 'write_file', 'list_directory', 'create_directory']
-                                })
+                                coding_agent.add_mcp_connection(
+                                    server_id,
+                                    {
+                                        "name": server_info["name"],
+                                        "tools": [
+                                            "read_file",
+                                            "write_file",
+                                            "list_directory",
+                                            "create_directory",
+                                        ],
+                                    },
+                                )
                                 progress += "✅ Connected to coding agent!\n\n"
                             except Exception as e:
                                 progress += f"⚠️ Coding agent connection failed: {str(e)}\n\n"
-                        
+
                         progress += "🎉 Python filesystem server setup completed successfully!\n"
                         progress += "You can now use filesystem tools in the AI Assistant."
-                        
+
                         return progress
-                        
+
                     except Exception as e:
                         return progress + f"❌ Python filesystem error: {str(e)}"
-                        
+
                 except subprocess.TimeoutExpired:
                     return progress + "❌ Installation timed out"
                 except Exception as e:
                     return progress + f"❌ Error: {str(e)}"
-            
+
             else:
                 # For other servers, show installation command
                 install_commands = {
                     "memory": "pip install mcp-server-memory",
-                    "sequential-thinking": "pip install mcp-server-sequential-thinking", 
+                    "sequential-thinking": "pip install mcp-server-sequential-thinking",
                     "brave-search": "pip install mcp-server-brave-search",
                     "github": "pip install mcp-server-github",
-                    "time": "pip install mcp-server-time"
+                    "time": "pip install mcp-server-time",
                 }
-                
+
                 cmd = install_commands.get(server_id, f"pip install mcp-server-{server_id}")
-                
+
                 return f"""📦 To install {server_info['name']}, run:
 
 {cmd}
@@ -1620,46 +2106,55 @@ For others, please install manually using the command above."""
             """Quick connect to a predefined MCP server (with auto-install option)"""
             if not HAS_CLIENT_MANAGER:
                 return "❌ MCP client manager not available"
-            
+
             try:
                 server_info = predefined_servers.get(server_id)
                 if not server_info:
                     return "❌ Unknown server"
-                
+
                 # Try to connect using the actual MCP client
                 try:
                     # Use the existing connection manager to make a real MCP connection
-                    result = GradioMCPClient.test_connection(server_info['url'], server_info['protocol'])
-                    
+                    result = GradioMCPClient.test_connection(
+                        server_info["url"], server_info["protocol"]
+                    )
+
                     if result.get("success"):
                         # Store the connection info
-                        if not hasattr(quick_connect_mcp, 'connections'):
+                        if not hasattr(quick_connect_mcp, "connections"):
                             quick_connect_mcp.connections = {}
-                        
+
                         # Save the connection for reuse
-                        connection_manager.save_connection(server_id, server_info['url'], server_info['protocol'])
-                        
+                        connection_manager.save_connection(
+                            server_id, server_info["url"], server_info["protocol"]
+                        )
+
                         # Get available tools from the connection
                         tools = result.get("tools", [])
-                        tool_names = [tool.get("name", "unknown") for tool in tools] if tools else []
-                        
+                        tool_names = (
+                            [tool.get("name", "unknown") for tool in tools] if tools else []
+                        )
+
                         quick_connect_mcp.connections[server_id] = {
-                            'name': server_info['name'],
-                            'url': server_info['url'],
-                            'protocol': server_info['protocol'],
-                            'status': 'connected',
-                            'tools': tool_names,
-                            'client_info': result
+                            "name": server_info["name"],
+                            "url": server_info["url"],
+                            "protocol": server_info["protocol"],
+                            "status": "connected",
+                            "tools": tool_names,
+                            "client_info": result,
                         }
-                        
+
                         # Connect to coding agent if available
                         if coding_agent:
                             try:
-                                coding_agent.add_mcp_connection(server_id, {
-                                    'name': server_info['name'],
-                                    'client': connection_manager.get_connection(server_id),
-                                    'tools': tool_names
-                                })
+                                coding_agent.add_mcp_connection(
+                                    server_id,
+                                    {
+                                        "name": server_info["name"],
+                                        "client": connection_manager.get_connection(server_id),
+                                        "tools": tool_names,
+                                    },
+                                )
                                 return f"✅ Connected to {server_info['name']} and coding agent ({len(tool_names)} tools available)"
                             except Exception as e:
                                 return f"✅ Connected to {server_info['name']} ({len(tool_names)} tools) but failed to link to coding agent: {str(e)}"
@@ -1668,12 +2163,16 @@ For others, please install manually using the command above."""
                     else:
                         error_msg = result.get("error", "Unknown error")
                         return f"❌ Failed to connect to {server_info['name']}: {error_msg}"
-                        
+
                 except Exception as e:
                     # If real connection fails, provide helpful error message
-                    install_cmd = "npm install -g @modelcontextprotocol/server-filesystem" if server_id == "filesystem" else f"pip install mcp-server-{server_id}"
+                    install_cmd = (
+                        "npm install -g @modelcontextprotocol/server-filesystem"
+                        if server_id == "filesystem"
+                        else f"pip install mcp-server-{server_id}"
+                    )
                     return f"❌ Failed to connect to {server_info['name']}: {str(e)}\n\nClick 'Auto-Install & Connect' to install automatically"
-                    
+
             except Exception as e:
                 return f"❌ Error: {str(e)}"
 
@@ -1681,16 +2180,16 @@ For others, please install manually using the command above."""
             """Connect to all predefined MCP servers"""
             if not HAS_CLIENT_MANAGER or not connection_manager:
                 return "❌ Connection manager not available"
-            
+
             results = []
             success_count = 0
-            
+
             for server_id, server_info in predefined_servers.items():
                 result = quick_connect_mcp(server_id)
                 if "✅" in result:
                     success_count += 1
                 results.append(f"{server_info['icon']} {server_info['name']}: {result}")
-            
+
             summary = f"Connected to {success_count}/{len(predefined_servers)} servers\n\n"
             return summary + "\n".join(results)
 
@@ -1698,12 +2197,12 @@ For others, please install manually using the command above."""
             """Disconnect all MCP connections"""
             if not HAS_CLIENT_MANAGER or not connection_manager:
                 return "❌ Connection manager not available"
-            
+
             try:
                 connections = connection_manager.list_connections()
                 count = len(connections)
                 for conn in connections:
-                    connection_manager.remove_connection(conn.get('name', ''))
+                    connection_manager.remove_connection(conn.get("name", ""))
                 return f"✅ Disconnected {count} servers"
             except Exception as e:
                 return f"❌ Error disconnecting: {str(e)}"
@@ -1712,15 +2211,15 @@ For others, please install manually using the command above."""
             """Refresh status of all MCP connections"""
             if not HAS_CLIENT_MANAGER or not connection_manager:
                 return "❌ Connection manager not available"
-            
+
             try:
                 connections = connection_manager.list_connections()
                 status_lines = []
-                
+
                 for conn in connections:
-                    status = "🟢 Connected" if conn.get('connected') else "🔴 Disconnected"
+                    status = "🟢 Connected" if conn.get("connected") else "🔴 Disconnected"
                     status_lines.append(f"{conn.get('name', 'Unknown')}: {status}")
-                
+
                 return "\n".join(status_lines) if status_lines else "No connections found"
             except Exception as e:
                 return f"❌ Error refreshing status: {str(e)}"
@@ -1728,86 +2227,106 @@ For others, please install manually using the command above."""
         def get_mcp_connections_data():
             """Get MCP connections data for the table"""
             data = []
-            
+
             # Check if we have any connections stored
-            if hasattr(quick_connect_mcp, 'connections'):
+            if hasattr(quick_connect_mcp, "connections"):
                 for server_id, conn_info in quick_connect_mcp.connections.items():
                     server_info = predefined_servers.get(server_id, {})
-                    status_icon = "🟢" if conn_info['status'] == 'connected' else "🟡"
-                    status_text = "Connected" if conn_info['status'] == 'connected' else "Simulated"
-                    
-                    data.append([
-                        f"{server_info.get('icon', '🔌')} {conn_info['name']}",
-                        "MCP Server",
-                        f"{status_icon} {status_text}",
-                        len(conn_info.get('tools', [])),
-                        conn_info['url']
-                    ])
-            
+                    status_icon = "🟢" if conn_info["status"] == "connected" else "🟡"
+                    status_text = "Connected" if conn_info["status"] == "connected" else "Simulated"
+
+                    data.append(
+                        [
+                            f"{server_info.get('icon', '🔌')} {conn_info['name']}",
+                            "MCP Server",
+                            f"{status_icon} {status_text}",
+                            len(conn_info.get("tools", [])),
+                            conn_info["url"],
+                        ]
+                    )
+
             return data
 
         def get_mcp_connection_choices():
             """Get list of MCP connection names for dropdown"""
             choices = []
-            
+
             # Check if we have any connections stored
-            if hasattr(quick_connect_mcp, 'connections'):
+            if hasattr(quick_connect_mcp, "connections"):
                 for server_id, conn_info in quick_connect_mcp.connections.items():
                     choices.append(server_id)
-            
+
             return choices
 
         def load_mcp_connection_details(connection_name):
             """Load details for a selected MCP connection"""
             if not connection_name:
                 return {}, [], []
-            
-            # Check if we have this connection stored
-            if hasattr(quick_connect_mcp, 'connections') and connection_name in quick_connect_mcp.connections:
-                conn_info = quick_connect_mcp.connections[connection_name]
-                
-                details = {
-                    "name": connection_name,
-                    "url": conn_info['url'],
-                    "protocol": conn_info['protocol'],
-                    "status": conn_info['status'],
-                    "connected": conn_info['status'] == 'connected'
-                }
-                
-                # Get tools data
-                tools_data = []
-                tool_names = []
-                
-                for tool in conn_info.get('tools', []):
-                    tools_data.append([
-                        tool,
-                        f"Tool for {conn_info['name']}",
-                        "{}"  # Empty parameters for demo
-                    ])
-                    tool_names.append(tool)
-                
-                return details, tools_data, tool_names
-            
+
+            # Handle case where connection_name might be a list
+            if isinstance(connection_name, list):
+                connection_name = connection_name[0] if connection_name else None
+                if not connection_name:
+                    return {}, [], []
+
+            try:
+                # Check if we have this connection stored
+                if (
+                    hasattr(quick_connect_mcp, "connections")
+                    and connection_name in quick_connect_mcp.connections
+                ):
+                    conn_info = quick_connect_mcp.connections[connection_name]
+
+                    details = {
+                        "name": connection_name,
+                        "url": conn_info["url"],
+                        "protocol": conn_info["protocol"],
+                        "status": conn_info["status"],
+                        "connected": conn_info["status"] == "connected",
+                    }
+
+                    # Get tools data
+                    tools_data = []
+                    tool_names = []
+
+                    for tool in conn_info.get("tools", []):
+                        tools_data.append(
+                            [
+                                tool,
+                                f"Tool for {conn_info['name']}",
+                                "{}",  # Empty parameters for demo
+                            ]
+                        )
+                        tool_names.append(tool)
+
+                    return details, tools_data, tool_names
+
+            except Exception as e:
+                print(f"Error loading MCP connection details: {e}")
+                return {"error": f"Error loading connection: {str(e)}"}, [], []
+
             return {"error": "Connection not found"}, [], []
 
         def test_mcp_connection(connection_name):
             """Test an MCP connection"""
             if not HAS_CLIENT_MANAGER or not connection_name:
                 return {"error": "Invalid connection"}
-            
+
             connections = connection_manager.list_connections()
             selected_conn = None
-            
+
             for conn in connections:
-                if conn.get('name') == connection_name:
+                if conn.get("name") == connection_name:
                     selected_conn = conn
                     break
-            
+
             if not selected_conn:
                 return {"error": "Connection not found"}
-            
+
             try:
-                result = GradioMCPClient.test_connection(selected_conn.get('url'), selected_conn.get('protocol'))
+                result = GradioMCPClient.test_connection(
+                    selected_conn.get("url"), selected_conn.get("protocol")
+                )
                 return {"status": "connected" if result["success"] else "error", "result": result}
             except Exception as e:
                 return {"status": "error", "error": str(e)}
@@ -1816,113 +2335,119 @@ For others, please install manually using the command above."""
             """Disconnect a specific MCP connection"""
             if not connection_name:
                 return get_mcp_connections_data(), get_mcp_connection_choices()
-            
+
             try:
                 # Remove from our stored connections
-                if hasattr(quick_connect_mcp, 'connections') and connection_name in quick_connect_mcp.connections:
+                if (
+                    hasattr(quick_connect_mcp, "connections")
+                    and connection_name in quick_connect_mcp.connections
+                ):
                     del quick_connect_mcp.connections[connection_name]
             except Exception as e:
                 pass
-            
+
             return get_mcp_connections_data(), get_mcp_connection_choices()
 
         def call_mcp_tool(connection_name, tool_name, tool_args):
             """Call a tool on an MCP connection"""
             if not connection_name or not tool_name:
                 return {"error": "Missing connection name or tool name"}
-            
+
             # Check if we have this connection
-            if not hasattr(quick_connect_mcp, 'connections') or connection_name not in quick_connect_mcp.connections:
+            if (
+                not hasattr(quick_connect_mcp, "connections")
+                or connection_name not in quick_connect_mcp.connections
+            ):
                 return {"error": "Connection not found"}
-            
+
             conn_info = quick_connect_mcp.connections[connection_name]
-            
+
             try:
                 # For filesystem connection, implement actual operations
                 if connection_name == "filesystem":
                     import os
-                    
+
                     if tool_name == "list_directory":
-                        path = tool_args.get('path', '.')
+                        path = tool_args.get("path", ".")
                         try:
                             files = os.listdir(path)
                             return {
-                                "success": True, 
+                                "success": True,
                                 "result": {
-                                    "files": files, 
+                                    "files": files,
                                     "path": os.path.abspath(path),
-                                    "count": len(files)
-                                }
+                                    "count": len(files),
+                                },
                             }
                         except Exception as e:
                             return {"success": False, "error": str(e)}
-                    
+
                     elif tool_name == "read_file":
-                        path = tool_args.get('path', '')
+                        path = tool_args.get("path", "")
                         if not path:
                             return {"success": False, "error": "Path is required"}
-                        
+
                         try:
-                            with open(path, 'r', encoding='utf-8') as f:
+                            with open(path, "r", encoding="utf-8") as f:
                                 content = f.read()
                             return {
-                                "success": True, 
+                                "success": True,
                                 "result": {
-                                    "content": content, 
+                                    "content": content,
                                     "path": os.path.abspath(path),
-                                    "size": len(content)
-                                }
+                                    "size": len(content),
+                                },
                             }
                         except Exception as e:
                             return {"success": False, "error": str(e)}
-                    
+
                     elif tool_name == "write_file":
-                        path = tool_args.get('path', '')
-                        content = tool_args.get('content', '')
+                        path = tool_args.get("path", "")
+                        content = tool_args.get("content", "")
                         if not path:
                             return {"success": False, "error": "Path is required"}
-                        
+
                         try:
-                            with open(path, 'w', encoding='utf-8') as f:
+                            with open(path, "w", encoding="utf-8") as f:
                                 f.write(content)
                             return {
-                                "success": True, 
+                                "success": True,
                                 "result": {
                                     "message": f"File written successfully",
                                     "path": os.path.abspath(path),
-                                    "bytes_written": len(content.encode('utf-8'))
-                                }
+                                    "bytes_written": len(content.encode("utf-8")),
+                                },
                             }
                         except Exception as e:
                             return {"success": False, "error": str(e)}
-                    
+
                     elif tool_name == "create_directory":
-                        path = tool_args.get('path', '')
+                        path = tool_args.get("path", "")
                         if not path:
                             return {"success": False, "error": "Path is required"}
-                        
+
                         try:
                             os.makedirs(path, exist_ok=True)
                             return {
-                                "success": True, 
+                                "success": True,
                                 "result": {
                                     "message": f"Directory created successfully",
-                                    "path": os.path.abspath(path)
-                                }
+                                    "path": os.path.abspath(path),
+                                },
                             }
                         except Exception as e:
                             return {"success": False, "error": str(e)}
-                    
+
                     else:
                         return {"success": False, "error": f"Unknown tool: {tool_name}"}
-                
+
                 # For other connections, show installation instructions
                 else:
                     return {
-                        "success": False, 
-                        "error": f"MCP server '{connection_name}' not fully implemented.\n\nTo install real MCP servers, run:\npip install mcp-server-{connection_name}\n\nThen restart the dashboard."
+                        "success": False,
+                        "error": f"MCP server '{connection_name}' not fully implemented.\n\nTo install real MCP servers, run:\npip install mcp-server-{connection_name}\n\nThen restart the dashboard.",
                     }
-                    
+
             except Exception as e:
                 return {"success": False, "error": str(e)}
 
@@ -1930,10 +2455,10 @@ For others, please install manually using the command above."""
             """Connect to a custom MCP server"""
             if not HAS_CLIENT_MANAGER or not connection_manager:
                 return "❌ Connection manager not available"
-            
+
             if not name or not url:
                 return "❌ Please provide both name and URL"
-            
+
             try:
                 result = GradioMCPClient.test_connection(url, protocol)
                 if result["success"]:
@@ -1956,20 +2481,28 @@ For others, please install manually using the command above."""
 
             # Chat functionality
             send_btn.click(
-                send_message, inputs=[chat_input, chatbot, show_thinking], outputs=[chatbot, chat_input]
+                send_message,
+                inputs=[chat_input, chatbot, show_thinking],
+                outputs=[chatbot, chat_input],
             )
 
             chat_input.submit(
-                send_message, inputs=[chat_input, chatbot, show_thinking], outputs=[chatbot, chat_input]
+                send_message,
+                inputs=[chat_input, chatbot, show_thinking],
+                outputs=[chatbot, chat_input],
             )
 
             reset_chat_btn.click(reset_conversation, outputs=chatbot)
 
             # Quick action buttons
             help_mcp_btn.click(quick_mcp_help, inputs=[chatbot, show_thinking], outputs=chatbot)
-            help_gradio_btn.click(quick_gradio_help, inputs=[chatbot, show_thinking], outputs=chatbot)
+            help_gradio_btn.click(
+                quick_gradio_help, inputs=[chatbot, show_thinking], outputs=chatbot
+            )
             analyze_btn.click(quick_analyze_help, inputs=[chatbot, show_thinking], outputs=chatbot)
-            best_practices_btn.click(quick_best_practices, inputs=[chatbot, show_thinking], outputs=chatbot)
+            best_practices_btn.click(
+                quick_best_practices, inputs=[chatbot, show_thinking], outputs=chatbot
+            )
 
             # Direct code analysis
             analyze_code_btn.click(
@@ -2057,8 +2590,63 @@ For others, please install manually using the command above."""
             view_server_logs, inputs=selected_server, outputs=server_logs_output
         ).then(lambda: gr.update(visible=True), outputs=server_logs_output)
 
-        search_btn.click(
-            search_registry, inputs=[search_query, category_filter], outputs=search_results
+        # Registry Event Handlers
+
+        # Search functionality
+        registry_search_btn.click(
+            search_registry_servers,
+            inputs=[registry_search_query, registry_category_filter, registry_server_type],
+            outputs=[registry_results_df],
+        )
+
+        registry_show_all_btn.click(
+            show_all_servers, inputs=[registry_server_type], outputs=[registry_results_df]
+        )
+
+        registry_show_popular_btn.click(show_popular_servers, outputs=[registry_results_df])
+
+        # Server details functionality
+        registry_server_selector.change(
+            load_server_details,
+            inputs=[registry_server_selector],
+            outputs=[
+                registry_server_name,
+                registry_server_description,
+                registry_server_category,
+                registry_server_package,
+                registry_server_install_method,
+                registry_server_homepage,
+                registry_server_setup_help,
+                registry_server_example_usage,
+                registry_required_args,
+                registry_env_vars,
+                registry_user_args,
+            ],
+        )
+
+        # Installation functionality
+        registry_install_btn.click(
+            install_registry_server,
+            inputs=[registry_server_selector, registry_user_args],
+            outputs=[registry_install_status],
+        )
+
+        # Categories functionality
+        refresh_categories_btn.click(
+            refresh_categories_data, outputs=[official_servers_list, community_servers_list]
+        )
+
+        # Popular servers quick install
+        popular_filesystem_btn.click(
+            lambda: quick_install_popular("filesystem"), outputs=[registry_install_status]
+        )
+
+        popular_memory_btn.click(
+            lambda: quick_install_popular("memory"), outputs=[registry_install_status]
+        )
+
+        popular_github_btn.click(
+            lambda: quick_install_popular("github"), outputs=[registry_install_status]
         )
 
         connect_test_btn.click(
@@ -2084,89 +2672,70 @@ For others, please install manually using the command above."""
         )
 
         # MCP Connections event handlers
-        
+
         # Quick connect individual server buttons
         for server_id in predefined_servers.keys():
             if server_id in server_buttons and server_id in server_statuses:
                 server_buttons[server_id].click(
                     fn=lambda sid=server_id: quick_connect_mcp(sid),
-                    outputs=[server_statuses[server_id]]
-                ).then(
-                    fn=get_mcp_connections_data,
-                    outputs=[mcp_connections_table]
-                ).then(
-                    fn=get_mcp_connection_choices,
-                    outputs=[selected_mcp_connection]
+                    outputs=[server_statuses[server_id]],
+                ).then(fn=get_mcp_connections_data, outputs=[mcp_connections_table]).then(
+                    fn=get_mcp_connection_choices, outputs=[selected_mcp_connection]
                 )
-                
+
             # Auto-install buttons
             if server_id in server_install_buttons:
+
                 def create_install_handler(sid):
                     def install_handler():
                         return install_and_connect_mcp(sid)
+
                     return install_handler
-                
+
                 server_install_buttons[server_id].click(
-                    fn=lambda: gr.update(visible=True),
-                    outputs=[mcp_install_progress]
+                    fn=lambda: gr.update(visible=True), outputs=[mcp_install_progress]
+                ).then(fn=create_install_handler(server_id), outputs=[mcp_install_progress]).then(
+                    fn=get_mcp_connections_data, outputs=[mcp_connections_table]
                 ).then(
-                    fn=create_install_handler(server_id),
-                    outputs=[mcp_install_progress]
-                ).then(
-                    fn=get_mcp_connections_data,
-                    outputs=[mcp_connections_table]
-                ).then(
-                    fn=get_mcp_connection_choices,
-                    outputs=[selected_mcp_connection]
+                    fn=get_mcp_connection_choices, outputs=[selected_mcp_connection]
                 )
 
         # Bulk MCP actions
-        connect_all_mcp_btn.click(
-            connect_all_mcp_servers,
-            outputs=[mcp_bulk_status]
-        )
+        connect_all_mcp_btn.click(connect_all_mcp_servers, outputs=[mcp_bulk_status])
 
-        disconnect_all_mcp_btn.click(
-            disconnect_all_mcp_servers,
-            outputs=[mcp_bulk_status]
-        )
+        disconnect_all_mcp_btn.click(disconnect_all_mcp_servers, outputs=[mcp_bulk_status])
 
-        refresh_mcp_status_btn.click(
-            refresh_mcp_status,
-            outputs=[mcp_bulk_status]
-        )
+        refresh_mcp_status_btn.click(refresh_mcp_status, outputs=[mcp_bulk_status])
 
         # Active MCP connections management
         selected_mcp_connection.change(
             load_mcp_connection_details,
             inputs=[selected_mcp_connection],
-            outputs=[mcp_connection_details, mcp_available_tools, mcp_tool_name]
+            outputs=[mcp_connection_details, mcp_available_tools, mcp_tool_name],
         )
 
         test_mcp_connection_btn.click(
-            test_mcp_connection,
-            inputs=[selected_mcp_connection],
-            outputs=[mcp_connection_details]
+            test_mcp_connection, inputs=[selected_mcp_connection], outputs=[mcp_connection_details]
         )
 
         disconnect_mcp_btn.click(
             disconnect_mcp_connection,
             inputs=[selected_mcp_connection],
-            outputs=[mcp_connections_table, selected_mcp_connection]
+            outputs=[mcp_connections_table, selected_mcp_connection],
         )
 
         # MCP tool calling
         call_mcp_tool_btn.click(
             call_mcp_tool,
             inputs=[selected_mcp_connection, mcp_tool_name, mcp_tool_args],
-            outputs=[mcp_tool_result]
+            outputs=[mcp_tool_result],
         )
 
         # Custom MCP connection
         custom_mcp_connect_btn.click(
             connect_custom_mcp,
             inputs=[custom_mcp_name, custom_mcp_url, custom_mcp_protocol, custom_mcp_description],
-            outputs=[custom_mcp_status]
+            outputs=[custom_mcp_status],
         )
 
         # Load initial data
@@ -2174,10 +2743,17 @@ For others, please install manually using the command above."""
         dashboard.load(refresh_connections, outputs=connections_list)
         dashboard.load(update_server_dropdown, outputs=server_dropdown)
         dashboard.load(update_connection_dropdown, outputs=connection_dropdown)
-        
+
         # Load initial MCP connections data
         dashboard.load(get_mcp_connections_data, outputs=mcp_connections_table)
         dashboard.load(get_mcp_connection_choices, outputs=selected_mcp_connection)
+
+        # Load initial registry data
+        dashboard.load(show_popular_servers, outputs=registry_results_df)
+        dashboard.load(get_registry_server_choices, outputs=registry_server_selector)
+        dashboard.load(
+            refresh_categories_data, outputs=[official_servers_list, community_servers_list]
+        )
 
         # Load saved token on startup
         if coding_agent and config_manager.has_secure_storage():

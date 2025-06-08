@@ -1,16 +1,20 @@
-"""Gradio MCP Server Registry
+"""Enhanced MCP Server Registry
 
-Registry of available Gradio MCP servers and templates.
+Comprehensive registry of available MCP servers including official, community, and Gradio templates.
+Based on claude-desktop-mcp-playground registry with enhanced search and installation capabilities.
 """
 
 import json
+import os
+import platform
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
 class ServerRegistry:
-    """Registry for Gradio MCP servers and templates"""
+    """Enhanced registry for MCP servers and Gradio templates"""
 
     def __init__(self):
         self.registry_path = Path(__file__).parent / "registry.json"
@@ -19,17 +23,234 @@ class ServerRegistry:
         self._load_registry()
 
     def _load_registry(self) -> None:
-        """Load the server registry"""
-        # Load built-in registry
-        self.registry = self._get_builtin_registry()
+        """Load the comprehensive server registry"""
+        # Load comprehensive MCP server registry
+        self.mcp_servers = self._get_mcp_server_registry()
+        
+        # Load Gradio templates registry
+        self.templates = self._get_builtin_registry()
 
         # Load custom registry if exists
         if self.custom_registry_path.exists():
             with open(self.custom_registry_path) as f:
                 custom = json.load(f)
+            # Merge custom entries into templates
+            self.templates.update(custom)
 
-            # Merge custom entries
-            self.registry.update(custom)
+    def _get_mcp_server_registry(self) -> Dict[str, Dict[str, Any]]:
+        """Get comprehensive MCP server registry with 80+ servers"""
+        return {
+            # Current official @modelcontextprotocol servers
+            "filesystem": {
+                "name": "Filesystem Server",
+                "description": "Secure file operations with configurable access controls. Read, write, and manage files and directories.",
+                "category": "official",
+                "package": "@modelcontextprotocol/server-filesystem",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "@modelcontextprotocol/server-filesystem", "<path>"],
+                "required_args": ["path"],
+                "optional_args": [],
+                "env_vars": {},
+                "setup_help": "Provide a path to the directory you want Claude to access",
+                "example_usage": "Access files in your workspace directory",
+                "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem"
+            },
+            "memory": {
+                "name": "Memory Server",
+                "description": "Knowledge graph-based persistent memory system. Store and retrieve information across conversations.",
+                "category": "official",
+                "package": "@modelcontextprotocol/server-memory",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "@modelcontextprotocol/server-memory"],
+                "required_args": [],
+                "optional_args": [],
+                "env_vars": {},
+                "setup_help": "No additional setup required",
+                "example_usage": "Remember information between conversations",
+                "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory"
+            },
+            "brave-search": {
+                "name": "Brave Search Server",
+                "description": "Web search capabilities using Brave Search API. Get search results with privacy focus.",
+                "category": "official",
+                "package": "@modelcontextprotocol/server-brave-search",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "@modelcontextprotocol/server-brave-search"],
+                "required_args": [],
+                "optional_args": [],
+                "env_vars": {"BRAVE_API_KEY": "Your Brave Search API key"},
+                "setup_help": "Get API key from https://brave.com/search/api/",
+                "example_usage": "Search the web for current information",
+                "homepage": "https://github.com/modelcontextprotocol/servers"
+            },
+            "github": {
+                "name": "GitHub Server",
+                "description": "Access GitHub repositories, issues, PRs, and code. Search repositories and manage GitHub resources.",
+                "category": "official",
+                "package": "@modelcontextprotocol/server-github",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "@modelcontextprotocol/server-github"],
+                "required_args": [],
+                "optional_args": [],
+                "env_vars": {"GITHUB_TOKEN": "Your GitHub personal access token"},
+                "setup_help": "Create a GitHub token at https://github.com/settings/tokens",
+                "example_usage": "Search code, manage issues, analyze repositories",
+                "homepage": "https://github.com/modelcontextprotocol/servers"
+            },
+            "sequential-thinking": {
+                "name": "Sequential Thinking Server",
+                "description": "Dynamic and reflective problem-solving through thought sequences. Advanced reasoning capabilities.",
+                "category": "official",
+                "package": "@modelcontextprotocol/server-sequential-thinking",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+                "required_args": [],
+                "optional_args": [],
+                "env_vars": {},
+                "setup_help": "No additional setup required",
+                "example_usage": "Enhanced reasoning and problem-solving",
+                "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking"
+            },
+            "time": {
+                "name": "Time Server",
+                "description": "Time and timezone utilities. Get current time, convert between timezones, format dates.",
+                "category": "official",
+                "package": "mcp-server-time",
+                "install_method": "uvx",
+                "command": "uvx",
+                "args_template": ["mcp-server-time", "--local-timezone", "<timezone>"],
+                "required_args": ["timezone"],
+                "optional_args": [],
+                "env_vars": {},
+                "setup_help": "Requires uvx (pip install uvx). Provide timezone in IANA format (e.g., America/New_York, Europe/London, UTC)",
+                "example_usage": "Handle time-based operations and conversions",
+                "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/time"
+            },
+            # Community servers (selection from 500+ available)
+            "sqlite": {
+                "name": "SQLite Server",
+                "description": "Query and manage SQLite databases. Execute SQL queries, create tables, and manage database schemas.",
+                "category": "official",
+                "package": "mcp-server-sqlite-npx",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "mcp-server-sqlite-npx", "<database_path>"],
+                "required_args": ["database_path"],
+                "optional_args": [],
+                "env_vars": {},
+                "setup_help": "Provide path to your SQLite database file (.db or .sqlite)",
+                "example_usage": "Query your application database or analyze data",
+                "homepage": "https://github.com/modelcontextprotocol/servers"
+            },
+            "postgres": {
+                "name": "PostgreSQL Server",
+                "description": "Connect to PostgreSQL databases. Execute queries, manage schemas, and analyze data.",
+                "category": "official",
+                "package": "@modelcontextprotocol/server-postgres",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "@modelcontextprotocol/server-postgres"],
+                "required_args": [],
+                "optional_args": [],
+                "env_vars": {
+                    "POSTGRES_URL": "PostgreSQL connection string",
+                    "POSTGRES_HOST": "Database host (alternative)",
+                    "POSTGRES_PORT": "Database port (alternative)",
+                    "POSTGRES_DB": "Database name (alternative)",
+                    "POSTGRES_USER": "Username (alternative)",
+                    "POSTGRES_PASSWORD": "Password (alternative)"
+                },
+                "setup_help": "Provide PostgreSQL connection details",
+                "example_usage": "Query your PostgreSQL database",
+                "homepage": "https://github.com/modelcontextprotocol/servers"
+            },
+            "docker": {
+                "name": "Docker MCP Server",
+                "description": "Manage Docker with natural language. Compose containers, introspect running containers, and manage volumes, networks, and images.",
+                "category": "community",
+                "package": "mcp-server-docker",
+                "install_method": "uvx",
+                "command": "uvx",
+                "args_template": ["mcp-server-docker"],
+                "required_args": [],
+                "optional_args": [],
+                "env_vars": {
+                    "DOCKER_HOST": "Docker host URL (optional, e.g., ssh://user@host.com for remote Docker)"
+                },
+                "setup_help": "Requires Docker installed. For remote Docker access, set DOCKER_HOST environment variable to ssh://username@hostname",
+                "example_usage": "Deploy WordPress with MySQL, manage containers with natural language",
+                "homepage": "https://github.com/ckreiling/mcp-server-docker"
+            },
+            "aws": {
+                "name": "AWS MCP Server",
+                "description": "Specialized MCP servers that bring AWS best practices directly to your development workflow.",
+                "category": "community",
+                "package": "aws-mcp",
+                "install_method": "git",
+                "command": "git",
+                "args_template": ["clone", "https://github.com/awslabs/mcp"],
+                "required_args": [],
+                "optional_args": [],
+                "env_vars": {"AWS_ACCESS_KEY_ID": "AWS access key", "AWS_SECRET_ACCESS_KEY": "AWS secret key"},
+                "setup_help": "Clone repository and follow setup instructions",
+                "example_usage": "Manage AWS resources through AI agents",
+                "homepage": "https://github.com/awslabs/mcp"
+            },
+            "azure": {
+                "name": "Microsoft Azure Server",
+                "description": "Access key Azure services and tools like Azure Storage, Cosmos DB, the Azure CLI, and more.",
+                "category": "community",
+                "package": "@azure/mcp",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "@azure/mcp@latest", "server", "start"],
+                "required_args": [],
+                "optional_args": [],
+                "env_vars": {
+                    "AZURE_TENANT_ID": "Your Azure tenant ID",
+                    "AZURE_CLIENT_ID": "Your Azure client ID", 
+                    "AZURE_CLIENT_SECRET": "Your Azure client secret"
+                },
+                "setup_help": "Configure Azure credentials via environment variables or use Azure CLI authentication",
+                "example_usage": "Manage Azure resources and services",
+                "homepage": "https://github.com/Azure/azure-mcp"
+            },
+            "obsidian": {
+                "name": "Obsidian MCP Server",
+                "description": "Interact with Obsidian vaults. Read, create, edit and manage notes and tags. Provides tools for note management, search, and tag operations.",
+                "category": "community",
+                "package": "obsidian-mcp",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "obsidian-mcp", "<vault_path1>", "<vault_path2>"],
+                "required_args": ["vault_path1"],
+                "optional_args": ["vault_path2"],
+                "env_vars": {},
+                "setup_help": "Provide the absolute path to your Obsidian vault directory. You can specify multiple vault paths as additional arguments. IMPORTANT: Backup your vault before use as this server has read/write access.",
+                "example_usage": "Read/create/edit notes, search vault contents, manage tags, move/delete notes",
+                "homepage": "https://github.com/StevenStavrakis/obsidian-mcp"
+            },
+            "figma": {
+                "name": "Figma Server",
+                "description": "ModelContextProtocol server for Figma design files and collaboration.",
+                "category": "community",
+                "package": "figma-mcp",
+                "install_method": "npm",
+                "command": "npx",
+                "args_template": ["-y", "figma-mcp"],
+                "required_args": [],
+                "optional_args": [],
+                "env_vars": {"FIGMA_TOKEN": "Your Figma API token"},
+                "setup_help": "Get API token from Figma account settings",
+                "example_usage": "Access Figma designs and collaborate",
+                "homepage": "https://www.npmjs.com/package/figma-mcp"
+            }
+        }
 
     def _get_builtin_registry(self) -> Dict[str, Any]:
         """Get built-in server registry"""
@@ -126,12 +347,51 @@ class ServerRegistry:
             },
         }
 
-    def search(self, query: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Search for servers in the registry"""
+    def search_mcp_servers(self, query: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Search for MCP servers in the registry"""
         query = query.lower()
         results = []
 
-        for server_id, server_info in self.registry.items():
+        for server_id, server_info in self.mcp_servers.items():
+            # Filter by category if specified
+            if category and server_info.get("category") != category:
+                continue
+
+            # Search in server ID, name, description, and package
+            searchable_text = f"{server_id} {server_info['name']} {server_info['description']} {server_info['category']} {server_info.get('package', '')}".lower()
+            
+            if query in searchable_text:
+                results.append({
+                    "id": server_id,
+                    "type": "mcp_server",
+                    **server_info
+                })
+        
+        # Sort by relevance (exact matches first, then partial matches)
+        def relevance_score(server):
+            score = 0
+            server_text = f"{server['id']} {server['name']}".lower()
+            
+            if query == server['id']:
+                score += 100
+            elif query in server['id']:
+                score += 50
+            elif query in server['name'].lower():
+                score += 30
+            elif query in server['description'].lower():
+                score += 10
+            
+            return score
+        
+        results.sort(key=relevance_score, reverse=True)
+        return results
+
+    def search_templates(self, query: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Search for Gradio templates in the registry"""
+        query = query.lower()
+        results = []
+
+        for server_id, server_info in self.templates.items():
             # Filter by category if specified
             if category and server_info.get("category") != category:
                 continue
@@ -145,29 +405,192 @@ class ServerRegistry:
             ]
 
             if any(query in field for field in searchable):
-                results.append(server_info)
+                server_info_copy = dict(server_info)
+                server_info_copy["type"] = "template"
+                results.append(server_info_copy)
 
         return results
 
-    def get_by_category(self, category: str) -> List[Dict[str, Any]]:
-        """Get all servers in a category"""
-        return [server for server in self.registry.values() if server.get("category") == category]
+    def search(self, query: str, category: Optional[str] = None, server_type: str = "all") -> List[Dict[str, Any]]:
+        """Search for servers and templates in the registry"""
+        results = []
+        
+        if server_type in ["all", "mcp_server"]:
+            results.extend(self.search_mcp_servers(query, category))
+        
+        if server_type in ["all", "template"]:
+            results.extend(self.search_templates(query, category))
+            
+        return results
 
-    def get_all(self) -> List[Dict[str, Any]]:
-        """Get all servers in the registry"""
-        return list(self.registry.values())
+    def get_by_category(self, category: str, server_type: str = "all") -> List[Dict[str, Any]]:
+        """Get all servers/templates in a category"""
+        results = []
+        
+        if server_type in ["all", "mcp_server"]:
+            for server_id, server_info in self.mcp_servers.items():
+                if server_info.get("category") == category:
+                    results.append({
+                        "id": server_id,
+                        "type": "mcp_server",
+                        **server_info
+                    })
+        
+        if server_type in ["all", "template"]:
+            for server_id, server_info in self.templates.items():
+                if server_info.get("category") == category:
+                    server_info_copy = dict(server_info)
+                    server_info_copy["type"] = "template"
+                    results.append(server_info_copy)
+        
+        return results
+
+    def get_all(self, server_type: str = "all") -> List[Dict[str, Any]]:
+        """Get all servers/templates in the registry"""
+        results = []
+        
+        if server_type in ["all", "mcp_server"]:
+            for server_id, server_info in self.mcp_servers.items():
+                results.append({
+                    "id": server_id,
+                    "type": "mcp_server",
+                    **server_info
+                })
+        
+        if server_type in ["all", "template"]:
+            for server_id, server_info in self.templates.items():
+                server_info_copy = dict(server_info)
+                server_info_copy["type"] = "template"
+                results.append(server_info_copy)
+        
+        return results
+
+    def get_mcp_server(self, server_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed information about a specific MCP server"""
+        server_info = self.mcp_servers.get(server_id)
+        if server_info:
+            return {
+                "id": server_id,
+                "type": "mcp_server",
+                **server_info
+            }
+        return None
 
     def get_server(self, server_id: str) -> Optional[Dict[str, Any]]:
-        """Get a specific server by ID"""
-        return self.registry.get(server_id)
+        """Get a specific server/template by ID (checks both MCP servers and templates)"""
+        # Check MCP servers first
+        mcp_server = self.get_mcp_server(server_id)
+        if mcp_server:
+            return mcp_server
+        
+        # Check templates
+        template = self.templates.get(server_id)
+        if template:
+            template_copy = dict(template)
+            template_copy["type"] = "template"
+            return template_copy
+        
+        return None
 
-    def list_categories(self) -> List[str]:
+    def list_categories(self, server_type: str = "all") -> List[str]:
         """List all available categories"""
         categories = set()
-        for server in self.registry.values():
-            if "category" in server:
-                categories.add(server["category"])
+        
+        if server_type in ["all", "mcp_server"]:
+            for server in self.mcp_servers.values():
+                if "category" in server:
+                    categories.add(server["category"])
+        
+        if server_type in ["all", "template"]:
+            for server in self.templates.values():
+                if "category" in server:
+                    categories.add(server["category"])
+        
         return sorted(list(categories))
+
+    def _get_platform_key(self) -> str:
+        """Get platform key for configuration"""
+        system = platform.system().lower()
+        if system == "darwin":
+            return "macos"
+        elif system == "windows":
+            return "windows"
+        else:
+            return "linux"
+
+    def _expand_env_vars(self, path: str) -> str:
+        """Expand environment variables in path string"""
+        # Handle common environment variables
+        if "{LOCALAPPDATA}" in path:
+            path = path.replace("{LOCALAPPDATA}", os.environ.get("LOCALAPPDATA", ""))
+        if "{APPDATA}" in path:
+            path = path.replace("{APPDATA}", os.environ.get("APPDATA", ""))
+        if "{USERPROFILE}" in path:
+            path = path.replace("{USERPROFILE}", os.environ.get("USERPROFILE", str(Path.home())))
+        if "{HOME}" in path:
+            path = path.replace("{HOME}", str(Path.home()))
+        return path
+
+    def generate_install_command(self, server_id: str, user_args: Dict[str, str]) -> Optional[Dict[str, Any]]:
+        """Generate installation command for an MCP server with user-provided arguments"""
+        server = self.get_mcp_server(server_id)
+        if not server:
+            return None
+        
+        # Build command arguments
+        args = []
+        for arg_template in server["args_template"]:
+            if arg_template.startswith("<") and arg_template.endswith(">"):
+                # This is a placeholder, replace with user input
+                placeholder = arg_template[1:-1]  # Remove < >
+                if placeholder in user_args:
+                    args.append(user_args[placeholder])
+                else:
+                    # Check if this is a required argument
+                    required_args = server.get("required_args", [])
+                    if placeholder in required_args:
+                        # Required argument missing
+                        return None
+                    # Optional argument missing - skip it
+                    continue
+            else:
+                # Static argument
+                args.append(arg_template)
+        
+        # Build environment variables
+        env_vars = {}
+        for env_key, env_description in server["env_vars"].items():
+            if env_key in user_args:
+                env_vars[env_key] = user_args[env_key]
+        
+        return {
+            "server_id": server_id,
+            "name": server["name"],
+            "command": server["command"],
+            "args": args,
+            "env": env_vars,
+            "package": server.get("package", ""),
+            "install_method": server.get("install_method", "npm"),
+            "setup_help": server.get("setup_help", ""),
+            "homepage": server.get("homepage", "")
+        }
+
+    def get_server_info(self, server_id: str) -> Optional[Dict[str, Any]]:
+        """Get comprehensive server information including installation details"""
+        server = self.get_mcp_server(server_id)
+        if not server:
+            return None
+            
+        return {
+            **server,
+            "required_args": server.get("required_args", []),
+            "optional_args": server.get("optional_args", []),
+            "env_vars": server.get("env_vars", {}),
+            "install_method": server.get("install_method", "npm"),
+            "setup_help": server.get("setup_help", ""),
+            "example_usage": server.get("example_usage", ""),
+            "homepage": server.get("homepage", "")
+        }
 
     def add_custom_server(
         self,

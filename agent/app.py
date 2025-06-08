@@ -22,6 +22,7 @@ from ui.chat_interface import ChatInterface
 from ui.pipeline_view import PipelineView
 from ui.server_manager import ServerManager
 from ui.control_panel import ControlPanelUI
+from ui.mcp_connections_panel import MCPConnectionsPanel
 
 console = Console()
 
@@ -58,6 +59,10 @@ def create_agent_interface() -> gr.Interface:
     pipeline_view = PipelineView(agent)
     server_manager = ServerManager(agent)
     control_panel = ControlPanelUI()
+    mcp_connections = MCPConnectionsPanel(agent)
+    
+    # Connect components
+    chat_interface.set_mcp_connections_panel(mcp_connections)
     
     # Custom CSS for better styling
     css = """
@@ -100,6 +105,30 @@ def create_agent_interface() -> gr.Interface:
     .status-building {
         background-color: #ffc107;
     }
+    
+    .mcp-connection-card {
+        background: #f0f4f8;
+        border-radius: 8px;
+        padding: 16px;
+        margin: 8px 0;
+        border-left: 4px solid #3b82f6;
+        transition: all 0.2s ease;
+    }
+    
+    .mcp-connection-card:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transform: translateY(-1px);
+    }
+    
+    .connection-status-active {
+        color: #10b981;
+        font-weight: bold;
+    }
+    
+    .connection-status-inactive {
+        color: #ef4444;
+        font-weight: bold;
+    }
     """
     
     with gr.Blocks(
@@ -139,6 +168,10 @@ def create_agent_interface() -> gr.Interface:
             with gr.Tab("🤖 Agent Control Panel", id="control"):
                 # Embed the control panel components directly
                 control_panel.create_components()
+            
+            # MCP Connections Tab - Connect to external MCP servers
+            with gr.Tab("🔌 MCP Connections", id="mcp_connections"):
+                mcp_connections.create_interface()
             
             # Help Tab - Documentation and examples
             with gr.Tab("📚 Help & Examples", id="help"):

@@ -81,12 +81,14 @@ class GMPAgent:
         self.registry = EnhancedRegistry()
         self.knowledge = KnowledgeBase()
         self.context = ConversationContext(messages=[])
+        self.mcp_connections = {}  # Store active MCP connections
         
         # Initialize with system message
         self._add_system_message(
             "I am the GMP Agent, an intelligent assistant for building and managing "
             "MCP servers using the Gradio MCP Playground toolkit. I can help you "
-            "create servers, build pipelines, and deploy applications in natural language."
+            "create servers, build pipelines, and deploy applications in natural language. "
+            "I can also connect to external MCP servers for enhanced capabilities."
         )
     
     def _add_system_message(self, content: str) -> None:
@@ -685,3 +687,40 @@ Could you rephrase your request or let me know what you'd like to accomplish?"""
         self.context.current_project = context_data.get("current_project")
         self.context.active_servers = context_data.get("active_servers", [])
         self.context.user_preferences = context_data.get("user_preferences", {})
+    
+    def set_mcp_connections(self, connections: Dict[str, Any]) -> None:
+        """Set active MCP connections from the MCP connections panel"""
+        self.mcp_connections = connections
+    
+    def get_mcp_connections(self) -> Dict[str, Any]:
+        """Get active MCP connections"""
+        return self.mcp_connections
+    
+    async def call_mcp_tool(self, connection_name: str, tool_name: str, arguments: Dict[str, Any]) -> Any:
+        """Call a tool on a specific MCP connection"""
+        if connection_name not in self.mcp_connections:
+            raise ValueError(f"Connection '{connection_name}' not found")
+        
+        connection = self.mcp_connections[connection_name]
+        client = connection.get('client')
+        
+        if not client:
+            raise ValueError(f"No client available for connection '{connection_name}'")
+        
+        return client.call_tool(tool_name, arguments)
+    
+    def list_mcp_tools(self, connection_name: Optional[str] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """List available tools from MCP connections"""
+        tools_by_connection = {}
+        
+        if connection_name:
+            # List tools for specific connection
+            if connection_name in self.mcp_connections:
+                connection = self.mcp_connections[connection_name]
+                tools_by_connection[connection_name] = connection.get('tools', [])
+        else:
+            # List tools for all connections
+            for name, connection in self.mcp_connections.items():
+                tools_by_connection[name] = connection.get('tools', [])
+        
+        return tools_by_connection

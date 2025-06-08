@@ -14,6 +14,7 @@ class ChatInterface:
     def __init__(self, agent):
         self.agent = agent
         self.conversation_history = []
+        self.mcp_connections_panel = None  # Will be set later
         
     def create_interface(self) -> None:
         """Create the chat interface components"""
@@ -87,6 +88,10 @@ class ChatInterface:
         # Set up event handlers
         self._setup_event_handlers()
     
+    def set_mcp_connections_panel(self, panel) -> None:
+        """Set the MCP connections panel reference"""
+        self.mcp_connections_panel = panel
+    
     def _setup_event_handlers(self) -> None:
         """Setup event handlers for the interface"""
         
@@ -140,6 +145,11 @@ class ChatInterface:
         chat_history.append({"role": "user", "content": message})
         
         try:
+            # Update agent with current MCP connections if available
+            if self.mcp_connections_panel:
+                active_connections = self.mcp_connections_panel.get_active_connections()
+                self.agent.set_mcp_connections(active_connections)
+            
             # Process message with agent
             response, metadata = await self.agent.process_message(message)
             
