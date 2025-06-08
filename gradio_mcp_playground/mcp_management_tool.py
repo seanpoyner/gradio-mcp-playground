@@ -452,6 +452,10 @@ class MCPServerManager:
                         
                         # Add connection to coding agent if available
                         try:
+                            # Set environment variable for the agent to use
+                            if server_id == 'brave-search' and 'BRAVE_API_KEY' in env:
+                                os.environ['BRAVE_API_KEY'] = env['BRAVE_API_KEY']
+                                
                             from .coding_agent import CodingAgent
                             # Get global coding agent instance if available
                             import gradio_mcp_playground.web_ui as web_ui

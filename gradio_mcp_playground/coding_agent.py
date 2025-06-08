@@ -96,6 +96,7 @@ if HAS_LLAMAINDEX:
                 self._create_file_reader_tool(),
                 self._create_home_directory_tool(),
                 self._create_directory_tool(),
+                self._create_brave_search_tool(),  # Add brave search tool
             ]
 
             # Add MCP server management tools
@@ -446,6 +447,45 @@ if HAS_LLAMAINDEX:
             
             return FunctionTool.from_defaults(fn=create_directory, name="create_directory")
 
+        def _create_brave_search_tool(self) -> FunctionTool:
+            """Create Brave Search tool"""
+            def brave_search(query: str, count: int = 10) -> str:
+                """Search the web using Brave Search API.
+                
+                Args:
+                    query: Search query string
+                    count: Number of results to return (default: 10)
+                    
+                Returns:
+                    Search results from Brave Search API
+                """
+                try:
+                    import requests
+                    import os
+                    
+                    api_key = os.environ.get('BRAVE_API_KEY')
+                    if not api_key:
+                        return "Error: BRAVE_API_KEY not set. Please install the brave-search server first using install_mcp_server_from_registry()"
+                    
+                    url = "https://api.search.brave.com/res/v1/web/search"
+                    headers = {"X-Subscription-Token": api_key}
+                    params = {"q": query, "count": count}
+                    
+                    response = requests.get(url, headers=headers, params=params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        results = []
+                        for idx, result in enumerate(data.get('web', {}).get('results', [])[:count], 1):
+                            results.append(f"{idx}. {result.get('title', 'No title')}\n   URL: {result.get('url', 'No URL')}\n   {result.get('description', 'No description')}")
+                        
+                        return f"Brave Search Results for '{query}':\n\n" + "\n\n".join(results) if results else "No results found"
+                    else:
+                        return f"Error: Brave Search API returned status {response.status_code}"
+                except Exception as e:
+                    return f"Error performing brave search: {str(e)}"
+            
+            return FunctionTool.from_defaults(fn=brave_search, name="brave_search")
+
         def _add_mcp_management_tools(self):
             """Add MCP server management tools to the agent"""
             try:
@@ -591,28 +631,23 @@ if HAS_LLAMAINDEX:
                         max_iterations=100,  # Allow for complex multi-step operations
                         system_prompt="""You are a coding assistant helping with MCP server management and development.
 
-**MCP SERVER INTEGRATION:**
-When you install a registry MCP server using install_mcp_server_from_registry, its tools become available to you:
-- brave-search → brave_search() tool for web searches
-- filesystem → filesystem_read_file(), filesystem_write_file(), etc.
-- Other servers will have their specific tools added
+**IMPORTANT - BRAVE SEARCH WORKFLOW:**
+1. First install: install_mcp_server_from_registry(server_id="brave-search", token="YOUR_KEY")
+2. After successful installation, use: brave_search(query="your search term")
 
-**WORKFLOW:**
-1. Install server: install_mcp_server_from_registry(server_id="brave-search", token="YOUR_KEY")
-2. Use its tools: brave_search(query="search term")
+**DO NOT** try to connect to MCP servers with test_mcp_connection, connect_to_mcp_server, or get_mcp_server_info.
+Once installed, the brave_search tool is automatically available!
 
-**TOOL PARAMETERS:**
-- server_id: Required (e.g., "brave-search", "memory", "filesystem", "github")
-- token: Optional, for API authentication
-- path: Optional, for filesystem server
-- timezone: Optional, for time server
+**EXAMPLE - User asks to search the web:**
+Step 1: install_mcp_server_from_registry(server_id="brave-search", token="BSAcIbrB5nHtrlV5iqt98NaYDhfjOCh")
+Step 2: brave_search(query="GitHub seanpoyner profile")
 
-**EXAMPLES:**
-User: "Search for GitHub profiles of seanpoyner"
-1. Install brave-search if needed
-2. Use: brave_search(query="GitHub seanpoyner profile")
+**AVAILABLE TOOLS AFTER INSTALLATION:**
+- brave-search → brave_search(query, count)
+- filesystem → filesystem_read_file(path), filesystem_write_file(path, content)
+- Other servers have their specific tools
 
-Be concise and helpful. Always use available tools when possible.""",
+Be direct and use tools immediately after installation.""",
                     )
                     print("DEBUG: ReActAgent created successfully")
                 except Exception as e:
