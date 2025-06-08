@@ -98,6 +98,7 @@ if HAS_LLAMAINDEX:
                 self._create_home_directory_tool(),
                 self._create_directory_tool(),
                 self._create_brave_search_tool(),  # Add brave search tool
+                self._create_registry_search_tool(),  # Add registry search tool
             ]
 
             # Add MCP server management tools
@@ -487,6 +488,49 @@ if HAS_LLAMAINDEX:
             
             return FunctionTool.from_defaults(fn=brave_search, name="brave_search")
 
+        def _create_registry_search_tool(self) -> FunctionTool:
+            """Create tool to search MCP server registry"""
+            def search_mcp_registry(query: str) -> str:
+                """Search the MCP server registry for servers matching a query.
+                
+                Args:
+                    query: Search query (e.g., "obsidian", "database", "api")
+                    
+                Returns:
+                    List of matching MCP servers with descriptions
+                """
+                try:
+                    from .registry import ServerRegistry
+                    registry = ServerRegistry()
+                    
+                    # Search for matching servers
+                    results = registry.search_mcp_servers(query)
+                    
+                    if not results:
+                        return f"No MCP servers found matching '{query}'"
+                    
+                    output = f"🔍 Found {len(results)} MCP servers matching '{query}':\n\n"
+                    for server in results[:10]:  # Limit to 10 results
+                        output += f"**{server['id']}** ({server['category']})\n"
+                        output += f"📝 {server['description']}\n"
+                        
+                        # Show required parameters
+                        if server.get('required_args'):
+                            output += f"📋 Required args: {', '.join(server['required_args'])}\n"
+                        
+                        # Show environment variables needed
+                        if server.get('env_vars'):
+                            output += f"🔑 Requires: {', '.join(server['env_vars'].keys())}\n"
+                        
+                        output += f"💡 Install: install_mcp_server_from_registry(server_id='{server['id']}')\n"
+                        output += "-" * 50 + "\n\n"
+                    
+                    return output
+                except Exception as e:
+                    return f"Error searching registry: {str(e)}"
+            
+            return FunctionTool.from_defaults(fn=search_mcp_registry, name="search_mcp_registry")
+
         def _add_mcp_management_tools(self):
             """Add MCP server management tools to the agent"""
             try:
@@ -632,27 +676,37 @@ if HAS_LLAMAINDEX:
                         max_iterations=100,  # Allow for complex multi-step operations
                         system_prompt="""You are a coding assistant helping with MCP server management and development.
 
+**KEY BEHAVIORS:**
+1. When users ask for tools/servers for specific tasks, ALWAYS search the registry first using search_mcp_registry()
+2. API keys are stored securely and reused automatically - no need to ask again
+3. Store important conversations in memory server for future reference
+
 **MCP SERVER WORKFLOWS:**
 
-1. **BRAVE SEARCH:**
+1. **FINDING SERVERS:**
+   - Search: search_mcp_registry("obsidian") to find relevant servers
+   - Install: Follow the suggested install command from search results
+
+2. **BRAVE SEARCH:**
    - Install: install_mcp_server_from_registry(server_id="brave-search", token="YOUR_KEY")
    - Use: brave_search(query="search term")
+   - Note: API key is stored securely after first use
 
-2. **MEMORY SERVER (Conversation Logging):**
+3. **MEMORY SERVER (Conversation Logging):**
    - Install: install_mcp_server_from_registry(server_id="memory")
    - Store: memory_store_conversation(topic="topic_name", content="conversation content")
    - Retrieve: memory_retrieve_conversation(topic="topic_name", limit=10)
-   - Search: memory_search_conversations(query="search term")
 
-3. **FILESYSTEM:**
-   - Install: install_mcp_server_from_registry(server_id="filesystem", path="/path/to/dir")
-   - Use: filesystem_read_file(path), filesystem_write_file(path, content)
+4. **OBSIDIAN:**
+   - Install: install_mcp_server_from_registry(server_id="obsidian", vault_path1="path/to/vault")
+   - Tools will be available after installation
 
-**IMPORTANT:** Once installed, tools are immediately available. DO NOT use connection tools.
+**IMPORTANT:** 
+- Always search registry when users need specific functionality
+- Store conversations about user preferences/identity in memory server
+- API keys are encrypted and stored securely
 
-**CONVERSATION LOGGING:** When users want to save conversations, use the memory server to store them with appropriate topics.
-
-Be direct and helpful.""",
+Be helpful and proactive about finding the right tools.""",
                     )
                     print("DEBUG: ReActAgent created successfully")
                 except Exception as e:
@@ -677,6 +731,18 @@ Be direct and helpful.""",
                 return "Please configure a model first by providing your HuggingFace API token and selecting a model."
 
             try:
+                # Check if user is introducing themselves
+                if any(phrase in message.lower() for phrase in ["my name is", "i am", "i'm"]):
+                    # Check if memory server is available
+                    if 'memory' in self.mcp_connections:
+                        # Store the conversation automatically
+                        try:
+                            from datetime import datetime
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            self.agent.chat(f"memory_store_conversation(topic='User Introduction', content='User message: {message} - Timestamp: {timestamp}')")
+                        except:
+                            pass  # Silently fail if memory storage doesn't work
+                
                 response = self.agent.chat(message)
                 response_str = str(response)
 

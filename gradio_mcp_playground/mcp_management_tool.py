@@ -358,19 +358,39 @@ class MCPServerManager:
             import platform
             import sys
             from .registry import ServerRegistry
+            from .secure_storage import SecureTokenStorage
+            
             registry = ServerRegistry()
+            storage = SecureTokenStorage()
 
             # Get server info from registry
             server_info = registry.get_server_info(server_id)
             if not server_info:
                 return f"❌ Server '{server_id}' not found in registry"
 
+            # Check for stored API keys first
+            env_vars_needed = server_info.get('env_vars', {})
+            stored_keys = storage.retrieve_server_keys(server_id)
+            
             # Special handling for environment variables passed as arguments
             # For brave-search, convert 'token' to 'BRAVE_API_KEY'
-            if server_id == 'brave-search' and 'token' in kwargs:
-                kwargs['BRAVE_API_KEY'] = kwargs.pop('token')
-            elif server_id == 'github' and 'token' in kwargs:
-                kwargs['GITHUB_TOKEN'] = kwargs.pop('token')
+            if server_id == 'brave-search':
+                if 'token' in kwargs:
+                    kwargs['BRAVE_API_KEY'] = kwargs.pop('token')
+                    # Store the key securely
+                    storage.store_key('brave-search', 'BRAVE_API_KEY', kwargs['BRAVE_API_KEY'])
+                elif 'BRAVE_API_KEY' in stored_keys:
+                    # Use stored key
+                    kwargs['BRAVE_API_KEY'] = stored_keys['BRAVE_API_KEY']
+                    
+            elif server_id == 'github':
+                if 'token' in kwargs:
+                    kwargs['GITHUB_TOKEN'] = kwargs.pop('token')
+                    # Store the key securely
+                    storage.store_key('github', 'GITHUB_TOKEN', kwargs['GITHUB_TOKEN'])
+                elif 'GITHUB_TOKEN' in stored_keys:
+                    # Use stored key
+                    kwargs['GITHUB_TOKEN'] = stored_keys['GITHUB_TOKEN']
 
             # Auto-detect and set default arguments for specific servers
             if server_id == 'filesystem' and 'path' not in kwargs:
@@ -900,14 +920,18 @@ def create_mcp_management_tools():
         """
         return manager.start_pure_mcp_server()
 
-    def install_mcp_server_from_registry(server_id: str, token: str = None, path: str = None, timezone: str = None) -> str:
+    def install_mcp_server_from_registry(server_id: str, token: str = None, path: str = None, 
+                                        timezone: str = None, vault_path1: str = None, 
+                                        vault_path2: str = None) -> str:
         """Install an MCP server from the registry and automatically start it.
 
         Args:
-            server_id: ID of the server to install (e.g., 'filesystem', 'memory', 'github', 'brave-search')
+            server_id: ID of the server to install (e.g., 'filesystem', 'memory', 'github', 'brave-search', 'obsidian')
             token: API token for servers that require authentication (brave-search, github)
             path: Path parameter for filesystem server (optional, defaults to home directory)
             timezone: Timezone for time server (e.g., 'UTC', 'America/New_York')
+            vault_path1: Primary vault path for Obsidian server
+            vault_path2: Secondary vault path for Obsidian server (optional)
 
         Returns:
             str: Server status and connection information
@@ -920,6 +944,10 @@ def create_mcp_management_tools():
             kwargs['path'] = path
         if timezone is not None:
             kwargs['timezone'] = timezone
+        if vault_path1 is not None:
+            kwargs['vault_path1'] = vault_path1
+        if vault_path2 is not None:
+            kwargs['vault_path2'] = vault_path2
             
         return manager.install_mcp_server_from_registry(server_id, **kwargs)
     
