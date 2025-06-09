@@ -11,6 +11,8 @@ import json
 import logging
 import psutil
 import subprocess
+import re
+import ast
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
@@ -29,259 +31,6 @@ except ImportError as e:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Custom CSS for production-ready styling with sidebar
-CUSTOM_CSS = """
-/* Dark theme with glassmorphism effects */
-.gradio-container {
-    background: linear-gradient(135deg, #1e1e2e 0%, #2a2a3e 100%);
-    min-height: 100vh;
-}
-
-/* Header styling */
-.main-header {
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(20px);
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 2rem;
-    margin-bottom: 2rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-}
-
-/* Sidebar styling */
-.sidebar {
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(15px);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 1.5rem;
-    margin-left: 1rem;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
-    min-height: 600px;
-}
-
-.sidebar:hover {
-    border-color: rgba(59, 130, 246, 0.5);
-    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.15);
-}
-
-/* Code editor styling */
-.code-editor {
-    background: rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 12px;
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
-    max-height: 500px;
-    overflow: auto;
-    resize: both;
-}
-
-.code-editor:focus-within {
-    border-color: rgba(59, 130, 246, 0.6);
-    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
-}
-
-/* Code editor textarea styling */
-.code-editor textarea {
-    overflow: auto !important;
-    overflow-x: auto !important;
-    overflow-y: auto !important;
-    resize: both !important;
-    min-height: 400px !important;
-    max-height: 600px !important;
-    white-space: pre !important;
-    word-wrap: normal !important;
-}
-
-/* Code editor container */
-.code-editor .code-container {
-    overflow: auto !important;
-    max-width: 100% !important;
-}
-
-/* Ensure proper scrolling for long lines */
-.code-editor pre {
-    overflow: auto !important;
-    white-space: pre !important;
-    word-wrap: normal !important;
-}
-
-/* Editor action buttons */
-.editor-actions {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    padding: 0.75rem;
-    margin-top: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Section cards */
-.control-section {
-    background: rgba(255, 255, 255, 0.05);
-    backdrop-filter: blur(15px);
-    border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 1.5rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
-}
-
-.control-section:hover {
-    border-color: rgba(59, 130, 246, 0.5);
-    box-shadow: 0 8px 32px rgba(59, 130, 246, 0.15);
-}
-
-/* Status indicators */
-.status-running {
-    color: #10b981;
-    font-weight: bold;
-}
-
-.status-stopped {
-    color: #ef4444;
-    font-weight: bold;
-}
-
-.status-starting {
-    color: #f59e0b;
-    font-weight: bold;
-}
-
-/* Button enhancements */
-.emergency-btn {
-    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-    border: none;
-    color: white;
-    font-weight: bold;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-    box-shadow: 0 4px 16px rgba(220, 38, 38, 0.4);
-}
-
-.primary-btn {
-    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-    border: none;
-    color: white;
-    font-weight: bold;
-    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
-}
-
-.success-btn {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    border: none;
-    color: white;
-    font-weight: bold;
-    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.4);
-}
-
-.warning-btn {
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-    border: none;
-    color: white;
-    font-weight: bold;
-    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
-}
-
-/* Dashboard grid */
-.dashboard-grid {
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Logs panel */
-.logs-panel {
-    background: rgba(0, 0, 0, 0.4);
-    border-radius: 12px;
-    font-family: 'JetBrains Mono', 'Consolas', monospace;
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-/* Template cards */
-.template-card {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 1rem;
-    transition: all 0.3s ease;
-}
-
-.template-card:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(59, 130, 246, 0.4);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
-}
-
-/* Metrics badges */
-.metric-badge {
-    background: rgba(59, 130, 246, 0.2);
-    border: 1px solid rgba(59, 130, 246, 0.4);
-    border-radius: 20px;
-    padding: 0.25rem 0.75rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #93c5fd;
-}
-
-/* Animation for live updates */
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-}
-
-.live-indicator {
-    animation: pulse 2s infinite;
-    color: #10b981;
-}
-
-/* Main content layout */
-.main-content {
-    display: flex;
-    gap: 1rem;
-}
-
-.main-panel {
-    flex: 2;
-}
-
-.side-panel {
-    flex: 1;
-    min-width: 400px;
-}
-
-/* Responsive design */
-@media (max-width: 1200px) {
-    .main-content {
-        flex-direction: column;
-    }
-    
-    .side-panel {
-        min-width: unset;
-    }
-}
-
-@media (max-width: 768px) {
-    .control-section {
-        padding: 1rem;
-        margin-bottom: 1rem;
-    }
-    
-    .main-header {
-        padding: 1.5rem;
-    }
-    
-    .sidebar {
-        margin-left: 0;
-        margin-top: 1rem;
-    }
-}
-"""
-
-
 class ControlPanelUI:
     """🚀 Production-ready control panel for comprehensive agent management"""
     
@@ -296,11 +45,13 @@ class ControlPanelUI:
         except Exception as e:
             logger.error(f"❌ Failed to initialize agent runner: {e}")
             self.agent_runner = None
-            
-        self.templates = self._load_enhanced_templates()
+        self.agents = self._load_enhanced_agents()
         self.logs_buffer = []
         self.max_log_lines = 1000
         self.system_metrics = self._get_system_metrics()
+        
+        # Track agent status for change detection
+        self.previous_agent_status = {}
         
         # Track deployment statistics
         self.deployment_stats = {
@@ -312,8 +63,7 @@ class ControlPanelUI:
         
     def _get_system_metrics(self) -> Dict[str, Any]:
         """Get comprehensive system metrics for monitoring"""
-        try:
-            return {
+        try:            return {
                 "cpu_percent": psutil.cpu_percent(interval=1),
                 "memory_percent": psutil.virtual_memory().percent,
                 "disk_percent": psutil.disk_usage('/').percent,
@@ -331,24 +81,13 @@ class ControlPanelUI:
                 "process_count": 0,
                 "uptime": 0
             }
-        
-    def _load_enhanced_templates(self) -> Dict[str, Dict[str, str]]:
-        """Load enhanced agent templates from external files"""
-        return self._load_templates_from_files()
+    def _load_enhanced_agents(self) -> Dict[str, Dict[str, str]]:
+        """Load enhanced agent files from external files"""
+        return self._load_agents_from_files()
 
-    def _load_templates_from_files(self) -> Dict[str, Dict[str, str]]:
-        """Load agent templates from external files in temp_agents directory"""
-        templates = {}
-        
-        # Define the mapping between agent files and display names
-        agent_files = {
-            "🧮 Calculator Pro": "calculator_pro.py",
-            "🕷️ Web Scraper Pro": "web_scraper_pro.py", 
-            "📊 Data Processor Pro": "data_processor_pro.py",
-            "💬 Chat Bot Pro": "chat_bot_pro.py",
-            "📁 File Monitor Pro": "file_monitor_pro.py",
-            "🔌 API Wrapper Pro": "api_wrapper_pro.py"
-        }
+    def _load_agents_from_files(self) -> Dict[str, Dict[str, str]]:
+        """Load agent files directly from temp_agents directory"""
+        agents = {}
         
         # Get the temp_agents directory path
         current_file = Path(__file__)
@@ -365,50 +104,41 @@ class ControlPanelUI:
                 logger.info(f"Using alternative path: {temp_agents_dir}")
             else:
                 logger.error(f"Could not find temp_agents directory")
+                return agents
         
-        logger.info(f"Loading agent templates from: {temp_agents_dir}")
+        logger.info(f"Loading agents from: {temp_agents_dir}")
         
-        for display_name, filename in agent_files.items():
-            agent_file = temp_agents_dir / filename
-            
+        # Load all .py files from temp_agents directory
+        for agent_file in temp_agents_dir.glob("*.py"):
+            if agent_file.name.startswith("__"):  # Skip __pycache__ etc
+                continue
             try:
-                if agent_file.exists():
-                    # Read the agent file content
-                    with open(agent_file, 'r', encoding='utf-8') as f:
-                        code_content = f.read()
-                    
-                    # Extract metadata from the code content
-                    metadata = self._extract_agent_metadata(code_content, display_name)
-                    
-                    templates[display_name] = {
-                        "description": metadata["description"],
-                        "category": metadata["category"], 
-                        "difficulty": metadata["difficulty"],
-                        "features": metadata["features"],
-                        "code": code_content
-                    }
-                else:
-                    logger.warning(f"Agent file not found: {agent_file}")
-                    # Provide fallback template
-                    templates[display_name] = {
-                        "description": f"Agent file {filename} not found",
-                        "category": "System",
-                        "difficulty": "Unknown",
-                        "features": ["File not available"],
-                        "code": f"# Agent file {filename} not found\nprint('Agent file not available')"
-                    }
-                    
+                # Use filename as the agent name (without .py extension)
+                agent_name = agent_file.stem
+                # Read the agent file content
+                with open(agent_file, 'r', encoding='utf-8') as f:
+                    code_content = f.read()
+                # Extract metadata from the code content
+                metadata = self._extract_agent_metadata(code_content, agent_name)
+                agents[agent_name] = {
+                    "description": metadata["description"],
+                    "category": metadata["category"], 
+                    "difficulty": metadata["difficulty"],
+                    "features": metadata["features"],
+                    "code": code_content,
+                    "file_path": str(agent_file)  # Store the file path for saving
+                }
             except Exception as e:
-                logger.error(f"Error loading agent file {filename}: {e}")
-                templates[display_name] = {
-                    "description": f"Error loading {filename}: {str(e)}",
+                logger.error(f"Error loading agent file {agent_file.name}: {e}")
+                agents[agent_name] = {
+                    "description": f"Error loading {agent_file.name}: {str(e)}",
                     "category": "System", 
                     "difficulty": "Error",
                     "features": ["Error loading file"],
-                    "code": f"# Error loading {filename}\nprint('Error: {str(e)}')"
+                    "code": f"# Error loading {agent_file.name}\nprint('Error: {str(e)}')",
+                    "file_path": str(agent_file)
                 }
-        
-        return templates
+        return agents
     
     def _extract_agent_metadata(self, code_content: str, display_name: str) -> Dict[str, Any]:
         """Extract metadata from agent code content AGENT_INFO dictionary"""
@@ -517,8 +247,7 @@ class ControlPanelUI:
             "starting": "🟡", 
             "stopped": "🔴",
             "error": "❌",
-            "not_found": "⚫"
-        }
+            "not_found": "⚫"        }
         return status_map.get(status, "⚫")
     
     def _update_dashboard(self) -> List[List[str]]:
@@ -551,43 +280,35 @@ class ControlPanelUI:
                 dashboard_data.append([name, f"{status_emoji} {status.title()}", uptime, cpu, memory, port])
             
             return dashboard_data
-            
         except Exception as e:
             logger.error(f"Error updating dashboard: {e}")
             return [["Error updating dashboard", "❌", str(e), "--", "--", "--"]]
-    
-    def _deploy_agent(self, agent_name: str, template_name: str) -> Tuple[str, List[List[str]]]:
-        """Deploy an agent from template"""
+    def _deploy_agent(self, agent_name: str) -> Tuple[str, List[List[str]]]:
+        """Deploy an agent directly from the dropdown selection"""
         if not self.agent_runner:
             return "❌ Agent runner not available", self._update_dashboard()
         
-        if not agent_name or not agent_name.strip():
-            return "❌ Please enter an agent name", self._update_dashboard()
-        
-        if not template_name:
-            return "❌ Please select a template", self._update_dashboard()
-        
-        agent_name = agent_name.strip().replace(' ', '_')
+        if not agent_name:
+            return "❌ Please select an agent", self._update_dashboard()
         
         try:
-            template = self.templates.get(template_name)
-            if not template:
-                return f"❌ Template '{template_name}' not found", self._update_dashboard()
+            agent = self.agents.get(agent_name)
+            if not agent:
+                return f"❌ Agent '{agent_name}' not found", self._update_dashboard()
             
-            # Deploy the agent
-            success, message, metadata = self.agent_runner.start_agent(agent_name, template['code'])
+            # Deploy the agent using the agent name directly
+            success, message, metadata = self.agent_runner.start_agent(agent_name, agent['code'])
             
             if success:
                 port = metadata.get('port', 'Unknown')
                 result = f"✅ Agent '{agent_name}' deployed successfully!\n"
                 result += f"🌐 URL: http://localhost:{port}\n"
-                result += f"📋 Template: {template_name}\n"
+                result += f"📋 Agent: {agent_name}\n"
                 result += f"🔧 Status: {metadata.get('status', 'Unknown')}"
             else:
                 result = f"❌ Failed to deploy agent: {message}"
             
             return result, self._update_dashboard()
-            
         except Exception as e:
             logger.error(f"Error deploying agent: {e}")
             return f"❌ Error deploying agent: {str(e)}", self._update_dashboard()
@@ -652,75 +373,127 @@ class ControlPanelUI:
         except Exception as e:
             logger.error(f"Error during emergency stop: {e}")
             return f"❌ Error during emergency stop: {str(e)}", self._update_dashboard()
-    
-    def _get_agent_logs(self, filter_agent: str = "All Agents") -> str:
-        """Get recent agent logs with filtering"""
+    def _get_agent_logs(self) -> str:
+        """Get agent status logs - only show changes in health status"""
         if not self.agent_runner:
-            return "Agent runner not available"
+            return "🔧 Agent runner not available\n\nPlease ensure the agent runner is properly initialized to view logs."
         
         try:
-            # For now, return sample logs since we don't have real log capture
-            # In a full implementation, this would read from log files or capture stdout/stderr
             current_time = datetime.now().strftime("%H:%M:%S")
-            
             agents_status = self.agent_runner.list_agents()
             
-            if not agents_status:
-                return f"[{current_time}] No agents running - no logs to display"
+            # Create header
+            header = f"📋 **Agent Health Monitor**\n"
+            header += f"🕐 Last checked: {current_time}\n"
+            header += "=" * 60 + "\n\n"
             
-            logs = []
+            if not agents_status:
+                if self.previous_agent_status:
+                    # Agents were running before but now none are
+                    log_entry = f"[{current_time}] ℹ️  All agents have stopped running"
+                    self.logs_buffer.append(log_entry)
+                    self.previous_agent_status = {}
+                return header + f"[{current_time}] ℹ️  No agents are currently running\n\nDeploy some agents to monitor their health status."
+            
+            # Detect status changes
+            current_logs = []
             
             for name, info in agents_status.items():
-                if filter_agent != "All Agents" and name != filter_agent:
-                    continue
-                
                 status = info.get('status', 'unknown')
+                port = info.get('port', 'N/A')
                 
-                if status == 'running':
-                    logs.append(f"[{current_time}] [{name}] INFO: Agent running normally")
-                    logs.append(f"[{current_time}] [{name}] INFO: CPU: {info.get('cpu_percent', 0):.1f}%, Memory: {info.get('memory_mb', 0):.1f}MB")
-                    logs.append(f"[{current_time}] [{name}] INFO: Uptime: {self._format_uptime(info.get('uptime_seconds', 0))}")
-                elif status == 'stopped':
-                    logs.append(f"[{current_time}] [{name}] WARN: Agent is stopped")
-                else:
-                    logs.append(f"[{current_time}] [{name}] INFO: Status - {status}")
+                # Check if this is a new agent or status changed
+                if name not in self.previous_agent_status:
+                    # New agent detected
+                    log_entry = f"[{current_time}] [{name}:{port}] 🆕 New agent detected - Status: {status}"
+                    current_logs.append(log_entry)
+                    
+                    # Add initial health status
+                    if status == 'running':
+                        health_entry = f"[{current_time}] [{name}:{port}] ✅ Agent is healthy - CPU: {info.get('cpu_percent', 0):.1f}%, Memory: {info.get('memory_mb', 0):.1f}MB"
+                        current_logs.append(health_entry)
+                        
+                elif self.previous_agent_status[name].get('status') != status:
+                    # Status changed
+                    old_status = self.previous_agent_status[name].get('status', 'unknown')
+                    log_entry = f"[{current_time}] [{name}:{port}] 🔄 Status changed: {old_status} → {status}"
+                    current_logs.append(log_entry)
+                    
+                elif status == 'running':
+                    # Check for significant health metric changes for running agents
+                    old_cpu = self.previous_agent_status[name].get('cpu_percent', 0)
+                    old_memory = self.previous_agent_status[name].get('memory_mb', 0)
+                    new_cpu = info.get('cpu_percent', 0)
+                    new_memory = info.get('memory_mb', 0)
+                    
+                    # Log if CPU or memory changed significantly (>10% change)
+                    if abs(new_cpu - old_cpu) > 10 or abs(new_memory - old_memory) > 50:
+                        health_entry = f"[{current_time}] [{name}:{port}] 📊 Health update - CPU: {new_cpu:.1f}% ({old_cpu:.1f}%), Memory: {new_memory:.1f}MB ({old_memory:.1f}MB)"
+                        current_logs.append(health_entry)
+                        
+                elif status == 'error':
+                    # Always log error status
+                    log_entry = f"[{current_time}] [{name}:{port}] ❌ Agent in error state"
+                    current_logs.append(log_entry)
             
-            if not logs:
-                return f"[{current_time}] No logs for selected filter: {filter_agent}"
+            # Check for removed agents
+            for name in self.previous_agent_status:
+                if name not in agents_status:
+                    log_entry = f"[{current_time}] [{name}] 🗑️  Agent removed/stopped"
+                    current_logs.append(log_entry)
             
-            # Keep recent logs
-            self.logs_buffer.extend(logs)
-            if len(self.logs_buffer) > self.max_log_lines:
-                self.logs_buffer = self.logs_buffer[-self.max_log_lines:]
+            # Update previous status
+            self.previous_agent_status = agents_status.copy()
             
-            return "\n".join(self.logs_buffer[-50:])  # Show last 50 lines
+            # Add new logs to buffer
+            if current_logs:
+                self.logs_buffer.extend(current_logs)
+                
+                # Maintain buffer size
+                if len(self.logs_buffer) > self.max_log_lines:
+                    self.logs_buffer = self.logs_buffer[-self.max_log_lines:]
+            
+            # Build display
+            if not self.logs_buffer:
+                return header + f"[{current_time}] 📭 No status changes detected yet\n\nAgent health changes will appear here when they occur."
+            
+            # Show recent status changes
+            recent_logs = self.logs_buffer[-20:]  # Show last 20 entries
+            result = header + "\n".join(recent_logs)
+            
+            # Add footer with helpful info
+            result += f"\n\n📌 Note: Only status changes are logged to reduce noise"
+            if len(recent_logs) >= 20:
+                result += f" | Showing last {len(recent_logs)} changes"
+            
+            return result
             
         except Exception as e:
-            logger.error(f"Error getting logs: {e}")
-            return f"Error getting logs: {str(e)}"
-    
+            logger.error(f"Error getting agent logs: {e}")
+            return f"❌ Error retrieving logs: {str(e)}\n\nPlease check the agent runner configuration and try again."
     def _clear_logs(self) -> str:
         """Clear the logs display"""
         self.logs_buffer = []
+        self.previous_agent_status = {}
         current_time = datetime.now().strftime("%H:%M:%S")
-        return f"[{current_time}] Logs cleared"
+        return f"[{current_time}] Logs cleared - Agent health monitoring reset"
     
-    def _get_template_info(self, template_name: str) -> str:
-        """Get information about a selected template using dynamic metadata"""
-        if not template_name:
-            return "## 📚 Available Templates\n\nSelect a template to see details and preview code."
+    def _get_agent_info(self, agent_name: str) -> str:
+        """Get information about a selected agent using dynamic metadata"""
+        if not agent_name:
+            return "## 📚 Available Agents\n\nSelect an agent to see details and preview code."
         
-        template = self.templates.get(template_name)
-        if not template:
-            return f"Template '{template_name}' not found."
+        agent = self.agents.get(agent_name)
+        if not agent:
+            return f"Agent '{agent_name}' not found."
         
-        info = f"## {template_name}\n\n"
-        info += f"**Description:** {template['description']}\n\n"
-        info += f"**Category:** {template.get('category', 'Custom')}\n"
-        info += f"**Difficulty:** {template.get('difficulty', 'Unknown')}\n\n"
+        info = f"## {agent_name}\n\n"
+        info += f"**Description:** {agent['description']}\n\n"
+        info += f"**Category:** {agent.get('category', 'Custom')}\n"
+        info += f"**Difficulty:** {agent.get('difficulty', 'Unknown')}\n\n"
         
         # Use dynamic features from metadata
-        features = template.get('features', [])
+        features = agent.get('features', [])
         if features and isinstance(features, list):
             info += "**Features:**\n"
             for feature in features:
@@ -733,16 +506,16 @@ class ControlPanelUI:
         
         return info
     
-    def _load_template_code(self, template_name: str) -> str:
-        """Load template code into the editor"""
-        if not template_name:
-            return "# Select a template to load its code"
+    def _load_agent_code(self, agent_name: str) -> str:
+        """Load agent code into the editor"""
+        if not agent_name:
+            return "# Select an agent to load its code"
         
-        template = self.templates.get(template_name)
-        if not template:
-            return f"# Template '{template_name}' not found"
+        agent = self.agents.get(agent_name)
+        if not agent:
+            return f"# Agent '{agent_name}' not found"
         
-        return template['code']
+        return agent['code']
     
     def _validate_code(self, code: str) -> Tuple[str, str]:
         """Validate Python code syntax"""
@@ -813,46 +586,42 @@ class ControlPanelUI:
             return "❌ Test Failed", f"Syntax Error - Line {e.lineno}: {e.msg}"
         except Exception as e:
             return "❌ Test Failed", str(e)
-    
-    def _save_template(self, template_name: str, code: str) -> Tuple[str, str]:
-        """Save modified template code to file"""
-        if not template_name:
-            return "❌ Save Failed", "No template selected"
+    def _save_agent(self, agent_name: str, code: str) -> Tuple[str, str]:
+        """Save modified agent code back to the original agent file"""
+        if not agent_name:
+            return "❌ Save Failed", "No agent selected"
         
         if not code.strip():
             return "❌ Save Failed", "No code to save"
         
         try:
-            # Create a custom templates directory if it doesn't exist
-            current_file = Path(__file__)
-            project_root = current_file.parent.parent.parent
-            custom_templates_dir = project_root / "custom_templates"
-            custom_templates_dir.mkdir(exist_ok=True)
-            
-            # Generate filename based on template name
-            safe_name = template_name.lower().replace(' ', '_').replace('🧮', 'calc').replace('🕷️', 'scraper').replace('📊', 'data').replace('💬', 'chat').replace('📁', 'monitor').replace('🔌', 'api')
-            filename = f"custom_{safe_name}_{int(time.time())}.py"
-            file_path = custom_templates_dir / filename
-            
-            # Save the code
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(f"# Custom template based on: {template_name}\n")
-                f.write(f"# Created: {datetime.now().isoformat()}\n\n")
+            agent = self.agents.get(agent_name)
+            if not agent or 'file_path' not in agent:
+                return "❌ Save Failed", f"Cannot find original file path for agent '{agent_name}'"
+            original_file_path = Path(agent['file_path'])
+            if not original_file_path.exists():
+                return "❌ Save Failed", f"Original agent file not found: {original_file_path}"
+            backup_path = original_file_path.with_suffix(f".backup_{int(time.time())}.py")
+            with open(original_file_path, 'r', encoding='utf-8') as f:
+                original_content = f.read()
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                f.write(original_content)
+            with open(original_file_path, 'w', encoding='utf-8') as f:
                 f.write(code)
-            
+            self.agents[agent_name]['code'] = code
             status = "✅ Save Successful"
-            details = f"Template saved as: {filename}\nLocation: {file_path}\n\nYou can now deploy this custom template."
-            
+            details = f"Agent '{agent_name}' updated successfully!\n"
+            details += f"File: {original_file_path}\n"
+            details += f"Backup created: {backup_path.name}\n\n"
+            details += "Changes have been saved to the original agent file."
             return status, details
-            
         except Exception as e:
-            return "❌ Save Failed", f"Error saving file: {str(e)}"
+            return "❌ Save Failed", f"Error saving to original file: {str(e)}"
     
     def _deploy_from_editor(self, agent_name: str, code: str) -> Tuple[str, List[List[str]]]:
         """Deploy agent directly from the code editor"""
         if not self.agent_runner:
             return "❌ Agent runner not available", self._update_dashboard()
-        
         if not agent_name or not agent_name.strip():
             return "❌ Please provide an agent name", self._update_dashboard()
         
@@ -888,20 +657,6 @@ class ControlPanelUI:
         except Exception as e:
             logger.error(f"Error deploying from editor: {e}")
             return f"❌ Deployment failed: {str(e)}", self._update_dashboard()
-    
-    def _get_agent_choices(self) -> List[str]:
-        """Get list of agent names for filtering"""
-        if not self.agent_runner:
-            return ["All Agents"]
-        
-        try:
-            agents_status = self.agent_runner.list_agents()
-            choices = ["All Agents"]
-            choices.extend(list(agents_status.keys()))
-            return choices
-        except:
-            return ["All Agents"]
-
     def create_components(self) -> None:
         """Create the control panel components for embedding in another interface"""
         
@@ -941,15 +696,9 @@ class ControlPanelUI:
                     
                     with gr.Row():
                         with gr.Column(scale=2):
-                            agent_name_input = gr.Textbox(
-                                label="Agent Name",
-                                placeholder="Enter unique agent name (e.g., my-calculator)",
-                                value=""
-                            )
-                            
-                            template_dropdown = gr.Dropdown(
-                                choices=list(self.templates.keys()),
-                                label="Select Template",
+                            agent_dropdown = gr.Dropdown(
+                                choices=list(self.agents.keys()),
+                                label="Available Agents",
                                 value=None
                             )
                             
@@ -968,46 +717,33 @@ class ControlPanelUI:
                             value="Ready to deploy agents..."
                         )
                 
-                # Section 3: Logs Panel - Real-time Output
+                # Section 3: Logs Panel - Change-based Output
                 with gr.Group():
-                    gr.Markdown("## 📋 Real-time Agent Logs")
+                    gr.Markdown("## 📋 Agent Health Monitor")
                     
-                    with gr.Row():
-                        log_filter_dropdown = gr.Dropdown(
-                            choices=self._get_agent_choices(),
-                            value="All Agents",
-                            label="Filter by Agent",
-                            scale=1
-                        )
-                        
                     logs_display = gr.Textbox(
-                        label="Live Logs",
+                        label="Status Changes",
                         lines=12,
-                        max_lines=20,
                         interactive=False,
-                        value="Waiting for agent logs...",
+                        value="Waiting for agent status changes...",
                         show_copy_button=True
                     )
                     
-                    # Auto-refresh logs every 2 seconds
-                    logs_timer = gr.Timer(2.0)
-                    logs_timer.tick(
-                        fn=lambda filter_choice: self._get_agent_logs(filter_choice),
-                        inputs=[log_filter_dropdown],
-                        outputs=[logs_display]
-                    )
+                    # Manual refresh button (no auto-refresh)
+                    with gr.Row():
+                        manual_refresh_logs_btn = gr.Button("🔄 Check for Changes", size="sm")
                 
-                # Section 4: Template Selection
+                # Section 4: Agent Selection
                 with gr.Group():
-                    gr.Markdown("## 📚 Agent Templates")
+                    gr.Markdown("## 📚 Agents")
                     
-                    template_info_display = gr.Markdown(
-                        self._get_template_info(None),
-                        label="Template Information"
+                    agent_info_display = gr.Markdown(
+                        self._get_agent_info(None),
+                        label="Agent Information"
                     )
                     
                     with gr.Row():
-                        load_template_btn = gr.Button("📥 Load Template", variant="secondary", size="sm")
+                        load_agent_btn = gr.Button("📥 Load Agent", variant="secondary", size="sm")
                         quick_deploy_btn = gr.Button("⚡ Quick Deploy", variant="secondary", size="sm")
             
             # Sidebar: Code Editor
@@ -1025,14 +761,9 @@ class ControlPanelUI:
                 code_editor = gr.Code(
                     label="Agent Code Editor",
                     language="python",
-                    lines=25,
-                    max_lines=50,
+                    max_lines=None,
                     value="# Select a template or write your own agent code here\n# Use the buttons below to validate, test, and deploy",
-                    elem_classes=["code-editor"],
-                    interactive=True,
-                    show_label=True,
-                    container=True,
-                    wrap_lines=False
+                    elem_classes=["code-editor"]
                 )
                 
                 # Editor actions
@@ -1044,7 +775,7 @@ class ControlPanelUI:
                         test_btn = gr.Button("🧪 Test", size="sm", variant="secondary")
                     
                     with gr.Row():
-                        save_btn = gr.Button("💾 Save Template", size="sm")
+                        save_btn = gr.Button("💾 Save Agent", size="sm")
                         deploy_editor_btn = gr.Button("🚀 Deploy", size="sm", variant="primary")
                 
                 # Editor status
@@ -1056,12 +787,12 @@ class ControlPanelUI:
                     show_copy_button=True
                 )
         
-        # Event handlers
+        # Event handlers - Updated to remove filter functionality
         
         # Deploy agent from template
         deploy_btn.click(
             fn=self._deploy_agent,
-            inputs=[agent_name_input, template_dropdown],
+            inputs=[agent_dropdown],
             outputs=[action_status, status_grid]
         )
         
@@ -1083,27 +814,29 @@ class ControlPanelUI:
             outputs=[logs_display]
         )
         
-        # Template selection updates info
-        template_dropdown.change(
-            fn=self._get_template_info,
-            inputs=[template_dropdown],
-            outputs=[template_info_display]
+        # Manual logs refresh
+        manual_refresh_logs_btn.click(
+            fn=self._get_agent_logs,
+            outputs=[logs_display]
         )
         
-        # Load template into editor
-        load_template_btn.click(
-            fn=self._load_template_code,
-            inputs=[template_dropdown],
+        # Agent selection updates info
+        agent_dropdown.change(
+            fn=self._get_agent_info,
+            inputs=[agent_dropdown],
+            outputs=[agent_info_display]
+        )
+        
+        # Load agent into editor
+        load_agent_btn.click(
+            fn=self._load_agent_code,
+            inputs=[agent_dropdown],
             outputs=[code_editor]
         )
-        
-        # Quick deploy from template
+          # Quick deploy from agent
         quick_deploy_btn.click(
-            fn=lambda template: self._deploy_agent(
-                f"quick-{template.split()[0].lower()}-{int(time.time()) % 10000}" if template else "quick-agent",
-                template
-            ),
-            inputs=[template_dropdown],
+            fn=self._deploy_agent,
+            inputs=[agent_dropdown],
             outputs=[action_status, status_grid]
         )
         
@@ -1121,8 +854,8 @@ class ControlPanelUI:
         )
         
         save_btn.click(
-            fn=self._save_template,
-            inputs=[template_dropdown, code_editor],
+            fn=self._save_agent,
+            inputs=[agent_dropdown, code_editor],
             outputs=[editor_status]
         )
         
@@ -1132,13 +865,6 @@ class ControlPanelUI:
             outputs=[action_status, status_grid]
         )
         
-        # Update log filter choices when dashboard updates
-        dashboard_timer.tick(
-            fn=self._get_agent_choices,
-            outputs=[log_filter_dropdown],
-            show_progress=False
-        )
-
     def create_interface(self) -> gr.Blocks:
         """Create the main control panel interface"""
         
@@ -1177,22 +903,15 @@ class ControlPanelUI:
                             fn=self._update_dashboard,
                             outputs=[status_grid]
                         )
-                    
-                    # Section 2: Quick Actions - Emergency Controls
+                      # Section 2: Quick Actions - Emergency Controls
                     with gr.Group():
                         gr.Markdown("## ⚡ Quick Actions & Emergency Controls")
                         
                         with gr.Row():
                             with gr.Column(scale=2):
-                                agent_name_input = gr.Textbox(
-                                    label="Agent Name",
-                                    placeholder="Enter unique agent name (e.g., my-calculator)",
-                                    value=""
-                                )
-                                
-                                template_dropdown = gr.Dropdown(
-                                    choices=list(self.templates.keys()),
-                                    label="Select Template",
+                                agent_dropdown = gr.Dropdown(
+                                    choices=list(self.agents.keys()),
+                                    label="Available Agents",
                                     value=None
                                 )
                                 
@@ -1210,49 +929,36 @@ class ControlPanelUI:
                                 interactive=False,
                                 value="Ready to deploy agents..."
                             )
-                    
-                    # Section 3: Logs Panel - Real-time Output
-                    with gr.Group():
-                        gr.Markdown("## 📋 Real-time Agent Logs")
-                        
-                        with gr.Row():
-                            log_filter_dropdown = gr.Dropdown(
-                                choices=self._get_agent_choices(),
-                                value="All Agents",
-                                label="Filter by Agent",
-                                scale=1
-                            )
-                            
-                        logs_display = gr.Textbox(
-                            label="Live Logs",
-                            lines=12,
-                            max_lines=20,
-                            interactive=False,
-                            value="Waiting for agent logs...",
-                            show_copy_button=True
-                        )
-                        
-                        # Auto-refresh logs every 2 seconds
-                        logs_timer = gr.Timer(2.0)
-                        logs_timer.tick(
-                            fn=lambda filter_choice: self._get_agent_logs(filter_choice),
-                            inputs=[log_filter_dropdown],
-                            outputs=[logs_display]
-                        )
-                    
-                    # Section 4: Template Selection
-                    with gr.Group():
-                        gr.Markdown("## 📚 Agent Templates")
-                        
-                        template_info_display = gr.Markdown(
-                            self._get_template_info(None),
-                            label="Template Information"
-                        )
-                        
-                        with gr.Row():
-                            load_template_btn = gr.Button("📥 Load Template", variant="secondary", size="sm")
-                            quick_deploy_btn = gr.Button("⚡ Quick Deploy", variant="secondary", size="sm")
                 
+                # Section 3: Logs Panel - Change-based Output
+                with gr.Group():
+                    gr.Markdown("## 📋 Agent Health Monitor")
+                    
+                    logs_display = gr.Textbox(
+                        label="Status Changes",
+                        lines=12,
+                        interactive=False,
+                        value="Waiting for agent status changes...",
+                        show_copy_button=True
+                    )
+                    
+                    # Manual refresh button (no auto-refresh)
+                    with gr.Row():
+                        manual_refresh_logs_btn = gr.Button("🔄 Check for Changes", size="sm")
+                
+                # Section 4: Agent Selection
+                with gr.Group():
+                    gr.Markdown("## 📚 Agents")
+                    
+                    agent_info_display = gr.Markdown(
+                        self._get_agent_info(None),
+                        label="Agent Information"
+                    )
+                    
+                    with gr.Row():
+                        load_agent_btn = gr.Button("📥 Load Agent", variant="secondary", size="sm")
+                        quick_deploy_btn = gr.Button("⚡ Quick Deploy", variant="secondary", size="sm")
+            
                 # Sidebar: Code Editor
                 with gr.Column(scale=1, elem_classes=["side-panel", "sidebar"]):
                     gr.Markdown("## 🔧 Code Editor & Testing")
@@ -1268,7 +974,7 @@ class ControlPanelUI:
                     code_editor = gr.Code(
                         label="Agent Code Editor",
                         language="python",
-                        lines=20,
+                        lines=100,
                         value="# Select a template or write your own agent code here\n# Use the buttons below to validate, test, and deploy",
                         elem_classes=["code-editor"]
                     )
@@ -1282,9 +988,9 @@ class ControlPanelUI:
                             test_btn = gr.Button("🧪 Test", size="sm", variant="secondary")
                         
                         with gr.Row():
-                            save_btn = gr.Button("💾 Save Template", size="sm")
+                            save_btn = gr.Button("💾 Save Agent", size="sm")
                             deploy_editor_btn = gr.Button("🚀 Deploy", size="sm", variant="primary")
-                    
+                
                     # Editor status
                     editor_status = gr.Textbox(
                         label="Editor Status",
@@ -1294,12 +1000,12 @@ class ControlPanelUI:
                         show_copy_button=True
                     )
             
-            # Event handlers
+            # Event handlers - Updated to remove filter functionality
             
             # Deploy agent from template
             deploy_btn.click(
                 fn=self._deploy_agent,
-                inputs=[agent_name_input, template_dropdown],
+                inputs=[agent_dropdown],
                 outputs=[action_status, status_grid]
             )
             
@@ -1321,30 +1027,32 @@ class ControlPanelUI:
                 outputs=[logs_display]
             )
             
-            # Template selection updates info
-            template_dropdown.change(
-                fn=self._get_template_info,
-                inputs=[template_dropdown],
-                outputs=[template_info_display]
+            # Manual logs refresh
+            manual_refresh_logs_btn.click(
+                fn=self._get_agent_logs,
+                outputs=[logs_display]
             )
             
-            # Load template into editor
-            load_template_btn.click(
-                fn=self._load_template_code,
-                inputs=[template_dropdown],
+            # Agent selection updates info
+            agent_dropdown.change(
+                fn=self._get_agent_info,
+                inputs=[agent_dropdown],
+                outputs=[agent_info_display]
+            )
+            
+            # Load agent into editor
+            load_agent_btn.click(
+                fn=self._load_agent_code,
+                inputs=[agent_dropdown],
                 outputs=[code_editor]
             )
-            
-            # Quick deploy from template
+              # Quick deploy from agent
             quick_deploy_btn.click(
-                fn=lambda template: self._deploy_agent(
-                    f"quick-{template.split()[0].lower()}-{int(time.time()) % 10000}" if template else "quick-agent",
-                    template
-                ),
-                inputs=[template_dropdown],
+                fn=self._deploy_agent,
+                inputs=[agent_dropdown],
                 outputs=[action_status, status_grid]
             )
-            
+
             # Editor actions
             validate_btn.click(
                 fn=self._validate_code,
@@ -1359,23 +1067,15 @@ class ControlPanelUI:
             )
             
             save_btn.click(
-                fn=self._save_template,
-                inputs=[template_dropdown, code_editor],
+                fn=self._save_agent,
+                inputs=[agent_dropdown, code_editor],
                 outputs=[editor_status]
             )
             
             deploy_editor_btn.click(
                 fn=self._deploy_from_editor,
                 inputs=[editor_agent_name, code_editor],
-                outputs=[action_status, status_grid]
-            )
-            
-            # Update log filter choices when dashboard updates
-            dashboard_timer.tick(
-                fn=self._get_agent_choices,
-                outputs=[log_filter_dropdown],
-                show_progress=False
-            )
+                outputs=[action_status, status_grid]            )
             
             # Initial load
             interface.load(

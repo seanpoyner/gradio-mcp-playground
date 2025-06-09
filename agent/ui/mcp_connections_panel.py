@@ -234,8 +234,7 @@ class MCPConnectionsPanel:
                 
                 self.tool_args = gr.JSON(
                     label="Tool Arguments",
-                    value={},
-                    interactive=True
+                    value={}
                 )
                 
                 self.call_tool_btn = gr.Button("📞 Call Tool", variant="primary")

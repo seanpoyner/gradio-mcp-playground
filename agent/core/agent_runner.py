@@ -109,40 +109,13 @@ class AgentRunner:
         self._used_ports.discard(port)
     
     def _create_agent_file(self, name: str, code: str) -> Path:
-        """Create a temporary Python file for the agent code"""
-        # Create agent-specific directory
-        agent_dir = self.workspace_dir / name
-        agent_dir.mkdir(exist_ok=True)
+        """Create a Python file for the agent code in temp_agents directory"""
+        # Save directly to temp_agents directory (no subdirectories)
+        agent_file = self.workspace_dir / f"{name}.py"
         
-        # Create the agent script
-        agent_file = agent_dir / "agent.py"
-        
-        # Wrap the code to ensure it runs properly
-        wrapped_code = f'''#!/usr/bin/env python3
-"""Generated agent: {name}"""
-
-import sys
-import os
-import logging
-
-# Setup logging for the agent
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("{name}")
-
-try:
-    logger.info("Starting agent: {name}")
-    
-    # User's agent code
-{self._indent_code(code, 4)}
-    
-    logger.info("Agent {name} started successfully")
-    
-except Exception as e:
-    logger.error(f"Agent {name} failed to start: {{e}}")
-    sys.exit(1)
-'''
-        
-        agent_file.write_text(wrapped_code)
+        # Use the original code directly without wrapping
+        # This allows the agent to run as originally designed
+        agent_file.write_text(code)
         agent_file.chmod(0o755)  # Make executable
         return agent_file
     
@@ -199,7 +172,7 @@ except Exception as e:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=env,
-                cwd=agent_file.parent,
+                cwd=self.workspace_dir,  # Use temp_agents directory as working directory
                 preexec_fn=os.setsid if os.name != 'nt' else None
             )
             
@@ -412,7 +385,15 @@ def get_agent_runner() -> AgentRunner:
     """Get the global agent runner instance"""
     global _agent_runner
     if _agent_runner is None:
-        _agent_runner = AgentRunner()
+        # Use temp_agents directory instead of agent_workspace
+        current_file = Path(__file__)
+        project_root = current_file.parent.parent.parent
+        temp_agents_dir = project_root / "temp_agents"
+        
+        # Ensure temp_agents directory exists
+        temp_agents_dir.mkdir(exist_ok=True)
+        
+        _agent_runner = AgentRunner(workspace_dir=temp_agents_dir)
     return _agent_runner
 
 # Convenience functions using the global instance
