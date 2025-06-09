@@ -67,6 +67,8 @@ flagged/
 .mcp_server.json
 servers/
 .gradio-mcp/
+mcp_servers.json
+**/mcp_servers.json
 
 # Node.js
 node_modules/

@@ -35,11 +35,27 @@ class MCPServerConfig:
             with open(self.config_file, 'r') as f:
                 self.config = json.load(f)
         else:
-            # Initialize with empty config
+            # Initialize with default servers (no API keys)
             self.config = {
-                "mcpServers": {}
+                "mcpServers": {
+                    "memory": {
+                        "command": "npx",
+                        "args": ["-y", "@modelcontextprotocol/server-memory"]
+                    },
+                    "filesystem": {
+                        "command": "npx",
+                        "args": [
+                            "-y", 
+                            "@modelcontextprotocol/server-filesystem",
+                            str(Path.home())  # Default to user's home directory
+                        ]
+                    }
+                    # Note: brave-search is NOT included by default since it requires an API key
+                }
             }
             self._save_config()
+            print(f"Created default MCP server configuration at {self.config_file}")
+            print("Note: Servers requiring API keys (like brave-search) must be installed separately.")
     
     def _save_config(self):
         """Save the MCP server configuration"""
