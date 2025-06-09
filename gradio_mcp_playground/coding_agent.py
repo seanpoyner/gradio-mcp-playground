@@ -678,6 +678,7 @@ if HAS_LLAMAINDEX:
             """Load MCP servers from configuration"""
             try:
                 from .mcp_server_config import MCPServerConfig
+                from .mcp_working_client import MCPServerProcess, create_mcp_tools_for_server
                 
                 config = MCPServerConfig()
                 servers = config.list_servers()
@@ -690,22 +691,55 @@ if HAS_LLAMAINDEX:
                 for server_name in servers:
                     print(f"  - {server_name}")
                 
-                # Note about MCP server status
-                print("\n📌 MCP Server Status:")
-                print("   ✅ Servers are installed and configured")
-                print("   ✅ Servers are accessible to external clients (e.g., Claude Desktop)")
-                print("   ⚠️  Direct tool loading is disabled due to stdio compatibility issues")
-                print("   💡 Use the built-in tools for similar functionality:")
-                print("      - File operations: read_project_file(), list_home_directory()")
-                print("      - Web search: brave_search() (after installing brave-search server)")
-                print("      - MCP management: install_mcp_server_from_registry()")
+                # Load MCP servers using the working approach
+                print("\n🔌 Loading MCP server tools...")
                 
-                # Initialize mcp_tools as empty
                 if not hasattr(self, 'mcp_tools'):
                     self.mcp_tools = {}
+                
+                if not hasattr(self, '_mcp_servers'):
+                    self._mcp_servers = {}
+                
+                loaded_count = 0
+                for server_name, server_config in servers.items():
+                    try:
+                        command = server_config.get('command', '')
+                        args = server_config.get('args', [])
+                        env = server_config.get('env', {})
+                        
+                        # Create and start server
+                        server = MCPServerProcess(server_name, command, args, env)
+                        
+                        if server.start() and server.initialize():
+                            # Create tools
+                            server_tools = create_mcp_tools_for_server(server)
+                            
+                            if server_tools:
+                                # Add tools to agent
+                                self.tools.extend(server_tools)
+                                self.mcp_tools[server_name] = server_tools
+                                self._mcp_servers[server_name] = server
+                                
+                                loaded_count += len(server_tools)
+                                print(f"   ✅ Loaded {len(server_tools)} tools from {server_name}")
+                            else:
+                                print(f"   ⚠️  No tools created for {server_name}")
+                                server.stop()
+                        else:
+                            print(f"   ❌ Failed to start/initialize {server_name}")
+                    
+                    except Exception as e:
+                        print(f"   ❌ Error loading {server_name}: {e}")
+                
+                if loaded_count > 0:
+                    print(f"\n✅ Successfully loaded {loaded_count} MCP tools!")
+                    print("   Tools are now available in the chat")
+                else:
+                    print("\n⚠️  No MCP tools were loaded")
+                    print("   Servers may need to be installed first")
                     
             except Exception as e:
-                print(f"Error checking MCP servers: {e}")
+                print(f"Error loading MCP servers: {e}")
                 import traceback
                 traceback.print_exc()
         
@@ -1091,6 +1125,17 @@ Be helpful and proactive about finding the right tools.""",
         def get_available_models(self) -> Dict[str, Dict[str, Any]]:
             """Get list of available models"""
             return self.available_models
+        
+        def cleanup(self):
+            """Clean up resources including MCP servers"""
+            if hasattr(self, '_mcp_servers'):
+                for server_name, server in self._mcp_servers.items():
+                    try:
+                        server.stop()
+                        print(f"Stopped MCP server: {server_name}")
+                    except:
+                        pass
+                self._mcp_servers.clear()
 
         def reset_conversation(self):
             """Reset the conversation memory"""
