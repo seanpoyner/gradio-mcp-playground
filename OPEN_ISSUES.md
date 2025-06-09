@@ -9,13 +9,14 @@ This document tracks known issues, bugs, and planned improvements for the Gradio
 1. **API Key Security**
    - Issue: API keys were previously exposed in git history
    - Status: Fixed in latest commit, but git history still contains exposed keys
-   - Action: Users should revoke any exposed API keys and generate new ones
+   - Action: Ensure that credentials are protected from accidental exposure in all future testing.
    - Related: #security
 
-2. **Windows Path Handling in WSL**
-   - Issue: MCP servers running in WSL need proper path translation
-   - Status: Implemented path translator, but needs more testing
-   - Action: Test with various path formats and edge cases
+2. **Agent Stops Using Tools After First MCP Call**
+   - Issue: ReAct agent switches to just answering instead of continuing to use tools after first successful MCP tool call
+   - Status: Added explicit instructions in system prompt to continue using tools
+   - Action: Monitor agent behavior and consider implementing a more robust solution if issue persists
+   - Related: #agent-behavior
 
 ### Medium Priority
 
@@ -40,6 +41,11 @@ This document tracks known issues, bugs, and planned improvements for the Gradio
    - Issue: Requires Node.js installed for MCP servers
    - Status: Expected behavior, but could be clearer
    - Action: Add Node.js installation check and helpful error messages
+
+7. **Windows Path Handling in WSL**
+   - Issue: MCP servers running in WSL need proper path translation
+   - Status: Implemented path translator, but needs more testing
+   - Action: Test with various path formats and edge cases
 
 ## ✨ Planned Features
 
@@ -143,5 +149,6 @@ If you'd like to help with any of these issues:
 ## 🔄 Last Updated
 
 - Date: June 9, 2025
-- Version: After MCP integration implementation
+- Version: After MCP integration implementation and agent behavior fixes
 - Next Review: June 16, 2025
+- Recent changes: Added issue #2 about agent stopping tool use after first MCP call
