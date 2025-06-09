@@ -607,49 +607,65 @@ def create_dashboard():
                     "Connect to multiple MCP servers simultaneously for enhanced capabilities"
                 )
 
-                # Predefined MCP server configurations
+                # Predefined MCP server configurations with auto-install
                 predefined_servers = {
                     "memory": {
                         "name": "Memory Server",
-                        "url": "python -m mcp_server_memory",
+                        "server_id": "memory",
+                        "url": "npx -y @modelcontextprotocol/server-memory",
                         "protocol": "stdio",
                         "description": "Persistent memory storage for conversations and data",
                         "icon": "🧠",
+                        "auto_install": True,
                     },
                     "sequential-thinking": {
                         "name": "Sequential Thinking",
-                        "url": "python -m mcp_server_sequential_thinking",
+                        "server_id": "sequential-thinking",
+                        "url": "npx -y @modelcontextprotocol/server-sequential-thinking",
                         "protocol": "stdio",
                         "description": "Step-by-step reasoning and problem solving",
                         "icon": "🤔",
+                        "auto_install": True,
                     },
                     "filesystem": {
                         "name": "File System",
-                        "url": "npx @modelcontextprotocol/server-filesystem /",
+                        "server_id": "filesystem",
+                        "url": "npx -y @modelcontextprotocol/server-filesystem",
                         "protocol": "stdio",
                         "description": "File system access and manipulation",
                         "icon": "📁",
+                        "auto_install": True,
+                        "requires_path": True,
                     },
                     "brave-search": {
                         "name": "Brave Search",
-                        "url": "python -m mcp_server_brave_search",
+                        "server_id": "brave-search",
+                        "url": "npx -y @modelcontextprotocol/server-brave-search",
                         "protocol": "stdio",
                         "description": "Web search capabilities using Brave",
                         "icon": "🔍",
+                        "auto_install": True,
+                        "requires_env": ["BRAVE_API_KEY"],
                     },
                     "github": {
                         "name": "GitHub",
-                        "url": "python -m mcp_server_github",
+                        "server_id": "github",
+                        "url": "npx -y @modelcontextprotocol/server-github",
                         "protocol": "stdio",
                         "description": "GitHub repository and issue management",
                         "icon": "🐙",
+                        "auto_install": True,
+                        "requires_env": ["GITHUB_TOKEN"],
                     },
                     "time": {
                         "name": "Time Server",
-                        "url": "python -m mcp_server_time",
+                        "server_id": "time",
+                        "url": "uvx mcp-server-time",
                         "protocol": "stdio",
                         "description": "Time and date utilities",
                         "icon": "⏰",
+                        "auto_install": True,
+                        "requires_timezone": True,
                     },
                 }
 
@@ -1276,6 +1292,45 @@ def create_dashboard():
                     history.append({"role": "user", "content": message})
                     history.append({"role": "assistant", "content": bot_response})
                     return history, ""
+                
+                # Check if user is providing an API key in a natural way
+                import re
+                
+                # Pattern 1: "install brave search with key YOUR_KEY"
+                brave_key_match = re.search(r"install brave search with (?:key|token) ([\w-]+)", message, re.IGNORECASE)
+                if brave_key_match:
+                    api_key = brave_key_match.group(1)
+                    message = f"install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
+                
+                # Pattern 2: "install github with token YOUR_TOKEN"
+                github_key_match = re.search(r"install github with (?:key|token) ([\w-]+)", message, re.IGNORECASE)
+                if github_key_match:
+                    api_key = github_key_match.group(1)
+                    message = f"install_mcp_server_from_registry(server_id='github', token='{api_key}')"
+                
+                # Pattern 3: "my brave api key is YOUR_KEY"
+                brave_key_statement = re.search(r"(?:my )?brave (?:api )?key (?:is |= ?)([\w-]+)", message, re.IGNORECASE)
+                if brave_key_statement:
+                    api_key = brave_key_statement.group(1)
+                    message = f"I have your Brave API key. Let me install the brave search server: install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
+                
+                # Pattern 4: "use path /home/user/workspace" (for filesystem server)
+                path_statement = re.search(r"(?:use |provide )?path (?:is |= ?)?([/\\][^\s]+)", message, re.IGNORECASE)
+                if path_statement:
+                    path = path_statement.group(1)
+                    message = f"I'll use path '{path}' for the filesystem server: install_mcp_server_from_registry(server_id='filesystem', path='{path}')"
+                
+                # Pattern 5: "my obsidian vault is at /path/to/vault"
+                vault_statement = re.search(r"(?:my )?obsidian vault (?:is )?(?:at |in )?([/\\][^\s]+)", message, re.IGNORECASE)
+                if vault_statement:
+                    vault_path = vault_statement.group(1)
+                    message = f"I'll use your Obsidian vault at '{vault_path}': install_mcp_server_from_registry(server_id='obsidian', vault_path1='{vault_path}')"
+                
+                # Pattern 6: "my github token is YOUR_TOKEN"
+                github_token_statement = re.search(r"(?:my )?github (?:token|pat|personal access token) (?:is |= ?)([\w-]+)", message, re.IGNORECASE)
+                if github_token_statement:
+                    token = github_token_statement.group(1)
+                    message = f"I have your GitHub token. Let me install the GitHub server: install_mcp_server_from_registry(server_id='github', token='{token}')"
 
                 if show_thinking_steps:
                     # Use the detailed method that shows thinking steps
@@ -1293,6 +1348,75 @@ def create_dashboard():
                     # Use the regular chat method
                     full_response = coding_agent.chat(message)
 
+                # Check if the response indicates missing API keys or if Brave search needs API key
+                if "Missing required arguments:" in full_response and "Example for" in full_response:
+                    # Extract server ID and missing arguments
+                    import re
+                    server_match = re.search(r"Example for ([\w-]+):", full_response)
+                    args_match = re.search(r"Missing required arguments: \[([^\]]+)\]", full_response)
+                    
+                    if server_match and args_match:
+                        server_id = server_match.group(1)
+                        missing_args = [arg.strip().strip("'") for arg in args_match.group(1).split(",")]
+                        
+                        # Create a helpful prompt for the user
+                        api_key_prompt = f"\n\n🔑 **API Key Required**\n\n"
+                        api_key_prompt += f"The {server_id} server requires the following:"
+                        
+                        for arg in missing_args:
+                            if "token" in arg.lower() or "key" in arg.lower():
+                                api_key_prompt += f"\n- **{arg}**: Please provide your API key"
+                            else:
+                                api_key_prompt += f"\n- **{arg}**: Please provide the required value"
+                        
+                        api_key_prompt += "\n\nPlease provide the required information in your next message."
+                        api_key_prompt += "\n\nExample: `install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
+                        
+                        full_response += api_key_prompt
+                
+                # Check if Brave Search API key is needed
+                elif "BRAVE_API_KEY not set" in full_response:
+                    api_key_prompt = f"\n\n🔑 **Brave Search API Key Required**\n\n"
+                    api_key_prompt += "To use Brave Search, you need to provide an API key.\n\n"
+                    api_key_prompt += "🌐 **Get your API key:**\n"
+                    api_key_prompt += "1. Visit https://brave.com/search/api/\n"
+                    api_key_prompt += "2. Sign up for a free account\n"
+                    api_key_prompt += "3. Copy your API key\n\n"
+                    api_key_prompt += "🔧 **To install with your key:**\n"
+                    api_key_prompt += "Please type: `install brave search with key YOUR_API_KEY_HERE`\n\n"
+                    api_key_prompt += "Or use the exact command:\n"
+                    api_key_prompt += "`install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
+                    
+                    # Replace the error message with the helpful prompt
+                    if "Error: BRAVE_API_KEY not set" in full_response:
+                        full_response = full_response.split("Error: BRAVE_API_KEY not set")[0] + api_key_prompt
+                    else:
+                        full_response += api_key_prompt
+                
+                # Check if the response shows server requirements
+                elif "Requirements for" in full_response and "Required Arguments:" in full_response:
+                    # Add a helpful prompt for providing requirements
+                    requirements_prompt = "\n\n📝 **Please provide the required information:**\n\n"
+                    
+                    # Extract what's needed from the response
+                    if "path" in full_response and "Directory path" in full_response:
+                        requirements_prompt += "For **filesystem** server, please specify the directory path:\n"
+                        requirements_prompt += "Example: `use path /home/user/workspace`\n\n"
+                    
+                    if "vault_path1" in full_response:
+                        requirements_prompt += "For **Obsidian** server, please specify your vault path:\n"
+                        requirements_prompt += "Example: `my obsidian vault is at /path/to/vault`\n\n"
+                    
+                    if "BRAVE_API_KEY" in full_response and "❌ Not yet provided" in full_response:
+                        requirements_prompt += "For **Brave Search**, please provide your API key:\n"
+                        requirements_prompt += "Example: `my brave api key is YOUR_KEY_HERE`\n\n"
+                    
+                    if "GITHUB_TOKEN" in full_response and "❌ Not yet provided" in full_response:
+                        requirements_prompt += "For **GitHub**, please provide your personal access token:\n"
+                        requirements_prompt += "Example: `my github token is YOUR_TOKEN_HERE`\n\n"
+                    
+                    full_response += requirements_prompt
+                
                 # Convert to messages format for new Gradio chatbot
                 history.append({"role": "user", "content": message})
                 history.append({"role": "assistant", "content": full_response})
@@ -1914,16 +2038,92 @@ def create_dashboard():
 
         # MCP Connection functions
         def install_and_connect_mcp(server_id):
-            """Install MCP server package and connect"""
+            """Install MCP server package and connect using registry"""
             import subprocess
             import time
+            import os
+            from .mcp_management_tool import get_mcp_manager
 
             server_info = predefined_servers.get(server_id)
             if not server_info:
                 return "❌ Unknown server"
 
-            # For now, let's focus on getting filesystem working since it shows potential
-            if server_id == "filesystem":
+            progress = f"📦 Installing {server_info['name']}...\n"
+            
+            try:
+                # Get the MCP manager
+                manager = get_mcp_manager()
+                
+                # Prepare kwargs based on server requirements
+                kwargs = {}
+                
+                # Handle filesystem path
+                if server_id == "filesystem" and server_info.get("requires_path"):
+                    # Auto-detect home directory
+                    import platform
+                    system = platform.system().lower()
+                    if system == 'windows':
+                        home_path = os.environ.get('USERPROFILE', os.path.expanduser('~'))
+                    else:
+                        home_path = os.path.expanduser('~')
+                    kwargs['path'] = home_path
+                    progress += f"🏠 Using home directory: {home_path}\n"
+                
+                # Handle time server timezone
+                elif server_id == "time" and server_info.get("requires_timezone"):
+                    kwargs['timezone'] = 'UTC'  # Default to UTC
+                    progress += "🕐 Using timezone: UTC\n"
+                
+                # Check for required environment variables
+                if server_info.get("requires_env"):
+                    missing_env = []
+                    for env_var in server_info["requires_env"]:
+                        if not os.environ.get(env_var):
+                            missing_env.append(env_var)
+                    
+                    if missing_env:
+                        progress += f"⚠️ Missing environment variables: {', '.join(missing_env)}\n"
+                        if server_id == "brave-search":
+                            progress += "\n📝 To use Brave Search:\n"
+                            progress += "1. Get API key from https://brave.com/search/api/\n"
+                            progress += f"2. Set environment variable: BRAVE_API_KEY=your_key_here\n"
+                        elif server_id == "github":
+                            progress += "\n📝 To use GitHub:\n"
+                            progress += "1. Create token at https://github.com/settings/tokens\n"
+                            progress += f"2. Set environment variable: GITHUB_TOKEN=your_token_here\n"
+                        progress += "\n❌ Cannot install without required environment variables\n"
+                        return progress
+                
+                # Use the registry's install_mcp_server_from_registry function
+                progress += "🚀 Starting installation via registry...\n"
+                result = manager.install_mcp_server_from_registry(server_id, **kwargs)
+                progress += result + "\n"
+                
+                # Check if installation was successful
+                if "✅" in result and "started automatically" in result:
+                    progress += "\n🎉 Installation and startup successful!\n"
+                    
+                    # Update connection status
+                    if not hasattr(quick_connect_mcp, "connections"):
+                        quick_connect_mcp.connections = {}
+                    
+                    quick_connect_mcp.connections[server_id] = {
+                        "name": server_info["name"],
+                        "url": server_info["url"],
+                        "protocol": server_info["protocol"],
+                        "status": "running",
+                        "auto_started": True,
+                    }
+                    
+                    return progress
+                else:
+                    return progress + "\n❌ Installation failed\n"
+                    
+            except Exception as e:
+                return progress + f"\n❌ Error during installation: {str(e)}\n"
+            
+            # Keep the old filesystem-specific implementation as fallback
+            if server_id == "filesystem" and "✅" not in progress:
                 progress = f"📦 Installing {server_info['name']}...\n"
 
                 # Check if we have Node.js for filesystem server
@@ -2111,6 +2311,12 @@ For others, please install manually using the command above."""
                 server_info = predefined_servers.get(server_id)
                 if not server_info:
                     return "❌ Unknown server"
+
+                # Check if server is already running from auto-install
+                if hasattr(quick_connect_mcp, "connections") and server_id in quick_connect_mcp.connections:
+                    conn_info = quick_connect_mcp.connections[server_id]
+                    if conn_info.get("auto_started") and conn_info.get("status") == "running":
+                        return f"✅ {server_info['name']} is already running!\n\nThis server was auto-started and is ready for use by external MCP clients."
 
                 # Try to connect using the actual MCP client
                 try:
@@ -2692,9 +2898,24 @@ For others, please install manually using the command above."""
 
                     return install_handler
 
+                # Update status display after installation
+                def update_server_status_handler(sid):
+                    def handler(install_output):
+                        if "✅" in install_output and "started automatically" in install_output:
+                            return f"✅ Running (Auto-started)"
+                        elif "❌" in install_output:
+                            return "❌ Installation Failed"
+                        else:
+                            return "⏳ Installing..."
+                    return handler
+                
                 server_install_buttons[server_id].click(
                     fn=lambda: gr.update(visible=True), outputs=[mcp_install_progress]
                 ).then(fn=create_install_handler(server_id), outputs=[mcp_install_progress]).then(
+                    fn=update_server_status_handler(server_id), 
+                    inputs=[mcp_install_progress],
+                    outputs=[server_statuses[server_id]]
+                ).then(
                     fn=get_mcp_connections_data, outputs=[mcp_connections_table]
                 ).then(
                     fn=get_mcp_connection_choices, outputs=[selected_mcp_connection]

@@ -67,6 +67,17 @@ flagged/
 .mcp_server.json
 servers/
 .gradio-mcp/
+mcp_servers.json
+**/mcp_servers.json
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.npm
 
 # Environment
 .env
