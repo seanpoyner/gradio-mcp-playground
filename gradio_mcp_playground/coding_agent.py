@@ -1157,7 +1157,14 @@ Be helpful and proactive about finding the right tools.""",
                     self._create_mcp_tools(connection_id, connection_info)
 
                 # For external MCP servers, try to connect and get actual tools
-                if connection_id in ["obsidian", "filesystem", "github", "time"]:
+                # Include all known registry servers
+                external_servers = [
+                    "obsidian", "filesystem", "github", "time", "brave-search", 
+                    "memory", "sequential-thinking", "puppeteer", "everything",
+                    "azure", "office-powerpoint", "office-word", "excel",
+                    "quickchart", "screenshotone", "figma", "pg-cli-server"
+                ]
+                if connection_id in external_servers:
                     self._connect_to_external_mcp_server(connection_id, connection_info)
 
                 # Recreate agent with new tools if already configured
@@ -1170,13 +1177,8 @@ Be helpful and proactive about finding the right tools.""",
         def _connect_to_external_mcp_server(self, server_id: str, connection_info: Dict[str, Any]):
             """Connect to an external MCP server and create tools"""
             try:
-                from .mcp_client_integration import get_mcp_client_manager, create_mcp_tool_wrapper
-                import asyncio
-
-                # Get or create MCP client manager
-                if not self.mcp_client_manager:
-                    self.mcp_client_manager = get_mcp_client_manager()
-
+                from .mcp_working_client import MCPServerProcess, create_mcp_tools_for_server
+                
                 # Extract command and args from connection info
                 command_str = connection_info.get("command", "")
                 if command_str:
@@ -1184,60 +1186,47 @@ Be helpful and proactive about finding the right tools.""",
                     command = parts[0] if parts else None
                     args = parts[1:] if len(parts) > 1 else []
                 else:
-                    command = None
+                    command = connection_info.get("command", "")
                     args = connection_info.get("args", [])
-
-                # Connect to the server and get tools
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    # Connect to server with command and args
-                    connected = loop.run_until_complete(
-                        self.mcp_client_manager.connect_to_server(server_id, command, args)
-                    )
-
-                    if connected:
-                        # Get available tools
-                        tools = loop.run_until_complete(
-                            self.mcp_client_manager.get_server_tools(server_id)
-                        )
-
-                        # Create LlamaIndex tools for each MCP tool
-                        mcp_tools = []
-                        for tool_name, tool_info in tools.items():
-                            # Create wrapper function
-                            wrapper = create_mcp_tool_wrapper(
-                                server_id,
-                                tool_name,
-                                (
-                                    tool_info.description
-                                    if hasattr(tool_info, "description")
-                                    else f"Call {tool_name}"
-                                ),
-                            )
-
-                            # Create LlamaIndex tool
-                            llamaindex_tool = FunctionTool.from_defaults(
-                                fn=wrapper,
-                                name=f"{server_id}_{tool_name}",
-                                description=wrapper.__doc__,
-                            )
-                            mcp_tools.append(llamaindex_tool)
-
+                
+                # Get environment variables
+                env = connection_info.get("env", {})
+                
+                # Create and start server using the working client
+                server = MCPServerProcess(server_id, command, args, env)
+                
+                if server.start() and server.initialize():
+                    # Create tools using the working implementation
+                    mcp_tools = create_mcp_tools_for_server(server)
+                    
+                    if mcp_tools:
                         # Store tools for this server
                         if not hasattr(self, "mcp_tools"):
                             self.mcp_tools = {}
                         self.mcp_tools[server_id] = mcp_tools
-
-                        print(f"Connected to {server_id} MCP server with {len(mcp_tools)} tools")
-
-                finally:
-                    loop.close()
-
+                        
+                        # Store the server process for cleanup
+                        if not hasattr(self, '_mcp_servers'):
+                            self._mcp_servers = {}
+                        self._mcp_servers[server_id] = server
+                        
+                        print(f"✅ Connected to {server_id} MCP server with {len(mcp_tools)} tools")
+                        
+                        # List the tool names for debugging
+                        tool_names = [tool.name for tool in mcp_tools if hasattr(tool, "name")]
+                        print(f"   Available tools: {', '.join(tool_names)}")
+                    else:
+                        print(f"⚠️ No tools created for {server_id}")
+                        server.stop()
+                else:
+                    print(f"❌ Failed to start/initialize {server_id}")
+                    # Fall back to direct implementation tools
+                    self._create_mcp_tools(server_id, connection_info)
+                    print(f"Using direct implementation for {server_id} tools")
+                    
             except Exception as e:
                 print(f"Failed to connect to {server_id} MCP server: {str(e)}")
                 import traceback
-
                 traceback.print_exc()
                 # Fall back to direct implementation tools
                 self._create_mcp_tools(server_id, connection_info)

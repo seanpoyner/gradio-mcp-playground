@@ -667,12 +667,20 @@ Configured timezone: {timezone}"""
                                     ],
                                 }
 
+                                # Properly separate command and args
+                                if len(cmd) > 0:
+                                    actual_command = cmd[0]
+                                    actual_args = cmd[1:] if len(cmd) > 1 else []
+                                else:
+                                    actual_command = install_config["command"]
+                                    actual_args = install_config["args"]
+                                
                                 connection_info = {
                                     "name": server_info.get("name", server_id),
                                     "tools": tools_map.get(server_id, []),
                                     "env": env,
-                                    "command": cmd_str,
-                                    "args": install_config["args"],
+                                    "command": actual_command,
+                                    "args": actual_args,
                                 }
                                 web_ui.coding_agent.add_mcp_connection(server_id, connection_info)
                                 print(f"Added {server_id} connection to coding agent")
