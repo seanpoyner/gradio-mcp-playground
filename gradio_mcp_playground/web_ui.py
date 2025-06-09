@@ -192,28 +192,6 @@ def create_dashboard():
                             info="Display the AI's reasoning process step-by-step",
                         )
 
-                    # Quick action buttons
-                    gr.Markdown("#### Quick Actions")
-                    with gr.Row():
-                        help_mcp_btn = gr.Button("❓ MCP Help", variant="secondary")
-                        help_gradio_btn = gr.Button("🎨 Gradio Help", variant="secondary")
-                        analyze_btn = gr.Button("🔍 Analyze Code", variant="secondary")
-                        best_practices_btn = gr.Button("📋 Best Practices", variant="secondary")
-
-                    # Code analysis section
-                    with gr.Accordion("Code Analysis", open=False):
-                        code_input = gr.Textbox(
-                            label="Code to Analyze",
-                            lines=10,
-                            placeholder="Paste your code here for analysis...",
-                        )
-                        language_select = gr.Dropdown(
-                            label="Language",
-                            choices=["python", "javascript", "typescript", "java", "cpp"],
-                            value="python",
-                        )
-                        analyze_code_btn = gr.Button("🔍 Analyze Code", variant="primary")
-
                 else:
                     gr.Markdown("### AI Assistant Unavailable")
                     if "coding_agent_error" in locals():
@@ -387,7 +365,6 @@ def create_dashboard():
                                 )
 
                             with gr.Column():
-                                gr.Markdown("#### Quick Actions")
                                 test_server_btn = gr.Button(
                                     "🧪 Test Connection", variant="secondary"
                                 )
@@ -2700,22 +2677,6 @@ For others, please install manually using the command above."""
 
             reset_chat_btn.click(reset_conversation, outputs=chatbot)
 
-            # Quick action buttons
-            help_mcp_btn.click(quick_mcp_help, inputs=[chatbot, show_thinking], outputs=chatbot)
-            help_gradio_btn.click(
-                quick_gradio_help, inputs=[chatbot, show_thinking], outputs=chatbot
-            )
-            analyze_btn.click(quick_analyze_help, inputs=[chatbot, show_thinking], outputs=chatbot)
-            best_practices_btn.click(
-                quick_best_practices, inputs=[chatbot, show_thinking], outputs=chatbot
-            )
-
-            # Direct code analysis
-            analyze_code_btn.click(
-                analyze_code_directly,
-                inputs=[code_input, language_select, chatbot, show_thinking],
-                outputs=chatbot,
-            )
 
             # Token management connections (only if secure storage is available)
             if config_manager.has_secure_storage():
