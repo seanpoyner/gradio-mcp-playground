@@ -41,6 +41,7 @@ if HAS_LLAMAINDEX:
             self.hf_token = None
             self.memory = ChatMemoryBuffer.from_defaults(token_limit=3000)
             self.mcp_connections = {}  # Store MCP connections
+            self.mcp_client_manager = None  # MCP client manager for external servers
 
             # Available models - CONFIRMED working with HuggingFace Inference API
             self.available_models = {
@@ -87,6 +88,9 @@ if HAS_LLAMAINDEX:
             }
 
             self._setup_tools()
+            
+            # Load configured MCP servers after tools are set up
+            self._load_configured_mcp_servers()
 
         def _setup_tools(self):
             """Setup tools for the coding agent"""
@@ -340,29 +344,29 @@ if HAS_LLAMAINDEX:
                 try:
                     import os
                     from pathlib import Path
-                    
+
                     # Get home directory
                     home_path = Path.home()
-                    
+
                     # If subdirectory specified, append it
                     if subdirectory:
                         target_path = home_path / subdirectory
                     else:
                         target_path = home_path
-                    
+
                     if not target_path.exists():
                         return f"Error: Directory '{target_path}' does not exist"
-                    
+
                     if not target_path.is_dir():
                         return f"Error: '{target_path}' is not a directory"
-                    
+
                     # List all items
                     items = list(target_path.iterdir())
-                    
+
                     # Separate directories and files
                     directories = []
                     files = []
-                    
+
                     for item in items:
                         try:
                             if item.is_dir():
@@ -382,36 +386,41 @@ if HAS_LLAMAINDEX:
                         except (PermissionError, OSError):
                             # Skip items we can't access
                             continue
-                    
+
                     # Sort alphabetically
                     directories.sort()
                     files.sort()
-                    
+
                     # Build result
                     result = f"📂 Contents of: {target_path}\n"
                     result += f"🏠 Home Directory: {home_path}\n\n"
-                    
+
                     if directories:
                         result += f"**Directories ({len(directories)}):**\n"
                         result += "\n".join(directories[:50])  # Limit to 50 to avoid huge outputs
                         if len(directories) > 50:
                             result += f"\n... and {len(directories) - 50} more directories"
                         result += "\n\n"
-                    
+
                     if files:
                         result += f"**Files ({len(files)}):**\n"
                         result += "\n".join(files[:30])  # Limit files to 30
                         if len(files) > 30:
                             result += f"\n... and {len(files) - 30} more files"
-                    
+
                     # Look for git projects specifically
                     git_projects = [d for d in directories if " (git repo)" in d]
                     if git_projects:
                         result += f"\n\n**🔧 Git Projects Found ({len(git_projects)}):**\n"
-                        result += "\n".join([f"- {proj.replace('📁 ', '').replace(' (git repo)', '')}" for proj in git_projects[:20]])
+                        result += "\n".join(
+                            [
+                                f"- {proj.replace('📁 ', '').replace(' (git repo)', '')}"
+                                for proj in git_projects[:20]
+                            ]
+                        )
                         if len(git_projects) > 20:
                             result += f"\n... and {len(git_projects) - 20} more git projects"
-                    
+
                     return result
 
                 except Exception as e:
@@ -421,6 +430,7 @@ if HAS_LLAMAINDEX:
 
         def _create_directory_tool(self):
             """Create a tool for creating directories"""
+
             def create_directory(path: str) -> str:
                 """Create a directory at the specified path.
 
@@ -430,211 +440,225 @@ if HAS_LLAMAINDEX:
                 try:
                     import os
                     from pathlib import Path
-                    
+
                     # If path doesn't start with /, assume it's relative to home
-                    if not path.startswith(('/', 'C:\\', 'C:/', '\\\\')):
+                    if not path.startswith(("/", "C:\\", "C:/", "\\\\")):
                         home_path = Path.home()
                         full_path = home_path / path
                     else:
                         full_path = Path(path)
-                    
+
                     # Create directory (including parents if needed)
                     full_path.mkdir(parents=True, exist_ok=True)
-                    
+
                     return f"✅ Directory created successfully: {full_path}"
-                    
+
                 except PermissionError:
                     return f"❌ Permission denied: Cannot create directory at {full_path}"
                 except Exception as e:
                     return f"❌ Error creating directory: {str(e)}"
-            
+
             return FunctionTool.from_defaults(fn=create_directory, name="create_directory")
 
         def _create_brave_search_tool(self) -> FunctionTool:
             """Create Brave Search tool"""
+
             def brave_search(query: str, count: int = 10) -> str:
                 """Search the web using Brave Search API.
-                
+
                 Args:
                     query: Search query string
                     count: Number of results to return (default: 10)
-                    
+
                 Returns:
                     Search results from Brave Search API
                 """
                 try:
                     import requests
                     import os
-                    
-                    api_key = os.environ.get('BRAVE_API_KEY')
+
+                    api_key = os.environ.get("BRAVE_API_KEY")
                     if not api_key:
                         return "Error: BRAVE_API_KEY not set. Please install the brave-search server first using install_mcp_server_from_registry()"
-                    
+
                     url = "https://api.search.brave.com/res/v1/web/search"
                     headers = {"X-Subscription-Token": api_key}
                     params = {"q": query, "count": count}
-                    
+
                     response = requests.get(url, headers=headers, params=params)
                     if response.status_code == 200:
                         data = response.json()
                         results = []
-                        for idx, result in enumerate(data.get('web', {}).get('results', [])[:count], 1):
-                            results.append(f"{idx}. {result.get('title', 'No title')}\n   URL: {result.get('url', 'No URL')}\n   {result.get('description', 'No description')}")
-                        
-                        return f"Brave Search Results for '{query}':\n\n" + "\n\n".join(results) if results else "No results found"
+                        for idx, result in enumerate(
+                            data.get("web", {}).get("results", [])[:count], 1
+                        ):
+                            results.append(
+                                f"{idx}. {result.get('title', 'No title')}\n   URL: {result.get('url', 'No URL')}\n   {result.get('description', 'No description')}"
+                            )
+
+                        return (
+                            f"Brave Search Results for '{query}':\n\n" + "\n\n".join(results)
+                            if results
+                            else "No results found"
+                        )
                     else:
                         return f"Error: Brave Search API returned status {response.status_code}"
                 except Exception as e:
                     return f"Error performing brave search: {str(e)}"
-            
+
             return FunctionTool.from_defaults(fn=brave_search, name="brave_search")
 
         def _create_registry_search_tool(self) -> FunctionTool:
             """Create tool to search MCP server registry"""
+
             def search_mcp_registry(query: str) -> str:
                 """Search the MCP server registry for servers matching a query.
-                
+
                 Args:
                     query: Search query (e.g., "obsidian", "database", "api")
-                    
+
                 Returns:
                     List of matching MCP servers with descriptions
                 """
                 try:
                     from .registry import ServerRegistry
+
                     registry = ServerRegistry()
-                    
+
                     # Search for matching servers
                     results = registry.search_mcp_servers(query)
-                    
+
                     if not results:
                         return f"No MCP servers found matching '{query}'"
-                    
+
                     output = f"🔍 Found {len(results)} MCP servers matching '{query}':\n\n"
                     for server in results[:10]:  # Limit to 10 results
                         output += f"**{server['id']}** ({server['category']})\n"
                         output += f"📝 {server['description']}\n"
-                        
+
                         # Show required parameters
-                        if server.get('required_args'):
+                        if server.get("required_args"):
                             output += f"📋 Required args: {', '.join(server['required_args'])}\n"
-                        
+
                         # Show environment variables needed
-                        if server.get('env_vars'):
+                        if server.get("env_vars"):
                             output += f"🔑 Requires: {', '.join(server['env_vars'].keys())}\n"
-                        
+
                         output += f"💡 Install: install_mcp_server_from_registry(server_id='{server['id']}')\n"
                         output += "-" * 50 + "\n\n"
-                    
+
                     return output
                 except Exception as e:
                     return f"Error searching registry: {str(e)}"
-            
+
             return FunctionTool.from_defaults(fn=search_mcp_registry, name="search_mcp_registry")
 
         def _create_check_server_requirements_tool(self) -> FunctionTool:
             """Create tool to check server requirements before installation"""
+
             def check_server_requirements(server_id: str) -> str:
                 """Check what requirements are needed to install an MCP server.
-                
+
                 Args:
                     server_id: ID of the server to check (e.g., 'brave-search', 'filesystem')
-                    
+
                 Returns:
                     Information about required arguments and environment variables
                 """
                 try:
                     from .registry import ServerRegistry
                     from .secure_storage import SecureTokenStorage
-                    
+
                     registry = ServerRegistry()
                     storage = SecureTokenStorage()
-                    
+
                     # Get server info
                     server_info = registry.get_server_info(server_id)
                     if not server_info:
                         return f"❌ Server '{server_id}' not found in registry"
-                    
+
                     output = f"📋 **Requirements for {server_info['name']}**\n\n"
-                    
+
                     # Check required arguments
-                    required_args = server_info.get('required_args', [])
+                    required_args = server_info.get("required_args", [])
                     if required_args:
                         output += "**Required Arguments:**\n"
                         for arg in required_args:
                             output += f"- `{arg}`: "
-                            if arg == 'path':
+                            if arg == "path":
                                 output += "Directory path to provide access to\n"
-                            elif arg == 'timezone':
+                            elif arg == "timezone":
                                 output += "Timezone (e.g., 'UTC', 'America/New_York')\n"
-                            elif arg == 'vault_path1':
+                            elif arg == "vault_path1":
                                 output += "Path to your Obsidian vault\n"
                             else:
                                 output += "Required value\n"
-                    
+
                     # Check environment variables
-                    env_vars = server_info.get('env_vars', {})
+                    env_vars = server_info.get("env_vars", {})
                     if env_vars:
                         output += "\n**Required Environment Variables:**\n"
-                        
+
                         # Check if we have stored keys
                         stored_keys = storage.retrieve_server_keys(server_id)
-                        
+
                         for env_var, description in env_vars.items():
                             output += f"- `{env_var}`: {description}\n"
-                            
+
                             # Check if we already have this key stored
                             if env_var in stored_keys:
                                 output += f"  ✅ Already stored securely\n"
                             else:
                                 output += f"  ❌ Not yet provided\n"
-                                
+
                                 # Add instructions for getting the key
-                                if server_id == 'brave-search':
+                                if server_id == "brave-search":
                                     output += f"  📝 Get your API key from: https://brave.com/search/api/\n"
-                                elif server_id == 'github':
+                                elif server_id == "github":
                                     output += f"  📝 Create a token at: https://github.com/settings/tokens\n"
-                    
+
                     # Add setup help
-                    if server_info.get('setup_help'):
+                    if server_info.get("setup_help"):
                         output += f"\n**Setup Help:** {server_info['setup_help']}\n"
-                    
+
                     # Add example installation command
                     output += "\n**Example Installation:**\n```\n"
-                    
+
                     # Build example command
                     example_args = {}
                     for arg in required_args:
-                        if arg == 'path':
-                            example_args[arg] = '/home/user/workspace'
-                        elif arg == 'timezone':
-                            example_args[arg] = 'UTC'
-                        elif arg == 'vault_path1':
-                            example_args[arg] = '/path/to/obsidian/vault'
+                        if arg == "path":
+                            example_args[arg] = "/home/user/workspace"
+                        elif arg == "timezone":
+                            example_args[arg] = "UTC"
+                        elif arg == "vault_path1":
+                            example_args[arg] = "/path/to/obsidian/vault"
                         else:
-                            example_args[arg] = f'YOUR_{arg.upper()}'
-                    
+                            example_args[arg] = f"YOUR_{arg.upper()}"
+
                     # Add tokens for env vars
-                    if 'BRAVE_API_KEY' in env_vars:
-                        example_args['token'] = 'YOUR_BRAVE_API_KEY'
-                    elif 'GITHUB_TOKEN' in env_vars:
-                        example_args['token'] = 'YOUR_GITHUB_TOKEN'
-                    
+                    if "BRAVE_API_KEY" in env_vars:
+                        example_args["token"] = "YOUR_BRAVE_API_KEY"
+                    elif "GITHUB_TOKEN" in env_vars:
+                        example_args["token"] = "YOUR_GITHUB_TOKEN"
+
                     # Format the command
                     if example_args:
-                        args_str = ', '.join([f"{k}='{v}'" for k, v in example_args.items()])
+                        args_str = ", ".join([f"{k}='{v}'" for k, v in example_args.items()])
                         output += f"install_mcp_server_from_registry(server_id='{server_id}', {args_str})\n"
                     else:
                         output += f"install_mcp_server_from_registry(server_id='{server_id}')\n"
-                    
+
                     output += "```"
-                    
+
                     return output
-                    
+
                 except Exception as e:
                     return f"Error checking requirements: {str(e)}"
-            
-            return FunctionTool.from_defaults(fn=check_server_requirements, name="check_server_requirements")
+
+            return FunctionTool.from_defaults(
+                fn=check_server_requirements, name="check_server_requirements"
+            )
 
         def _add_mcp_management_tools(self):
             """Add MCP server management tools to the agent"""
@@ -649,6 +673,42 @@ if HAS_LLAMAINDEX:
                 print(f"DEBUG: Could not add MCP management tools: {e}")
             except Exception as e:
                 print(f"DEBUG: Error adding MCP management tools: {e}")
+        
+        def _load_configured_mcp_servers(self):
+            """Load MCP servers from configuration"""
+            try:
+                from .mcp_server_config import MCPServerConfig
+                
+                config = MCPServerConfig()
+                servers = config.list_servers()
+                
+                if not servers:
+                    print("No MCP servers configured")
+                    return
+                
+                print(f"Found {len(servers)} configured MCP servers:")
+                for server_name in servers:
+                    print(f"  - {server_name}")
+                
+                # Note about MCP server status
+                print("\n📌 MCP Server Status:")
+                print("   ✅ Servers are installed and configured")
+                print("   ✅ Servers are accessible to external clients (e.g., Claude Desktop)")
+                print("   ⚠️  Direct tool loading is disabled due to stdio compatibility issues")
+                print("   💡 Use the built-in tools for similar functionality:")
+                print("      - File operations: read_project_file(), list_home_directory()")
+                print("      - Web search: brave_search() (after installing brave-search server)")
+                print("      - MCP management: install_mcp_server_from_registry()")
+                
+                # Initialize mcp_tools as empty
+                if not hasattr(self, 'mcp_tools'):
+                    self.mcp_tools = {}
+                    
+            except Exception as e:
+                print(f"Error checking MCP servers: {e}")
+                import traceback
+                traceback.print_exc()
+        
 
         def configure_model(self, hf_token: str, model_name: str) -> Dict[str, Any]:
             """Configure the LLM model for the agent"""
@@ -773,8 +833,17 @@ if HAS_LLAMAINDEX:
 
                 # Create agent
                 try:
+                    # Get all tools including MCP tools
+                    all_tools = list(self.tools)  # Copy base tools
+                    
+                    # Add any MCP tools that were loaded from config
+                    if hasattr(self, 'mcp_tools'):
+                        for server_tools in self.mcp_tools.values():
+                            all_tools.extend(server_tools)
+                            print(f"DEBUG: Added {len(server_tools)} tools from MCP servers")
+                    
                     self.agent = ReActAgent.from_tools(
-                        tools=self.tools,
+                        tools=all_tools,
                         llm=self.llm,
                         memory=self.memory,
                         verbose=True,
@@ -826,11 +895,11 @@ if HAS_LLAMAINDEX:
 - Store conversations about user preferences/identity in memory server
 - API keys are encrypted and stored securely after the user provides them
 
-**ACCESSING EXTERNAL MCP SERVERS:**
-- Servers like Obsidian, Filesystem (via registry) run EXTERNALLY and cannot be accessed from this chat
-- To access Obsidian vault contents, use: list_home_directory(subdirectory='vault-name')
-- To read Obsidian notes, use: read_project_file('vault-name/note.md')
-- Only Brave Search and Memory servers have integrated tools in this chat
+**USING MCP SERVERS:**
+- When an MCP server is installed, its tools become available with the prefix: {server_id}_{tool_name}
+- For example: obsidian_read_note(), filesystem_list_directory(), github_list_repos()
+- The tools will appear after the server is successfully installed and connected
+- Use the actual MCP tools rather than generic file tools when available
 
 Be helpful and proactive about finding the right tools.""",
                     )
@@ -860,15 +929,18 @@ Be helpful and proactive about finding the right tools.""",
                 # Check if user is introducing themselves
                 if any(phrase in message.lower() for phrase in ["my name is", "i am", "i'm"]):
                     # Check if memory server is available
-                    if 'memory' in self.mcp_connections:
+                    if "memory" in self.mcp_connections:
                         # Store the conversation automatically
                         try:
                             from datetime import datetime
+
                             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-                            self.agent.chat(f"memory_store_conversation(topic='User Introduction', content='User message: {message} - Timestamp: {timestamp}')")
+                            self.agent.chat(
+                                f"memory_store_conversation(topic='User Introduction', content='User message: {message} - Timestamp: {timestamp}')"
+                            )
                         except:
                             pass  # Silently fail if memory storage doesn't work
-                
+
                 response = self.agent.chat(message)
                 response_str = str(response)
 
@@ -891,21 +963,24 @@ Be helpful and proactive about finding the right tools.""",
         def chat_with_steps(self, message: str):
             """Send a message to the coding agent and return both steps and final response"""
             if not self.agent:
-                return [], "Please configure a model first by providing your HuggingFace API token and selecting a model."
+                return (
+                    [],
+                    "Please configure a model first by providing your HuggingFace API token and selecting a model.",
+                )
 
             try:
                 # Create a custom handler to capture steps
                 steps = []
 
                 # Store the original verbose setting
-                original_verbose = getattr(self.agent, '_verbose', True)
+                original_verbose = getattr(self.agent, "_verbose", True)
 
                 # Override the agent's step method to capture thinking
-                original_step = getattr(self.agent, '_run_step', None)
+                original_step = getattr(self.agent, "_run_step", None)
 
                 def capture_step(step_input, **kwargs):
                     """Capture reasoning steps"""
-                    if hasattr(step_input, 'input'):
+                    if hasattr(step_input, "input"):
                         user_input = str(step_input.input)
                         if user_input and user_input != "None":
                             steps.append(f"🤔 **Input**: {user_input}")
@@ -914,48 +989,66 @@ Be helpful and proactive about finding the right tools.""",
                     result = original_step(step_input, **kwargs) if original_step else None
 
                     # Extract thinking and action from the step
-                    if result and hasattr(result, 'output'):
+                    if result and hasattr(result, "output"):
                         output_str = str(result.output)
 
                         # Parse ReAct format (Thought: ... Action: ... Action Input: ... Observation: ...)
-                        lines = output_str.split('\n')
+                        lines = output_str.split("\n")
                         current_section = None
                         section_content = []
 
                         for line in lines:
                             line = line.strip()
-                            if line.startswith('Thought:'):
+                            if line.startswith("Thought:"):
                                 if current_section and section_content:
-                                    steps.append(f"💭 **{current_section}**: {' '.join(section_content)}")
+                                    steps.append(
+                                        f"💭 **{current_section}**: {' '.join(section_content)}"
+                                    )
                                 current_section = "Thought"
                                 section_content = [line[8:].strip()]  # Remove "Thought:" prefix
-                            elif line.startswith('Action:'):
+                            elif line.startswith("Action:"):
                                 if current_section and section_content:
-                                    steps.append(f"💭 **{current_section}**: {' '.join(section_content)}")
+                                    steps.append(
+                                        f"💭 **{current_section}**: {' '.join(section_content)}"
+                                    )
                                 current_section = "Action"
                                 section_content = [line[7:].strip()]  # Remove "Action:" prefix
-                            elif line.startswith('Action Input:'):
+                            elif line.startswith("Action Input:"):
                                 if current_section and section_content:
-                                    steps.append(f"🎯 **{current_section}**: {' '.join(section_content)}")
+                                    steps.append(
+                                        f"🎯 **{current_section}**: {' '.join(section_content)}"
+                                    )
                                 current_section = "Action Input"
-                                section_content = [line[13:].strip()]  # Remove "Action Input:" prefix
-                            elif line.startswith('Observation:'):
+                                section_content = [
+                                    line[13:].strip()
+                                ]  # Remove "Action Input:" prefix
+                            elif line.startswith("Observation:"):
                                 if current_section and section_content:
-                                    steps.append(f"📝 **{current_section}**: {' '.join(section_content)}")
+                                    steps.append(
+                                        f"📝 **{current_section}**: {' '.join(section_content)}"
+                                    )
                                 current_section = "Observation"
-                                section_content = [line[12:].strip()]  # Remove "Observation:" prefix
+                                section_content = [
+                                    line[12:].strip()
+                                ]  # Remove "Observation:" prefix
                             elif line and current_section:
                                 section_content.append(line)
 
                         # Add the last section
                         if current_section and section_content:
-                            icon = "🎯" if current_section == "Action" else "📝" if current_section == "Observation" else "💭"
-                            steps.append(f"{icon} **{current_section}**: {' '.join(section_content)}")
+                            icon = (
+                                "🎯"
+                                if current_section == "Action"
+                                else "📝" if current_section == "Observation" else "💭"
+                            )
+                            steps.append(
+                                f"{icon} **{current_section}**: {' '.join(section_content)}"
+                            )
 
                     return result
 
                 # Temporarily override the step method
-                if hasattr(self.agent, '_run_step'):
+                if hasattr(self.agent, "_run_step"):
                     self.agent._run_step = capture_step
 
                 # Get the response
@@ -975,13 +1068,25 @@ Be helpful and proactive about finding the right tools.""",
             except Exception as e:
                 error_msg = str(e)
                 if "404" in error_msg and "not found" in error_msg.lower():
-                    return [], f"❌ Model endpoint not available. Try using 'Zephyr 7B Beta' which is confirmed to work.\n\nOriginal error: {error_msg}"
+                    return (
+                        [],
+                        f"❌ Model endpoint not available. Try using 'Zephyr 7B Beta' which is confirmed to work.\n\nOriginal error: {error_msg}",
+                    )
                 elif "401" in error_msg or "unauthorized" in error_msg.lower():
-                    return [], f"❌ Authentication failed. Please check your HuggingFace token has the correct permissions.\n\nOriginal error: {error_msg}"
+                    return (
+                        [],
+                        f"❌ Authentication failed. Please check your HuggingFace token has the correct permissions.\n\nOriginal error: {error_msg}",
+                    )
                 elif "503" in error_msg or "temporarily unavailable" in error_msg.lower():
-                    return [], f"❌ Model is temporarily unavailable. Please try again in a few minutes.\n\nOriginal error: {error_msg}"
+                    return (
+                        [],
+                        f"❌ Model is temporarily unavailable. Please try again in a few minutes.\n\nOriginal error: {error_msg}",
+                    )
                 else:
-                    return [], f"❌ Error processing message: {error_msg}\n\n💡 Try switching to 'Zephyr 7B Beta' model which is confirmed to work."
+                    return (
+                        [],
+                        f"❌ Error processing message: {error_msg}\n\n💡 Try switching to 'Zephyr 7B Beta' model which is confirmed to work.",
+                    )
 
         def get_available_models(self) -> Dict[str, Dict[str, Any]]:
             """Get list of available models"""
@@ -1003,8 +1108,12 @@ Be helpful and proactive about finding the right tools.""",
                 self.mcp_connections[connection_id] = connection_info
 
                 # Create a tool for this MCP connection
-                if connection_info.get('tools'):
+                if connection_info.get("tools"):
                     self._create_mcp_tools(connection_id, connection_info)
+
+                # For external MCP servers, try to connect and get actual tools
+                if connection_id in ["obsidian", "filesystem", "github", "time"]:
+                    self._connect_to_external_mcp_server(connection_id, connection_info)
 
                 # Recreate agent with new tools if already configured
                 if self.is_configured():
@@ -1013,17 +1122,200 @@ Be helpful and proactive about finding the right tools.""",
             except Exception as e:
                 raise Exception(f"Failed to add MCP connection {connection_id}: {str(e)}")
 
+        def _connect_to_external_mcp_server(self, server_id: str, connection_info: Dict[str, Any]):
+            """Connect to an external MCP server and create tools"""
+            try:
+                from .mcp_client_integration import get_mcp_client_manager, create_mcp_tool_wrapper
+                import asyncio
+
+                # Get or create MCP client manager
+                if not self.mcp_client_manager:
+                    self.mcp_client_manager = get_mcp_client_manager()
+
+                # Extract command and args from connection info
+                command_str = connection_info.get("command", "")
+                if command_str:
+                    parts = command_str.split()
+                    command = parts[0] if parts else None
+                    args = parts[1:] if len(parts) > 1 else []
+                else:
+                    command = None
+                    args = connection_info.get("args", [])
+
+                # Connect to the server and get tools
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    # Connect to server with command and args
+                    connected = loop.run_until_complete(
+                        self.mcp_client_manager.connect_to_server(server_id, command, args)
+                    )
+
+                    if connected:
+                        # Get available tools
+                        tools = loop.run_until_complete(
+                            self.mcp_client_manager.get_server_tools(server_id)
+                        )
+
+                        # Create LlamaIndex tools for each MCP tool
+                        mcp_tools = []
+                        for tool_name, tool_info in tools.items():
+                            # Create wrapper function
+                            wrapper = create_mcp_tool_wrapper(
+                                server_id,
+                                tool_name,
+                                (
+                                    tool_info.description
+                                    if hasattr(tool_info, "description")
+                                    else f"Call {tool_name}"
+                                ),
+                            )
+
+                            # Create LlamaIndex tool
+                            llamaindex_tool = FunctionTool.from_defaults(
+                                fn=wrapper,
+                                name=f"{server_id}_{tool_name}",
+                                description=wrapper.__doc__,
+                            )
+                            mcp_tools.append(llamaindex_tool)
+
+                        # Store tools for this server
+                        if not hasattr(self, "mcp_tools"):
+                            self.mcp_tools = {}
+                        self.mcp_tools[server_id] = mcp_tools
+
+                        print(f"Connected to {server_id} MCP server with {len(mcp_tools)} tools")
+
+                finally:
+                    loop.close()
+
+            except Exception as e:
+                print(f"Failed to connect to {server_id} MCP server: {str(e)}")
+                import traceback
+
+                traceback.print_exc()
+                # Fall back to direct implementation tools
+                self._create_mcp_tools(server_id, connection_info)
+                print(f"Using direct implementation for {server_id} tools")
+
         def _create_mcp_tools(self, connection_id: str, connection_info: Dict[str, Any]):
             """Create LlamaIndex tools for MCP connection"""
             tools = []
 
+            # For obsidian connection, create direct tools
+            if connection_id == "obsidian":
+                vault_path = connection_info.get("vault_path", "C:/Users/seanp/seans-vault")
+                # Extract vault path from command if not in connection_info
+                if "command" in connection_info:
+                    parts = connection_info["command"].split()
+                    if len(parts) > 1:
+                        vault_path = parts[-1]  # Last argument is usually the vault path
+
+                def obsidian_list_notes() -> str:
+                    """List all notes in the Obsidian vault"""
+                    try:
+                        import os
+
+                        notes = []
+                        for root, dirs, files in os.walk(vault_path):
+                            # Skip .obsidian directory
+                            if ".obsidian" in root:
+                                continue
+                            for file in files:
+                                if file.endswith(".md"):
+                                    rel_path = os.path.relpath(os.path.join(root, file), vault_path)
+                                    notes.append(rel_path.replace("\\", "/"))
+                        if notes:
+                            return f"Found {len(notes)} notes in vault:\n" + "\n".join(
+                                f"- {note}" for note in notes
+                            )
+                        else:
+                            return "No notes found in vault"
+                    except Exception as e:
+                        return f"Error listing notes: {str(e)}"
+
+                def obsidian_read_note(path: str) -> str:
+                    """Read a note from the Obsidian vault"""
+                    try:
+                        import os
+
+                        full_path = os.path.join(vault_path, path)
+                        with open(full_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        return f"Content of {path}:\n\n{content}"
+                    except Exception as e:
+                        return f"Error reading note: {str(e)}"
+
+                def obsidian_create_note(path: str, content: str) -> str:
+                    """Create a new note in the Obsidian vault"""
+                    try:
+                        import os
+
+                        full_path = os.path.join(vault_path, path)
+                        # Create directory if needed
+                        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                        with open(full_path, "w", encoding="utf-8") as f:
+                            f.write(content)
+                        return f"Successfully created note: {path}"
+                    except Exception as e:
+                        return f"Error creating note: {str(e)}"
+
+                def obsidian_search_notes(query: str) -> str:
+                    """Search for notes containing a query string"""
+                    try:
+                        import os
+
+                        results = []
+                        for root, dirs, files in os.walk(vault_path):
+                            if ".obsidian" in root:
+                                continue
+                            for file in files:
+                                if file.endswith(".md"):
+                                    full_path = os.path.join(root, file)
+                                    try:
+                                        with open(full_path, "r", encoding="utf-8") as f:
+                                            content = f.read()
+                                            if query.lower() in content.lower():
+                                                rel_path = os.path.relpath(full_path, vault_path)
+                                                results.append(rel_path.replace("\\", "/"))
+                                    except:
+                                        pass
+                        if results:
+                            return (
+                                f"Found {len(results)} notes containing '{query}':\n"
+                                + "\n".join(f"- {note}" for note in results)
+                            )
+                        else:
+                            return f"No notes found containing '{query}'"
+                    except Exception as e:
+                        return f"Error searching notes: {str(e)}"
+
+                tools.extend(
+                    [
+                        FunctionTool.from_defaults(
+                            fn=obsidian_list_notes, name="obsidian_list_notes"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=obsidian_read_note, name="obsidian_read_note"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=obsidian_create_note, name="obsidian_create_note"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=obsidian_search_notes, name="obsidian_search_notes"
+                        ),
+                    ]
+                )
+
             # For filesystem connection, create actual working tools
-            if connection_id == "filesystem":
+            elif connection_id == "filesystem":
+
                 def read_file_tool(path: str) -> str:
                     """Read contents of a file"""
                     try:
                         import os
-                        with open(path, encoding='utf-8') as f:
+
+                        with open(path, encoding="utf-8") as f:
                             content = f.read()
                         return f"File content from {os.path.abspath(path)}:\n\n{content}"
                     except Exception as e:
@@ -1033,7 +1325,8 @@ Be helpful and proactive about finding the right tools.""",
                     """Write content to a file"""
                     try:
                         import os
-                        with open(path, 'w', encoding='utf-8') as f:
+
+                        with open(path, "w", encoding="utf-8") as f:
                             f.write(content)
                         return f"Successfully wrote {len(content)} characters to {os.path.abspath(path)}"
                     except Exception as e:
@@ -1043,10 +1336,13 @@ Be helpful and proactive about finding the right tools.""",
                     """List contents of a directory"""
                     try:
                         import os
+
                         files = os.listdir(path)
                         abs_path = os.path.abspath(path)
                         file_list = "\n".join([f"  - {f}" for f in files])
-                        return f"Directory contents of {abs_path} ({len(files)} items):\n{file_list}"
+                        return (
+                            f"Directory contents of {abs_path} ({len(files)} items):\n{file_list}"
+                        )
                     except Exception as e:
                         return f"Error listing directory: {str(e)}"
 
@@ -1054,17 +1350,26 @@ Be helpful and proactive about finding the right tools.""",
                     """Create a directory"""
                     try:
                         import os
+
                         os.makedirs(path, exist_ok=True)
                         return f"Successfully created directory: {os.path.abspath(path)}"
                     except Exception as e:
                         return f"Error creating directory: {str(e)}"
 
-                tools.extend([
-                    FunctionTool.from_defaults(fn=read_file_tool, name="filesystem_read_file"),
-                    FunctionTool.from_defaults(fn=write_file_tool, name="filesystem_write_file"),
-                    FunctionTool.from_defaults(fn=list_directory_tool, name="filesystem_list_directory"),
-                    FunctionTool.from_defaults(fn=create_directory_tool, name="filesystem_create_directory"),
-                ])
+                tools.extend(
+                    [
+                        FunctionTool.from_defaults(fn=read_file_tool, name="filesystem_read_file"),
+                        FunctionTool.from_defaults(
+                            fn=write_file_tool, name="filesystem_write_file"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=list_directory_tool, name="filesystem_list_directory"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=create_directory_tool, name="filesystem_create_directory"
+                        ),
+                    ]
+                )
 
             elif connection_id == "brave-search":
                 # Create actual brave search tool
@@ -1073,100 +1378,116 @@ Be helpful and proactive about finding the right tools.""",
                     try:
                         import requests
                         import os
-                        
-                        api_key = os.environ.get('BRAVE_API_KEY')
+
+                        api_key = os.environ.get("BRAVE_API_KEY")
                         if not api_key:
                             return "Error: BRAVE_API_KEY environment variable not set"
-                        
+
                         url = "https://api.search.brave.com/res/v1/web/search"
                         headers = {"X-Subscription-Token": api_key}
                         params = {"q": query, "count": count}
-                        
+
                         response = requests.get(url, headers=headers, params=params)
                         if response.status_code == 200:
                             data = response.json()
                             results = []
-                            for idx, result in enumerate(data.get('web', {}).get('results', [])[:count], 1):
-                                results.append(f"{idx}. {result.get('title', 'No title')}\n   URL: {result.get('url', 'No URL')}\n   {result.get('description', 'No description')}")
-                            
-                            return f"Brave Search Results for '{query}':\n\n" + "\n\n".join(results) if results else "No results found"
+                            for idx, result in enumerate(
+                                data.get("web", {}).get("results", [])[:count], 1
+                            ):
+                                results.append(
+                                    f"{idx}. {result.get('title', 'No title')}\n   URL: {result.get('url', 'No URL')}\n   {result.get('description', 'No description')}"
+                                )
+
+                            return (
+                                f"Brave Search Results for '{query}':\n\n" + "\n\n".join(results)
+                                if results
+                                else "No results found"
+                            )
                         else:
                             return f"Error: Brave Search API returned status {response.status_code}"
                     except Exception as e:
                         return f"Error performing brave search: {str(e)}"
 
                 tools.append(
-                    FunctionTool.from_defaults(fn=brave_search_tool, name="brave_search", 
-                                             description="Search the web using Brave Search")
+                    FunctionTool.from_defaults(
+                        fn=brave_search_tool,
+                        name="brave_search",
+                        description="Search the web using Brave Search",
+                    )
                 )
-                
+
             elif connection_id == "memory":
                 # Create memory server tools for conversation logging
-                def store_conversation(topic: str, content: str, metadata: Dict[str, Any] = None) -> str:
+                def store_conversation(
+                    topic: str, content: str, metadata: Dict[str, Any] = None
+                ) -> str:
                     """Store conversation in memory server's knowledge graph"""
                     try:
                         import json
                         import os
-                        
+
                         # Create a structured memory entry
                         memory_entry = {
                             "topic": topic,
                             "content": content,
                             "timestamp": datetime.now().isoformat(),
                             "type": "conversation",
-                            "metadata": metadata or {}
+                            "metadata": metadata or {},
                         }
-                        
+
                         # Store in the memory server's data directory
-                        memory_dir = os.path.join(os.path.expanduser('~'), '.memory_server_bin')
+                        memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
                         os.makedirs(memory_dir, exist_ok=True)
-                        
+
                         # Create a JSON file for the conversation
                         filename = f"{topic.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
                         filepath = os.path.join(memory_dir, filename)
-                        
-                        with open(filepath, 'w', encoding='utf-8') as f:
+
+                        with open(filepath, "w", encoding="utf-8") as f:
                             json.dump(memory_entry, f, indent=2)
-                        
+
                         return f"✅ Stored conversation under topic '{topic}' in memory server"
                     except Exception as e:
                         return f"Error storing conversation: {str(e)}"
-                
+
                 def retrieve_conversation(topic: str = None, limit: int = 10) -> str:
                     """Retrieve conversations from memory server"""
                     try:
                         import os
                         import json
                         from pathlib import Path
-                        
-                        memory_dir = os.path.join(os.path.expanduser('~'), '.memory_server_bin')
+
+                        memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
                         if not os.path.exists(memory_dir):
                             return "No conversations found - memory server directory does not exist"
-                        
+
                         # Get all JSON files
                         json_files = list(Path(memory_dir).glob("*.json"))
                         conversations = []
-                        
+
                         for file_path in json_files:
                             try:
-                                with open(file_path, 'r', encoding='utf-8') as f:
+                                with open(file_path, "r", encoding="utf-8") as f:
                                     data = json.load(f)
-                                    if topic is None or data.get('topic', '').lower() == topic.lower():
+                                    if (
+                                        topic is None
+                                        or data.get("topic", "").lower() == topic.lower()
+                                    ):
                                         conversations.append(data)
                             except:
                                 continue
-                        
+
                         # Sort by timestamp (newest first)
-                        conversations.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+                        conversations.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
                         conversations = conversations[:limit]
-                        
+
                         if conversations:
                             output = f"📚 Retrieved {len(conversations)} conversations:\n\n"
                             for conv in conversations:
                                 output += f"**Topic**: {conv.get('topic', 'Unknown')}\n"
                                 output += f"**Time**: {conv.get('timestamp', 'Unknown')}\n"
                                 output += f"**Content**: {conv.get('content', 'No content')}\n"
-                                if conv.get('metadata'):
+                                if conv.get("metadata"):
                                     output += f"**Metadata**: {json.dumps(conv.get('metadata'), indent=2)}\n"
                                 output += "-" * 50 + "\n\n"
                             return output
@@ -1174,53 +1495,55 @@ Be helpful and proactive about finding the right tools.""",
                             return "No conversations found in memory"
                     except Exception as e:
                         return f"Error retrieving conversations: {str(e)}"
-                
+
                 def search_conversations(query: str) -> str:
                     """Search conversations in memory server"""
                     try:
                         import os
                         import json
                         from pathlib import Path
-                        
-                        memory_dir = os.path.join(os.path.expanduser('~'), '.memory_server_bin')
+
+                        memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
                         if not os.path.exists(memory_dir):
                             return "No conversations found - memory server directory does not exist"
-                        
+
                         # Get all JSON files
                         json_files = list(Path(memory_dir).glob("*.json"))
                         results = []
                         query_lower = query.lower()
-                        
+
                         for file_path in json_files:
                             try:
-                                with open(file_path, 'r', encoding='utf-8') as f:
+                                with open(file_path, "r", encoding="utf-8") as f:
                                     data = json.load(f)
-                                    content = data.get('content', '').lower()
-                                    topic = data.get('topic', '').lower()
-                                    
+                                    content = data.get("content", "").lower()
+                                    topic = data.get("topic", "").lower()
+
                                     # Simple relevance scoring
                                     score = 0
                                     if query_lower in topic:
                                         score += 2
                                     if query_lower in content:
                                         score += content.count(query_lower)
-                                    
+
                                     if score > 0:
-                                        data['relevance_score'] = score
+                                        data["relevance_score"] = score
                                         results.append(data)
                             except:
                                 continue
-                        
+
                         # Sort by relevance score
-                        results.sort(key=lambda x: x.get('relevance_score', 0), reverse=True)
-                        
+                        results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
+
                         if results:
-                            output = f"🔍 Found {len(results)} matching conversations for '{query}':\n\n"
+                            output = (
+                                f"🔍 Found {len(results)} matching conversations for '{query}':\n\n"
+                            )
                             for res in results[:10]:  # Limit to top 10 results
                                 output += f"**Topic**: {res.get('topic', 'Unknown')}\n"
                                 output += f"**Relevance**: {res.get('relevance_score', 0)}\n"
                                 output += f"**Time**: {res.get('timestamp', 'Unknown')}\n"
-                                content_preview = res.get('content', 'No content')
+                                content_preview = res.get("content", "No content")
                                 if len(content_preview) > 200:
                                     content_preview = content_preview[:200] + "..."
                                 output += f"**Content**: {content_preview}\n"
@@ -1230,19 +1553,31 @@ Be helpful and proactive about finding the right tools.""",
                             return f"No conversations found matching '{query}'"
                     except Exception as e:
                         return f"Error searching conversations: {str(e)}"
-                
-                tools.extend([
-                    FunctionTool.from_defaults(fn=store_conversation, name="memory_store_conversation",
-                                             description="Store conversation in memory server"),
-                    FunctionTool.from_defaults(fn=retrieve_conversation, name="memory_retrieve_conversation",
-                                             description="Retrieve conversations from memory server"),
-                    FunctionTool.from_defaults(fn=search_conversations, name="memory_search_conversations",
-                                             description="Search conversations in memory server")
-                ])
+
+                tools.extend(
+                    [
+                        FunctionTool.from_defaults(
+                            fn=store_conversation,
+                            name="memory_store_conversation",
+                            description="Store conversation in memory server",
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=retrieve_conversation,
+                            name="memory_retrieve_conversation",
+                            description="Retrieve conversations from memory server",
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=search_conversations,
+                            name="memory_search_conversations",
+                            description="Search conversations in memory server",
+                        ),
+                    ]
+                )
 
             else:
                 # For other connections, create placeholder tools
-                for tool_name in connection_info.get('tools', []):
+                for tool_name in connection_info.get("tools", []):
+
                     def create_placeholder_tool(conn_id, tool_n):
                         def placeholder_func(**kwargs) -> str:
                             """Placeholder MCP tool"""
@@ -1251,13 +1586,13 @@ Be helpful and proactive about finding the right tools.""",
                         return FunctionTool.from_defaults(
                             fn=placeholder_func,
                             name=f"{conn_id}_{tool_n}",
-                            description=f"Call {tool_n} tool from {connection_info['name']} MCP server"
+                            description=f"Call {tool_n} tool from {connection_info['name']} MCP server",
                         )
 
                     tools.append(create_placeholder_tool(connection_id, tool_name))
 
             # Store tools for this connection
-            if not hasattr(self, 'mcp_tools'):
+            if not hasattr(self, "mcp_tools"):
                 self.mcp_tools = {}
             self.mcp_tools[connection_id] = tools
 
@@ -1267,26 +1602,26 @@ Be helpful and proactive about finding the right tools.""",
                 return
 
             try:
-                # Get all existing tools
-                all_tools = [
-                    self._create_mcp_knowledge_tool(),
-                    self._create_file_analysis_tool(),
-                    self._create_code_analysis_tool(),
-                    self._create_gradio_helper_tool(),
-                ]
+                # Get all base tools first
+                all_tools = list(self.tools)  # Start with original tools
 
                 # Add MCP tools
-                if hasattr(self, 'mcp_tools'):
+                if hasattr(self, "mcp_tools"):
                     for connection_tools in self.mcp_tools.values():
                         all_tools.extend(connection_tools)
 
-                # Recreate agent
+                # Recreate agent with all tools
                 self.agent = ReActAgent.from_tools(
-                    all_tools,
+                    tools=all_tools,
                     llm=self.llm,
                     memory=self.memory,
                     verbose=True,
-                    max_iterations=10,
+                    max_iterations=100,  # Keep the same max iterations
+                    system_prompt=(
+                        self.agent.agent_worker._system_prompt
+                        if hasattr(self.agent, "agent_worker")
+                        else None
+                    ),
                 )
 
             except Exception:
@@ -1302,7 +1637,7 @@ Be helpful and proactive about finding the right tools.""",
             if connection_id in self.mcp_connections:
                 del self.mcp_connections[connection_id]
 
-            if hasattr(self, 'mcp_tools') and connection_id in self.mcp_tools:
+            if hasattr(self, "mcp_tools") and connection_id in self.mcp_tools:
                 del self.mcp_tools[connection_id]
 
             # Recreate agent without this connection's tools

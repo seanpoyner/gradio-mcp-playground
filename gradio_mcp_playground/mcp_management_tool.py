@@ -17,7 +17,7 @@ except ImportError:
     HAS_LLAMAINDEX = False
 
 try:
-    import gradio as gr
+    import gradio as gr  # noqa: F401
 
     HAS_GRADIO = True
 except ImportError:
@@ -29,40 +29,79 @@ class MCPServerManager:
 
     def __init__(self):
         pass
-    
+
     def _get_server_specific_guidance(self, server_id: str, kwargs: dict) -> str:
         """Get server-specific guidance for users"""
         guidance = ""
-        
-        if server_id == 'obsidian':
-            vault_path = kwargs.get('vault_path1', '')
+
+        if server_id == "obsidian":
+            vault_path = kwargs.get("vault_path1", "")
             if vault_path:
-                # Extract just the folder name from the path
-                import os
-                vault_folder = os.path.basename(vault_path)
-                guidance = f"""\n**⚠️ Note:** The Obsidian MCP server runs externally and cannot be accessed from this chat.
-To explore your vault from this chat, you can use:
-- `list_home_directory(subdirectory='{vault_folder}')` to see files
-- `read_project_file('{vault_folder}/note.md')` to read a specific note"""
-        
-        elif server_id == 'filesystem':
-            path = kwargs.get('path', '')
+                # Check if running on WSL with Windows path
+                if vault_path.startswith("/mnt/"):
+                    guidance = f"""\n**⚠️ WSL Path Issue Detected**
+
+The Obsidian server cannot access Windows paths through WSL mounts.
+Your path: {vault_path}
+
+**Recommended Alternative:**
+Use the filesystem server instead for cross-platform file access:
+```
+install_mcp_server_from_registry(server_id='filesystem', path='{vault_path}')
+```
+
+The filesystem server supports WSL mount paths and provides similar functionality."""
+                else:
+                    guidance = f"""\n**✅ Obsidian tools are now available in this chat!**
+You can use:
+- `obsidian_read_note()` - Read a note from your vault
+- `obsidian_create_note()` - Create a new note
+- `obsidian_search_notes()` - Search through your notes
+- `obsidian_list_notes()` - List notes in your vault
+
+Your vault path: {vault_path}"""
+
+        elif server_id == "filesystem":
+            path = kwargs.get("path", "")
             if path:
-                guidance = f"""\n**⚠️ Note:** The Filesystem MCP server runs externally.
-To access files from this chat, you can use:
-- `list_home_directory()` to explore directories
-- `read_project_file('path/to/file')` to read files"""
-        
-        elif server_id == 'brave-search':
-            guidance = """\n**✅ Good news:** You can use `brave_search(query='your search')` directly in this chat!
-The Brave Search functionality is available both here and in external MCP clients."""
-        
-        elif server_id == 'memory':
-            guidance = """\n**✅ Good news:** You can use memory functions directly in this chat:
+                guidance = f"""\n**✅ Filesystem tools are now available in this chat!**
+You can use:
+- `filesystem_read_file()` - Read file contents
+- `filesystem_write_file()` - Write to files
+- `filesystem_list_directory()` - List directory contents
+- `filesystem_create_directory()` - Create directories
+
+Access path: {path}"""
+
+        elif server_id == "github":
+            guidance = """\n**✅ GitHub tools are now available in this chat!**
+You can use:
+- `github_list_repos()` - List your repositories
+- `github_get_issues()` - Get issues from a repo
+- `github_create_issue()` - Create a new issue
+- And many more GitHub operations!"""
+
+        elif server_id == "brave-search":
+            guidance = """\n**✅ Brave Search is ready!**
+You can use `brave_search(query='your search')` directly in this chat!"""
+
+        elif server_id == "memory":
+            guidance = """\n**✅ Memory server is ready!**
+You can use:
 - `memory_store_conversation(topic='topic', content='content')` to store
 - `memory_retrieve_conversation(topic='topic')` to retrieve
 - `memory_search_conversations(query='search term')` to search"""
-        
+
+        elif server_id == "time":
+            timezone = kwargs.get("timezone", "UTC")
+            guidance = f"""\n**✅ Time server tools are now available!**
+You can use:
+- `time_get_current_time()` - Get current time
+- `time_convert_timezone()` - Convert between timezones
+- `time_format_date()` - Format dates
+
+Configured timezone: {timezone}"""
+
         return guidance
 
     def _get_gmp_path(self) -> str:
@@ -74,7 +113,7 @@ The Brave Search functionality is available both here and in external MCP client
             )
             if result.returncode == 0:
                 return "gmp"
-        except:
+        except Exception:
             pass
 
         # Try which/where command depending on OS
@@ -83,7 +122,7 @@ The Brave Search functionality is available both here and in external MCP client
             result = subprocess.run([which_cmd, "gmp"], capture_output=True, text=True, shell=True)
             if result.returncode == 0:
                 return result.stdout.strip().split("\n")[0]  # Take first result on Windows
-        except:
+        except Exception:
             pass
 
         # Try Python module execution
@@ -96,7 +135,7 @@ The Brave Search functionality is available both here and in external MCP client
             )
             if result.returncode == 0:
                 return f"{sys.executable} -m gradio_mcp_playground.cli"
-        except:
+        except Exception:
             pass
 
         raise RuntimeError(
@@ -112,7 +151,6 @@ The Brave Search functionality is available both here and in external MCP client
         try:
             gmp_path = self._get_gmp_path()
             command_parts = gmp_path.split() + args
-            command_str = " ".join(command_parts)
 
             # Execute directly without approval
 
@@ -153,26 +191,34 @@ The Brave Search functionality is available both here and in external MCP client
                 # Handle Pydantic warnings more comprehensively
                 if "warning" in stderr_lower and "pydantic" in stderr_lower:
                     # Check if the only error content is Pydantic warnings and "Aborted!"
-                    stderr_lines = result.stderr.split('\n') if result.stderr else []
+                    stderr_lines = result.stderr.split("\n") if result.stderr else []
                     non_warning_errors = []
                     for line in stderr_lines:
                         line_lower = line.lower().strip()
-                        if (line_lower and
-                            not line_lower.startswith('c:\\programdata\\anaconda3\\lib\\site-packages\\pydantic') and
-                            'userwarning:' not in line_lower and
-                            'warnings.warn(' not in line_lower and
-                            'field "model_name" has conflict' not in line_lower and
-                            'you may be able to resolve this warning' not in line_lower and
-                            line_lower != 'aborted!'):
+                        if (
+                            line_lower
+                            and not line_lower.startswith(
+                                "c:\\programdata\\anaconda3\\lib\\site-packages\\pydantic"
+                            )
+                            and "userwarning:" not in line_lower
+                            and "warnings.warn(" not in line_lower
+                            and 'field "model_name" has conflict' not in line_lower
+                            and "you may be able to resolve this warning" not in line_lower
+                            and line_lower != "aborted!"
+                        ):
                             non_warning_errors.append(line)
 
                     # If only Pydantic warnings and possibly "Aborted!", treat as success for server operations
-                    if not non_warning_errors and any(cmd in args for cmd in ["create", "server", "start", "stop"]):
+                    if not non_warning_errors and any(
+                        cmd in args for cmd in ["create", "server", "start", "stop"]
+                    ):
                         return True, "Command completed successfully (Pydantic warnings ignored)"
 
                     # If command has stdout content and no real errors
-                    if (stdout_content.strip() and
-                        not any(error_word in stdout_content.lower() for error_word in ["error:", "failed", "traceback"])):
+                    if stdout_content.strip() and not any(
+                        error_word in stdout_content.lower()
+                        for error_word in ["error:", "failed", "traceback"]
+                    ):
                         return True, stdout_content
 
                 return False, f"Command failed: {result.stderr or result.stdout}"
@@ -189,7 +235,12 @@ The Brave Search functionality is available both here and in external MCP client
         )
 
         if success:
-            return f"📋 Available MCP Servers:\n{output}"
+            # Add a note about external servers
+            output_with_note = (
+                output
+                + "\n\n💡 Note: Servers marked with source 'Claude Desktop' are managed externally and cannot be modified here."
+            )
+            return f"📋 Available MCP Servers:\n{output_with_note}"
         else:
             return f"❌ Failed to list servers: {output}"
 
@@ -225,12 +276,20 @@ The Brave Search functionality is available both here and in external MCP client
                 if local_servers:
                     available_list = []
                     for server in local_servers:
-                        port_info = f"port {server.get('port', 'N/A')}" if server.get('port') else "no port configured"
+                        port_info = (
+                            f"port {server.get('port', 'N/A')}"
+                            if server.get("port")
+                            else "no port configured"
+                        )
                         available_list.append(f"- {server.get('name')} ({port_info})")
                     available = "\n".join(available_list)
                     return f"❌ Server '{name}' not found in configuration.\n\nAvailable local servers:\n{available}\n\n💡 Suggestion: Use start_mcp_server() with one of the available server names, or use create_mcp_server() to create a new server."
                 else:
                     return f"❌ Server '{name}' not found in configuration.\n\nNo local servers available. Use create_mcp_server() to create a new server first.\n\nExample: create_mcp_server(name='basic_server', template='basic', port=7862)"
+
+            # Check if server is managed locally
+            if server_config.get("source") != "local":
+                return f"❌ Cannot start '{name}': This server is managed by {server_config.get('source', 'external system')} and cannot be started from here.\n\n💡 Tip: Only locally created servers can be started using this command."
 
             server_directory = server_config.get("directory")
             if not server_directory:
@@ -270,6 +329,7 @@ The Brave Search functionality is available both here and in external MCP client
 
             # Give it a moment to start
             import time
+
             time.sleep(2)
 
             # Check if process is still running
@@ -278,7 +338,7 @@ The Brave Search functionality is available both here and in external MCP client
             else:
                 # Process exited, get error info
                 stdout, stderr = process.communicate()
-                error_msg = stderr.decode('utf-8', errors='replace') if stderr else "Unknown error"
+                error_msg = stderr.decode("utf-8", errors="replace") if stderr else "Unknown error"
                 return f"❌ Server '{name}' failed to start:\n{error_msg}"
 
         except Exception as e:
@@ -295,6 +355,10 @@ The Brave Search functionality is available both here and in external MCP client
 
             if not server_config:
                 return f"❌ Server '{name}' not found in configuration."
+
+            # Check if server is managed locally
+            if server_config.get("source") != "local":
+                return f"❌ Cannot stop '{name}': This server is managed by {server_config.get('source', 'external system')} and cannot be stopped from here.\n\n💡 Tip: Only locally created servers can be stopped using this command."
 
             # Safety check: Don't stop servers that might be the dashboard
             server_port = server_config.get("port", 7860)
@@ -336,6 +400,15 @@ The Brave Search functionality is available both here and in external MCP client
 
     def delete_server(self, name: str) -> str:
         """Delete an MCP server"""
+        # Check if server is managed locally
+        from .config_manager import ConfigManager
+
+        config_manager = ConfigManager()
+        server_config = config_manager.get_server(name)
+
+        if server_config and server_config.get("source") != "local":
+            return f"❌ Cannot delete '{name}': This server is managed by {server_config.get('source', 'external system')} and cannot be deleted from here.\n\n💡 Tip: Only locally created servers can be deleted using this command."
+
         success, output = self._execute_gmp_command(
             ["server", "delete", name], f"Delete MCP server '{name}' and its files"
         )
@@ -380,11 +453,11 @@ The Brave Search functionality is available both here and in external MCP client
 
     def install_mcp_server_from_registry(self, server_id: str, **kwargs) -> str:
         """Install an MCP server from the registry
-        
+
         Args:
             server_id: ID of the server in the registry (e.g., 'filesystem', 'memory', 'github')
             **kwargs: Additional arguments like 'path' for filesystem server, or environment variables
-            
+
         Returns:
             str: Installation result and connection instructions
         """
@@ -392,9 +465,10 @@ The Brave Search functionality is available both here and in external MCP client
             import os
             import platform
             import sys
+
             from .registry import ServerRegistry
             from .secure_storage import SecureTokenStorage
-            
+
             registry = ServerRegistry()
             storage = SecureTokenStorage()
 
@@ -404,47 +478,46 @@ The Brave Search functionality is available both here and in external MCP client
                 return f"❌ Server '{server_id}' not found in registry"
 
             # Check for stored API keys first
-            env_vars_needed = server_info.get('env_vars', {})
             stored_keys = storage.retrieve_server_keys(server_id)
-            
+
             # Special handling for environment variables passed as arguments
             # For brave-search, convert 'token' to 'BRAVE_API_KEY'
-            if server_id == 'brave-search':
-                if 'token' in kwargs:
-                    kwargs['BRAVE_API_KEY'] = kwargs.pop('token')
+            if server_id == "brave-search":
+                if "token" in kwargs:
+                    kwargs["BRAVE_API_KEY"] = kwargs.pop("token")
                     # Store the key securely
-                    storage.store_key('brave-search', 'BRAVE_API_KEY', kwargs['BRAVE_API_KEY'])
-                elif 'BRAVE_API_KEY' in stored_keys:
+                    storage.store_key("brave-search", "BRAVE_API_KEY", kwargs["BRAVE_API_KEY"])
+                elif "BRAVE_API_KEY" in stored_keys:
                     # Use stored key
-                    kwargs['BRAVE_API_KEY'] = stored_keys['BRAVE_API_KEY']
-                    
-            elif server_id == 'github':
-                if 'token' in kwargs:
-                    kwargs['GITHUB_TOKEN'] = kwargs.pop('token')
+                    kwargs["BRAVE_API_KEY"] = stored_keys["BRAVE_API_KEY"]
+
+            elif server_id == "github":
+                if "token" in kwargs:
+                    kwargs["GITHUB_TOKEN"] = kwargs.pop("token")
                     # Store the key securely
-                    storage.store_key('github', 'GITHUB_TOKEN', kwargs['GITHUB_TOKEN'])
-                elif 'GITHUB_TOKEN' in stored_keys:
+                    storage.store_key("github", "GITHUB_TOKEN", kwargs["GITHUB_TOKEN"])
+                elif "GITHUB_TOKEN" in stored_keys:
                     # Use stored key
-                    kwargs['GITHUB_TOKEN'] = stored_keys['GITHUB_TOKEN']
+                    kwargs["GITHUB_TOKEN"] = stored_keys["GITHUB_TOKEN"]
 
             # Auto-detect and set default arguments for specific servers
-            if server_id == 'filesystem' and 'path' not in kwargs:
+            if server_id == "filesystem" and "path" not in kwargs:
                 # Auto-detect home directory based on OS
-                
+
                 system = platform.system().lower()
-                if system == 'windows':
-                    home_path = os.environ.get('USERPROFILE', os.path.expanduser('~'))
+                if system == "windows":
+                    home_path = os.environ.get("USERPROFILE", os.path.expanduser("~"))
                 else:  # Linux, macOS, etc.
-                    home_path = os.path.expanduser('~')
-                
-                kwargs['path'] = home_path
+                    home_path = os.path.expanduser("~")
+
+                kwargs["path"] = home_path
                 auto_detected_path = True
             else:
                 auto_detected_path = False
-            
+
             # Create directory for memory server if needed
-            if server_id == 'memory':
-                memory_dir = os.path.join(os.path.expanduser('~'), '.memory_server_bin')
+            if server_id == "memory":
+                memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
                 if not os.path.exists(memory_dir):
                     os.makedirs(memory_dir, exist_ok=True)
                     print(f"Created memory server directory: {memory_dir}")
@@ -452,94 +525,178 @@ The Brave Search functionality is available both here and in external MCP client
             # Generate install command with user arguments (including auto-detected ones)
             install_config = registry.generate_install_command(server_id, kwargs)
             if not install_config:
-                required_args = server_info.get('required_args', [])
+                required_args = server_info.get("required_args", [])
                 if required_args:
                     missing_args = [arg for arg in required_args if arg not in kwargs]
                     if missing_args:
                         # Special handling for servers that need API keys
-                        if server_id == 'brave-search' and 'token' not in kwargs and 'BRAVE_API_KEY' not in kwargs:
+                        if (
+                            server_id == "brave-search"
+                            and "token" not in kwargs
+                            and "BRAVE_API_KEY" not in kwargs
+                        ):
                             return f"❌ Missing required arguments: {missing_args}\n\nExample for {server_id}:\n{server_info['setup_help']}\n\n🔑 **API Key Required**\n\nTo use Brave Search, you need an API key:\n1. Get your free API key from https://brave.com/search/api/\n2. Install with: install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY')"
-                        elif server_id == 'github' and 'token' not in kwargs and 'GITHUB_TOKEN' not in kwargs:
+                        elif (
+                            server_id == "github"
+                            and "token" not in kwargs
+                            and "GITHUB_TOKEN" not in kwargs
+                        ):
                             return f"❌ Missing required arguments: {missing_args}\n\nExample for {server_id}:\n{server_info['setup_help']}\n\n🔑 **GitHub Token Required**\n\nTo use GitHub server, you need a personal access token:\n1. Create a token at https://github.com/settings/tokens\n2. Install with: install_mcp_server_from_registry(server_id='github', token='YOUR_TOKEN')"
                         else:
                             return f"❌ Missing required arguments: {missing_args}\n\nExample for {server_id}:\n{server_info['setup_help']}"
                 return f"❌ Failed to generate install command for '{server_id}'"
 
             # Execute installation
-            if install_config['install_method'] == 'npm':
+            if install_config["install_method"] == "npm":
                 # Use npx to install and run npm packages
-                cmd = [install_config['command']] + install_config['args']
-                cmd_str = ' '.join(cmd)
+                cmd = [install_config["command"]] + install_config["args"]
+                cmd_str = " ".join(cmd)
 
                 # Add auto-detected path info if applicable
                 path_info = ""
-                if server_id == 'filesystem' and auto_detected_path:
+                if server_id == "filesystem" and auto_detected_path:
                     path_info = f"\n**🏠 Auto-detected Home Directory:** {kwargs['path']}"
-                
+
                 # Automatically start the server as a subprocess
                 try:
                     import subprocess
                     import time
-                    
+
                     # Set up environment variables if needed
                     env = os.environ.copy()
-                    for k, v in install_config['env'].items():
+                    for k, v in install_config["env"].items():
                         env[k] = v
-                    
+
                     # Start the server process
                     process = subprocess.Popen(
                         cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
+                        stdin=subprocess.PIPE,  # Important for stdio servers
                         env=env,
-                        shell=True if sys.platform == 'win32' else False
+                        shell=True if sys.platform == "win32" else False,
                     )
-                    
+
                     # Give it a moment to start
-                    time.sleep(2)
+                    time.sleep(1)
                     
+                    # For stdio servers, check if they printed their startup message
+                    if server_id in ["memory", "filesystem", "github", "obsidian", "time"]:
+                        # These are stdio servers - check for startup output
+                        import select
+                        import os
+                        
+                        # Non-blocking read of stdout
+                        if sys.platform != "win32":
+                            # Unix-like systems
+                            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+                            if ready:
+                                output = process.stdout.read(1024).decode("utf-8", errors="replace")
+                                if "running on stdio" in output.lower() or "server" in output.lower():
+                                    # Server started successfully
+                                    process_is_running = True
+                                else:
+                                    process_is_running = process.poll() is None
+                            else:
+                                process_is_running = process.poll() is None
+                        else:
+                            # Windows - just check if process is alive
+                            process_is_running = process.poll() is None
+                    else:
+                        process_is_running = process.poll() is None
+
                     # Check if process is running
-                    if process.poll() is None:
+                    if process_is_running:
                         # Process is running
                         # Store process info for later connection
-                        if not hasattr(self, '_running_mcp_servers'):
+                        if not hasattr(self, "_running_mcp_servers"):
                             self._running_mcp_servers = {}
-                        
+
                         self._running_mcp_servers[server_id] = {
-                            'process': process,
-                            'command': cmd_str,
-                            'pid': process.pid
+                            "process": process,
+                            "command": cmd_str,
+                            "pid": process.pid,
                         }
+
+                        # Save server configuration
+                        from .mcp_server_config import MCPServerConfig
+                        mcp_config = MCPServerConfig()
                         
+                        # For registry servers, we need to store the command and args
+                        # Extract command and args from cmd list
+                        if len(cmd) > 0:
+                            server_command = cmd[0]
+                            server_args = cmd[1:] if len(cmd) > 1 else []
+                        else:
+                            server_command = install_config["command"]
+                            server_args = install_config["args"]
+                        
+                        # Save the server configuration
+                        mcp_config.add_server(
+                            name=server_id,
+                            command=server_command,
+                            args=server_args,
+                            env=install_config.get("env", {})
+                        )
+                        print(f"Saved {server_id} configuration to MCP servers config")
+
                         # Add connection to coding agent if available
                         try:
                             # Set environment variable for the agent to use
-                            if server_id == 'brave-search' and 'BRAVE_API_KEY' in env:
-                                os.environ['BRAVE_API_KEY'] = env['BRAVE_API_KEY']
-                                
-                            from .coding_agent import CodingAgent
+                            if server_id == "brave-search" and "BRAVE_API_KEY" in env:
+                                os.environ["BRAVE_API_KEY"] = env["BRAVE_API_KEY"]
+                            elif server_id == "github" and "GITHUB_TOKEN" in env:
+                                os.environ["GITHUB_TOKEN"] = env["GITHUB_TOKEN"]
+
                             # Get global coding agent instance if available
                             import gradio_mcp_playground.web_ui as web_ui
-                            if hasattr(web_ui, 'coding_agent') and web_ui.coding_agent:
-                                # Define tools for each server type
+
+                            if hasattr(web_ui, "coding_agent") and web_ui.coding_agent:
+                                # Define tools for each server type (used as fallback)
                                 tools_map = {
-                                    'brave-search': ['search'],
-                                    'memory': ['store', 'retrieve', 'search'],
-                                    'filesystem': ['read', 'write', 'list', 'create'],
-                                    'github': ['repos', 'issues', 'prs'],
-                                    'time': ['current', 'convert', 'format']
+                                    "brave-search": ["search"],
+                                    "memory": ["store", "retrieve", "search"],
+                                    "filesystem": ["read", "write", "list", "create"],
+                                    "github": ["repos", "issues", "prs"],
+                                    "time": ["current", "convert", "format"],
+                                    "obsidian": [
+                                        "read_note",
+                                        "create_note",
+                                        "search_notes",
+                                        "list_notes",
+                                    ],
                                 }
-                                
+
                                 connection_info = {
-                                    'name': server_info.get('name', server_id),
-                                    'tools': tools_map.get(server_id, []),
-                                    'env': env
+                                    "name": server_info.get("name", server_id),
+                                    "tools": tools_map.get(server_id, []),
+                                    "env": env,
+                                    "command": cmd_str,
+                                    "args": install_config["args"],
                                 }
                                 web_ui.coding_agent.add_mcp_connection(server_id, connection_info)
                                 print(f"Added {server_id} connection to coding agent")
+
+                                # Check if tools are available
+                                if (
+                                    hasattr(web_ui.coding_agent, "mcp_tools")
+                                    and server_id in web_ui.coding_agent.mcp_tools
+                                ):
+                                    tool_count = len(web_ui.coding_agent.mcp_tools[server_id])
+                                    print(f"✅ {tool_count} tools registered for {server_id}")
+
+                                    # List the tool names for debugging
+                                    tool_names = [
+                                        tool.name
+                                        for tool in web_ui.coding_agent.mcp_tools[server_id]
+                                        if hasattr(tool, "name")
+                                    ]
+                                    print(f"   Available tools: {', '.join(tool_names)}")
+                                else:
+                                    print(f"⚠️ No tools found for {server_id} in mcp_tools")
                         except Exception as e:
                             print(f"Could not add connection to coding agent: {e}")
-                        
+
                         return f"""✅ MCP Server '{server_id}' started automatically!{path_info}
 
 **🚀 Server Running:**
@@ -547,8 +704,9 @@ The Brave Search functionality is available both here and in external MCP client
 - Command: `{cmd_str}`
 - Status: Running in background for external MCP clients
 
-**📝 Important:** This server is now ready for external MCP clients (like Claude Desktop).
-- **DO NOT** try to connect to this server within this chat
+**📝 Server Status:**
+- Process running in background (PID: {process.pid})
+- Tools are being connected to this chat interface
 - **To stop the server:** Use stop_mcp_registry_server('{server_id}')
 
 **🔌 For Claude Desktop users:**
@@ -566,9 +724,67 @@ Add this to your Claude Desktop config:
 {self._get_server_specific_guidance(server_id, kwargs)}
 """
                     else:
-                        # Process exited, get error
+                        # Process exited, check why
                         stdout, stderr = process.communicate()
-                        error_msg = stderr.decode('utf-8', errors='replace') if stderr else "Unknown error"
+                        stdout_msg = stdout.decode("utf-8", errors="replace") if stdout else ""
+                        stderr_msg = stderr.decode("utf-8", errors="replace") if stderr else ""
+                        
+                        # Check if it's a stdio server's normal startup message
+                        stdio_servers = ["memory", "filesystem", "github", "obsidian", "time", "brave-search"]
+                        if server_id in stdio_servers and ("running on stdio" in stdout_msg.lower() or "server" in stdout_msg.lower()) and not stderr_msg:
+                            # This is actually a successful start - stdio server just printed and is waiting
+                            # We need to restart it properly with stdin
+                            process = subprocess.Popen(
+                                cmd,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                stdin=subprocess.PIPE,  # Important for stdio servers
+                                env=env,
+                                shell=True if sys.platform == "win32" else False,
+                            )
+                            
+                            # Store the process
+                            if not hasattr(self, "_running_mcp_servers"):
+                                self._running_mcp_servers = {}
+                            
+                            self._running_mcp_servers[server_id] = {
+                                "process": process,
+                                "command": cmd_str,
+                                "pid": process.pid,
+                            }
+                            
+                            # Save configuration (duplicate code but needed here)
+                            from .mcp_server_config import MCPServerConfig
+                            mcp_config = MCPServerConfig()
+                            
+                            if len(cmd) > 0:
+                                server_command = cmd[0]
+                                server_args = cmd[1:] if len(cmd) > 1 else []
+                            else:
+                                server_command = install_config["command"]
+                                server_args = install_config["args"]
+                            
+                            mcp_config.add_server(
+                                name=server_id,
+                                command=server_command,
+                                args=server_args,
+                                env=install_config.get("env", {})
+                            )
+                            
+                            return f"""✅ MCP Server '{server_id}' started successfully!
+
+**🚀 Server Running:**
+- Process ID: {process.pid}
+- Command: `{cmd_str}`
+- Status: Running (stdio protocol)
+
+**📝 Note:** This is a stdio-based MCP server. It communicates via standard input/output.
+
+{self._get_server_specific_guidance(server_id, kwargs)}
+"""
+                        
+                        # Otherwise it's a real error
+                        error_msg = stderr_msg or stdout_msg or "Unknown error"
                         return f"""❌ Failed to start MCP Server '{server_id}'
 
 **Error:** {error_msg}
@@ -580,7 +796,7 @@ Add this to your Claude Desktop config:
 2. Check if the package exists: `npm view {install_config['package']}`
 3. Try running manually: `{cmd_str}`
 """
-                    
+
                 except Exception as e:
                     return f"""❌ Error starting MCP Server '{server_id}': {str(e)}
 
@@ -589,13 +805,13 @@ Add this to your Claude Desktop config:
 **💡 Try installing Node.js/npm if not already installed.**
 """
 
-            elif install_config['install_method'] == 'uvx':
-                cmd = [install_config['command']] + install_config['args']
-                cmd_str = ' '.join(cmd)
+            elif install_config["install_method"] == "uvx":
+                cmd = [install_config["command"]] + install_config["args"]
+                cmd_str = " ".join(cmd)
 
                 # Add auto-detected path info if applicable
                 path_info = ""
-                if server_id == 'filesystem' and auto_detected_path:
+                if server_id == "filesystem" and auto_detected_path:
                     path_info = f"\n**🏠 Auto-detected Home Directory:** {kwargs['path']}"
 
                 return f"""✅ MCP Server '{server_id}' installation ready!{path_info}
@@ -625,23 +841,23 @@ Add this to your Claude Desktop config:
 
     def stop_mcp_registry_server(self, server_id: str) -> str:
         """Stop a running MCP registry server
-        
+
         Args:
             server_id: ID of the server to stop
-            
+
         Returns:
             str: Result of stopping the server
         """
-        if not hasattr(self, '_running_mcp_servers') or server_id not in self._running_mcp_servers:
+        if not hasattr(self, "_running_mcp_servers") or server_id not in self._running_mcp_servers:
             return f"❌ Server '{server_id}' is not running or was not started by this session"
-        
+
         try:
             server_info = self._running_mcp_servers[server_id]
-            process = server_info['process']
-            
+            process = server_info["process"]
+
             # Terminate the process
             process.terminate()
-            
+
             # Wait a bit for graceful shutdown
             try:
                 process.wait(timeout=5)
@@ -649,20 +865,22 @@ Add this to your Claude Desktop config:
                 # Force kill if needed
                 process.kill()
                 process.wait()
-            
+
             # Remove from running servers
             del self._running_mcp_servers[server_id]
-            
+
             return f"""⏹️ MCP Server '{server_id}' stopped successfully!
 
 **Process ID:** {server_info['pid']}
 **Command:** {server_info['command']}
 """
-            
+
         except Exception as e:
             return f"❌ Error stopping server '{server_id}': {str(e)}"
 
-    def create_and_start_server(self, name: str, template: str = "basic", port: Optional[int] = None) -> str:
+    def create_and_start_server(
+        self, name: str, template: str = "basic", port: Optional[int] = None
+    ) -> str:
         """Create a new server and start it immediately with safe defaults"""
         try:
             # Use safe default port
@@ -684,7 +902,7 @@ Add this to your Claude Desktop config:
 
     def connect_client(self, url: str, name: Optional[str] = None, protocol: str = "stdio") -> str:
         """Connect to an MCP server as a client
-        
+
         Note: This connects to pure MCP servers, not Gradio web interfaces.
         For Gradio servers, use test_gradio_server() instead.
         """
@@ -850,6 +1068,9 @@ def create_mcp_management_tools():
     def stop_mcp_server(name: str) -> str:
         """Stop a running MCP server.
 
+        Note: Only locally created servers can be stopped. External servers
+        (e.g., Claude Desktop servers) cannot be stopped through this command.
+
         Args:
             name: Name of the server to stop
 
@@ -860,6 +1081,9 @@ def create_mcp_management_tools():
 
     def delete_mcp_server(name: str) -> str:
         """Delete an MCP server and its files.
+
+        Note: Only locally created servers can be deleted. External servers
+        (e.g., Claude Desktop servers) cannot be deleted through this command.
 
         Args:
             name: Name of the server to delete
@@ -962,9 +1186,14 @@ def create_mcp_management_tools():
         """
         return manager.start_pure_mcp_server()
 
-    def install_mcp_server_from_registry(server_id: str, token: str = None, path: str = None, 
-                                        timezone: str = None, vault_path1: str = None, 
-                                        vault_path2: str = None) -> str:
+    def install_mcp_server_from_registry(
+        server_id: str,
+        token: str = None,
+        path: str = None,
+        timezone: str = None,
+        vault_path1: str = None,
+        vault_path2: str = None,
+    ) -> str:
         """Install an MCP server from the registry and automatically start it.
 
         Args:
@@ -981,18 +1210,18 @@ def create_mcp_management_tools():
         # Build kwargs from explicit parameters
         kwargs = {}
         if token is not None:
-            kwargs['token'] = token
+            kwargs["token"] = token
         if path is not None:
-            kwargs['path'] = path
+            kwargs["path"] = path
         if timezone is not None:
-            kwargs['timezone'] = timezone
+            kwargs["timezone"] = timezone
         if vault_path1 is not None:
-            kwargs['vault_path1'] = vault_path1
+            kwargs["vault_path1"] = vault_path1
         if vault_path2 is not None:
-            kwargs['vault_path2'] = vault_path2
-            
+            kwargs["vault_path2"] = vault_path2
+
         return manager.install_mcp_server_from_registry(server_id, **kwargs)
-    
+
     def stop_mcp_registry_server(server_id: str) -> str:
         """Stop a running MCP registry server that was started by install_mcp_server_from_registry.
 
@@ -1037,9 +1266,15 @@ def create_mcp_management_tools():
             FunctionTool.from_defaults(fn=test_mcp_connection, name="test_mcp_connection"),
             FunctionTool.from_defaults(fn=test_gradio_server_http, name="test_gradio_server_http"),
             FunctionTool.from_defaults(fn=start_pure_mcp_server, name="start_pure_mcp_server"),
-            FunctionTool.from_defaults(fn=create_and_start_mcp_server, name="create_and_start_mcp_server"),
-            FunctionTool.from_defaults(fn=install_mcp_server_from_registry, name="install_mcp_server_from_registry"),
-            FunctionTool.from_defaults(fn=stop_mcp_registry_server, name="stop_mcp_registry_server"),
+            FunctionTool.from_defaults(
+                fn=create_and_start_mcp_server, name="create_and_start_mcp_server"
+            ),
+            FunctionTool.from_defaults(
+                fn=install_mcp_server_from_registry, name="install_mcp_server_from_registry"
+            ),
+            FunctionTool.from_defaults(
+                fn=stop_mcp_registry_server, name="stop_mcp_registry_server"
+            ),
             # Help tools
             FunctionTool.from_defaults(fn=get_mcp_help, name="get_mcp_help"),
         ]

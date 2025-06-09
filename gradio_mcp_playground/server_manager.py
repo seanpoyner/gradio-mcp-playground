@@ -275,13 +275,15 @@ class GradioMCPServer:
 
         # Start process in background with suppressed output
         self.process = subprocess.Popen(
-            cmd, 
-            env=env, 
+            cmd,
+            env=env,
             cwd=str(self.app_path.parent),
             stdout=subprocess.DEVNULL,  # Suppress stdout
             stderr=subprocess.DEVNULL,  # Suppress stderr
-            stdin=subprocess.DEVNULL,   # No input
-            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0  # Hide window on Windows
+            stdin=subprocess.DEVNULL,  # No input
+            creationflags=(
+                subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            ),  # Hide window on Windows
         )
 
         # Save process info
@@ -421,13 +423,15 @@ class GradioMCPServer:
         status = {"running": False, "last_seen": None, "errors": [], "status_message": "Stopped"}
 
         try:
-            # Read the last 100 lines of the log file for recent status
+            # Read the last 200 lines of the log file for recent status
             with open(log_file, encoding="utf-8") as f:
                 lines = f.readlines()
-                recent_lines = lines[-100:] if len(lines) > 100 else lines
+                recent_lines = lines[-200:] if len(lines) > 200 else lines
 
-            server_started = False
-            transport_closed = False
+            # Track timestamped events to determine current state
+            last_server_started = None
+            last_transport_closed = None
+            last_message_activity = None
             last_activity = None
             errors = []
 
@@ -437,48 +441,66 @@ class GradioMCPServer:
                     continue
 
                 # Parse timestamp and message
-                if line.startswith("2025-"):
+                if line.startswith("202"):  # Handles 2024, 2025, etc.
                     parts = line.split(" ", 3)
                     if len(parts) >= 4:
                         timestamp_str = parts[0]
                         level = parts[2] if parts[2].startswith("[") else None
                         message = parts[3] if len(parts) > 3 else ""
 
-                        # Update last activity timestamp
+                        # Parse timestamp
                         try:
                             from datetime import datetime
 
-                            last_activity = datetime.fromisoformat(
-                                timestamp_str.replace("Z", "+00:00")
-                            )
+                            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                            last_activity = timestamp
                         except:
-                            pass
+                            timestamp = None
 
-                        # Check for server status indicators
-                        if "Server started and connected successfully" in message:
-                            server_started = True
-                            transport_closed = False
-                        elif (
-                            "Client transport closed" in message
-                            or "Server transport closed" in message
-                        ):
-                            transport_closed = True
-                        elif (
-                            "Server disconnected" in message or "error" in level.lower()
-                            if level
-                            else False
-                        ):
-                            errors.append(message)
-                        elif "Initializing server" in message:
-                            server_started = False
+                        # Track important events with timestamps
+                        if timestamp:
+                            if "Server started and connected successfully" in message:
+                                last_server_started = timestamp
+                            elif (
+                                "Client transport closed" in message
+                                or "Server transport closed" in message
+                            ):
+                                last_transport_closed = timestamp
+                            elif (
+                                "Message from server:" in message or "Message to server:" in message
+                            ):
+                                # Any message activity indicates the server is running
+                                last_message_activity = timestamp
+                            elif (
+                                "Server disconnected" in message or "error" in level.lower()
+                                if level
+                                else False
+                            ):
+                                errors.append(message)
 
-            # Determine current status
-            if server_started and not transport_closed:
+            # Determine current status based on the most recent events
+            if last_message_activity and last_activity:
+                # If we've seen message activity in the last 5 minutes, server is running
+                from datetime import datetime, timezone, timedelta
+
+                now = datetime.now(timezone.utc)
+                if (now - last_message_activity) < timedelta(minutes=5):
+                    status["running"] = True
+                    status["status_message"] = "Running"
+                else:
+                    status["running"] = False
+                    status["status_message"] = "Inactive"
+            elif last_server_started and last_transport_closed:
+                # Compare timestamps to see which event was more recent
+                if last_server_started > last_transport_closed:
+                    status["running"] = True
+                    status["status_message"] = "Running"
+                else:
+                    status["running"] = False
+                    status["status_message"] = "Disconnected"
+            elif last_server_started:
                 status["running"] = True
                 status["status_message"] = "Running"
-            elif server_started and transport_closed:
-                status["running"] = False
-                status["status_message"] = "Disconnected"
             elif errors:
                 status["running"] = False
                 status["status_message"] = "Error"
