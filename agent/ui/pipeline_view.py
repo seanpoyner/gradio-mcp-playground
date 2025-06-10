@@ -117,12 +117,24 @@ class PipelineView:
                     value="All"
                 )
                 
-                self.available_servers = gr.JSON(
-                    label="Servers",
+                # Use Dataframe instead of JSON for server list (better compatibility)
+                self.available_servers = gr.Dataframe(
+                    headers=["Name", "Type", "Category", "Description"],
+                    label="Available Servers",
+                    interactive=False,
                     value=[]
                 )
                 
-                self.server_details = gr.Markdown("Select a server to see details...")
+                # Add dropdown for server selection
+                self.server_selector = gr.Dropdown(
+                    label="Select Server",
+                    choices=[],
+                    value=None,
+                    interactive=True,
+                    visible=False
+                )
+                
+                self.server_details = gr.Markdown("Search for servers above...")
         
         # Set up event handlers for design interface
         self._setup_design_handlers()
@@ -347,22 +359,28 @@ class PipelineView:
         )
         
         # Search servers
+        def search_and_update_dropdown(query, category):
+            data = self._search_servers(query, category)
+            # Update dropdown choices
+            choices = [row[0] for row in data]  # Server names
+            return data, gr.update(choices=choices, visible=len(choices) > 0)
+        
         self.server_search.change(
-            fn=self._search_servers,
+            fn=search_and_update_dropdown,
             inputs=[self.server_search, self.server_categories],
-            outputs=[self.available_servers]
+            outputs=[self.available_servers, self.server_selector]
         )
         
         self.server_categories.change(
-            fn=self._filter_servers,
-            inputs=[self.server_categories],
-            outputs=[self.available_servers]
+            fn=search_and_update_dropdown,
+            inputs=[gr.Textbox(value="", visible=False), self.server_categories],
+            outputs=[self.available_servers, self.server_selector]
         )
         
-        # Server selection from available list
-        self.available_servers.select(
-            fn=self._select_server,
-            inputs=[self.available_servers],
+        # Server selection from dropdown
+        self.server_selector.change(
+            fn=self._select_server_by_name,
+            inputs=[self.server_selector],
             outputs=[self.server_details]
         )
     
@@ -517,15 +535,24 @@ class PipelineView:
         server_names = [s["name"] for s in self.current_pipeline["servers"]]
         return self._render_pipeline_html(), self.current_pipeline, server_names, server_names
     
-    def _search_servers(self, query: str, category: str) -> List[Dict[str, Any]]:
+    def _search_servers(self, query: str, category: str) -> List[List[str]]:
         """Search for available servers"""
         
         # Use agent's registry if available
+        servers_data = []
         if hasattr(self.agent, 'registry'):
             try:
                 servers = self.agent.registry.search_servers(query, category)
                 self.available_servers_list = servers
-                return servers
+                # Convert to dataframe format
+                for server in servers:
+                    servers_data.append([
+                        server.get("name", ""),
+                        server.get("type", ""),
+                        server.get("category", ""),
+                        server.get("description", "")
+                    ])
+                return servers_data
             except:
                 pass
         
@@ -588,9 +615,19 @@ class PipelineView:
             mock_servers = [s for s in mock_servers if s["category"] == category]
         
         self.available_servers_list = mock_servers
-        return mock_servers
+        
+        # Convert to dataframe format
+        for server in mock_servers:
+            servers_data.append([
+                server.get("name", ""),
+                server.get("type", ""),
+                server.get("category", ""),
+                server.get("description", "")
+            ])
+        
+        return servers_data
     
-    def _filter_servers(self, category: str) -> List[Dict[str, Any]]:
+    def _filter_servers(self, category: str) -> List[List[str]]:
         """Filter servers by category"""
         return self._search_servers("", category)
     
@@ -1193,6 +1230,19 @@ if __name__ == "__main__":
         details += "\n*Click 'Add Server' to add this to your pipeline*"
         
         return details
+    
+    def _select_server_by_name(self, server_name: str) -> str:
+        """Handle server selection by name from dropdown"""
+        
+        if not server_name:
+            return "Select a server to see details..."
+        
+        # Find server in available servers list
+        for server in self.available_servers_list:
+            if server.get("name") == server_name:
+                return self._select_server(server)
+        
+        return f"Server '{server_name}' not found in available servers."
     
     async def _execute_pipeline(self, input_data: str) -> str:
         """Execute the pipeline with test data"""

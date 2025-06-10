@@ -946,7 +946,7 @@ def create_unified_dashboard():
                             - **Agent Builder**: Create custom Gradio agents
                             - **Server Builder**: Quick create servers or build complex pipelines
                             - **MCP Connections**: Connect to multiple servers simultaneously
-                            - **Tool Testing**: Test MCP tools interactively
+                            - **Agent Control Panel**: Deploy and manage agents with embedded viewer
                             
                             **Resources:**
                             - [MCP Documentation](https://github.com/anthropics/mcp)
