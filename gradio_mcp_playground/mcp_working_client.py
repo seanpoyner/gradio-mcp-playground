@@ -218,7 +218,7 @@ class MCPServerProcess:
             if request_id in self._pending_requests:
                 del self._pending_requests[request_id]
 
-    def initialize(self) -> bool:
+    def initialize(self, skip_if_cached=False) -> bool:
         """Initialize the server connection with caching support"""
         # Check cache first
         server_config = {
@@ -228,8 +228,8 @@ class MCPServerProcess:
         }
         
         cached_data = self._cache_manager.get_server_cache(self.server_id, server_config)
-        if cached_data and 'tools' in cached_data:
-            # Use cached tools
+        if cached_data and 'tools' in cached_data and skip_if_cached:
+            # Use cached tools - but note server still needs to be running for tools to work
             self.tools = cached_data['tools']
             logger.info(f"⚡ Loaded {len(self.tools)} tools from cache for {self.server_id}")
             return True

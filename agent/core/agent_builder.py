@@ -587,6 +587,21 @@ class AgentBuilder:
             "HuggingfaceH4/zephyr-7b-beta"
         ]
         
+        # Conversation state tracking
+        self.conversation_state = {
+            "current_agent": None,
+            "building_stage": None,  # None, "collecting_info", "choosing_prompt", "building"
+            "collected_requirements": None
+        }
+    
+    def clear_conversation(self) -> None:
+        """Clear conversation state"""
+        self.conversation_state = {
+            "current_agent": None,
+            "building_stage": None,
+            "collected_requirements": None
+        }
+        
     def set_mcp_connections(self, connections: Dict[str, Any]) -> None:
         """Set MCP connections for system prompt fetching"""
         self.prompt_manager.mcp_connections = connections
@@ -799,16 +814,66 @@ The agent is now available in the agents directory and can be accessed through t
     async def process_agent_request(self, user_input: str) -> Tuple[str, Dict[str, Any]]:
         """Process user requests for agent building"""
         
-        # Parse the user input to extract agent requirements
-        requirements = self._parse_agent_requirements(user_input)
+        print(f"[Agent Builder] Processing request: {user_input}")
+        print(f"[Agent Builder] Current state: {self.conversation_state}")
         
         metadata = {
-            "action": "agent_builder_response",
-            "requirements": requirements
+            "action": "agent_builder_response"
         }
         
-        if not requirements["agent_name"]:
-            response = """I'd be happy to help you build a new Gradio agent! 
+        # Check if we're in the middle of building an agent
+        if self.conversation_state["building_stage"] == "choosing_prompt":
+            # User is responding with a system prompt choice
+            print(f"[Agent Builder] User chose prompt: {user_input}")
+            
+            system_prompt = user_input.strip().lower()
+            if system_prompt == "default":
+                system_prompt = "claude-3.5-sonnet_20241122"
+            
+            # Build the agent with collected requirements
+            requirements = self.conversation_state["collected_requirements"]
+            success, message, agent_file = await self.build_from_requirements(
+                requirements,
+                system_prompt
+            )
+            
+            if success:
+                response = f"""✅ **Success!** Your agent **{requirements['agent_name']}** has been created!
+
+📁 **Location**: `{agent_file}`
+
+**To use your new agent:**
+1. Restart the app or reload the agent list
+2. Select your agent from the Enhanced Agents dropdown
+3. Start interacting with your custom agent!
+
+**Agent Details:**
+- Name: {requirements['agent_name']}
+- Category: {requirements['category']}
+- Features: {', '.join(requirements['features'])}
+- System Prompt: {system_prompt}
+
+Would you like to create another agent?"""
+                
+                # Reset state
+                self.conversation_state = {
+                    "current_agent": None,
+                    "building_stage": None,
+                    "collected_requirements": None
+                }
+                metadata["action"] = "agent_built"
+            else:
+                response = message
+                metadata["action"] = "build_failed"
+                
+        else:
+            # Parse new agent request
+            requirements = self._parse_agent_requirements(user_input)
+            
+            print(f"[Agent Builder] Parsed requirements: {requirements}")
+            
+            if not requirements["agent_name"]:
+                response = """I'd be happy to help you build a new Gradio agent! 
 
 To get started, please provide:
 
@@ -828,15 +893,15 @@ To get started, please provide:
 "Create a code review agent that analyzes Python code, suggests improvements, and checks for best practices. Category: Tools/Utilities"
 
 What kind of agent would you like to create?"""
-            
-            metadata["action"] = "request_agent_details"
-            
-        else:
-            # We have enough info to create a blueprint
-            try:
-                available_prompts = await self.get_available_system_prompts()
                 
-                response = f"""Perfect! I can help you create the **{requirements['agent_name']}** agent.
+                metadata["action"] = "request_agent_details"
+                
+            else:
+                # We have enough info to create a blueprint
+                try:
+                    available_prompts = await self.get_available_system_prompts()
+                    
+                    response = f"""Perfect! I can help you create the **{requirements['agent_name']}** agent.
 
 **Detected Requirements:**
 • **Name**: {requirements['agent_name']}
@@ -854,13 +919,20 @@ What kind of agent would you like to create?"""
 
 Which system prompt style would you like to use?"""
 
-                metadata["action"] = "ready_to_build"
-                metadata["requirements"] = requirements
-                metadata["available_prompts"] = available_prompts
-                
-            except Exception as e:
-                response = f"❌ Error preparing agent build: {str(e)}"
-                metadata["action"] = "error"
+                    # Save state for next interaction
+                    self.conversation_state = {
+                        "current_agent": requirements['agent_name'],
+                        "building_stage": "choosing_prompt",
+                        "collected_requirements": requirements
+                    }
+                    
+                    metadata["action"] = "ready_to_build"
+                    metadata["requirements"] = requirements
+                    metadata["available_prompts"] = available_prompts
+                    
+                except Exception as e:
+                    response = f"❌ Error preparing agent build: {str(e)}"
+                    metadata["action"] = "error"
         
         return response, metadata
     

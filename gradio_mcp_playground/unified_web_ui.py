@@ -114,19 +114,35 @@ def create_unified_dashboard():
     # Initialize coding agent if available
     coding_agent = None
     coding_agent_error = None
+    saved_hf_token = None
     if HAS_CODING_AGENT:
         try:
             coding_agent = CodingAgent()
+            
+            # Try to load saved HF token
+            try:
+                from .secure_storage import SecureStorage
+                storage = SecureStorage()
+                saved_hf_token = storage.get_api_key('huggingface', 'hf_token')
+                print("DEBUG: Loaded saved HuggingFace token from secure storage")
+            except Exception as e:
+                print(f"DEBUG: Could not load token from secure storage: {e}")
+                # Try config as fallback
+                saved_hf_token = config_manager.get('hf_token')
+                if saved_hf_token:
+                    print("DEBUG: Loaded saved HuggingFace token from config")
+            
             # Try to configure with stored HF token if available
-            if hasattr(config_manager, 'hf_token') and config_manager.hf_token:
+            if saved_hf_token:
                 try:
                     # Get available models
                     models = coding_agent.get_available_models()
                     if models:
                         # Use first available model
                         model_name = list(models.keys())[0]
-                        coding_agent.configure(config_manager.hf_token, model_name)
-                        print(f"Configured coding agent with {model_name}")
+                        result = coding_agent.configure_model(saved_hf_token, model_name)
+                        if result.get('success'):
+                            print(f"Auto-configured coding agent with {model_name}")
                 except Exception as e:
                     print(f"Could not auto-configure coding agent: {e}")
         except ImportError as e:
@@ -243,7 +259,8 @@ def create_unified_dashboard():
                                     label="HuggingFace API Token",
                                     type="password",
                                     placeholder="Enter your HuggingFace API token...",
-                                    info="Get your token from https://huggingface.co/settings/tokens",
+                                    value="*" * 20 if saved_hf_token else "",  # Show masked token if saved
+                                    info="Get your token from https://huggingface.co/settings/tokens" + (" (Using saved token)" if saved_hf_token else ""),
                                 )
 
                             with gr.Column(scale=1):
@@ -261,9 +278,13 @@ def create_unified_dashboard():
                         with gr.Row():
                             configure_btn = gr.Button("🔧 Configure Model", variant="primary")
                             
+                        # Check if already configured
+                        is_configured = coding_agent and hasattr(coding_agent, 'agent') and coding_agent.agent is not None
+                        current_model = coding_agent.current_model if hasattr(coding_agent, 'current_model') else None
+                        
                         config_status = gr.Textbox(
                             label="Configuration Status",
-                            value="Not configured - please enter your HuggingFace token and configure a model",
+                            value=f"✅ Configured with {current_model}" if is_configured else "Not configured - please enter your HuggingFace token and configure a model",
                             interactive=False,
                         )
 
@@ -788,8 +809,51 @@ def create_unified_dashboard():
             def process_message_wrapper(history, show_thinking):
                 return web_ui_process_message(history, show_thinking, coding_agent)
             
+            # Access saved_hf_token from outer scope
+            saved_token = saved_hf_token
+            
             def configure_model(hf_token, model_name):
-                return _configure_model(hf_token, model_name, coding_agent)
+                # Check if user is using the masked token (didn't change it)
+                if hf_token and hf_token == "*" * 20 and saved_token:
+                    # Use the saved token
+                    hf_token = saved_token
+                    print("DEBUG: Using saved HuggingFace token")
+                
+                # Save token for future use (only if it's not the masked value)
+                if hf_token and hf_token != "*" * 20:
+                    try:
+                        from .secure_storage import SecureStorage
+                        storage = SecureStorage()
+                        storage.store_api_key('huggingface', 'hf_token', hf_token)
+                        print("DEBUG: Saved HuggingFace token to secure storage")
+                    except Exception as e:
+                        print(f"DEBUG: Could not save token to secure storage: {e}")
+                        # Try to save to config as fallback
+                        try:
+                            config_manager.set('hf_token', hf_token)
+                            print("DEBUG: Saved HuggingFace token to config")
+                        except Exception as ce:
+                            print(f"DEBUG: Could not save token to config: {ce}")
+                
+                # Now configure the model
+                if not hasattr(coding_agent, 'configure_model'):
+                    # Use the old method name for compatibility
+                    return _configure_model(hf_token, model_name, coding_agent)
+                
+                result = coding_agent.configure_model(hf_token, model_name)
+                
+                if result.get('success'):
+                    return (
+                        f"✅ Successfully configured {model_name}",
+                        {"model": result.get('model'), "description": result.get('description')},
+                        gr.update(visible=True),
+                    )
+                else:
+                    return (
+                        f"❌ Configuration failed: {result.get('error', 'Unknown error')}",
+                        {},
+                        gr.update(visible=False),
+                    )
             
             # General Assistant handlers
             general_send_btn.click(

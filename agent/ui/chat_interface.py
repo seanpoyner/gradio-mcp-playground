@@ -358,7 +358,7 @@ class ChatInterface:
         
         # Clear conversation for current agent
         if self.current_agent_mode == "Agent Builder":
-            # Agent Builder doesn't have clear_conversation method, so just reset locally
+            self.agent_builder.clear_conversation()
             self.conversation_history = []
         else:
             self.mcp_agent.clear_conversation()

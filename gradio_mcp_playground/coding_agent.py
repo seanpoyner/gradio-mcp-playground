@@ -59,8 +59,16 @@ if HAS_LLAMAINDEX:
 
             self._setup_tools()
 
-            # Load configured MCP servers after tools are set up
-            self._load_configured_mcp_servers()
+            # Load configured MCP servers after tools are set up (unless disabled)
+            if os.environ.get('GMP_SKIP_MCP_LOAD', '').lower() != '1':
+                self._load_configured_mcp_servers()
+            else:
+                print("\n⚡ Skipping MCP server loading for faster startup")
+                print("   You can connect to servers manually in the MCP Connections tab")
+                if not hasattr(self, "mcp_tools"):
+                    self.mcp_tools = {}
+                if not hasattr(self, "_mcp_servers"):
+                    self._mcp_servers = {}
 
         def _setup_tools(self):
             """Setup tools for the coding agent"""
