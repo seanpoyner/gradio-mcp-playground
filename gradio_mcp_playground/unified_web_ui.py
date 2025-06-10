@@ -107,9 +107,20 @@ try:
     from ui.chat_interface import ChatInterface
 
     HAS_AGENT_COMPONENTS = True
+    HAS_CONTROL_PANEL = True
 except ImportError:
     HAS_AGENT_COMPONENTS = False
+    HAS_CONTROL_PANEL = False
     print("Agent components not available - some features will be disabled")
+
+# Try to import just control panel if full agent components fail
+if not HAS_CONTROL_PANEL:
+    try:
+        sys.path.insert(0, str(Path(__file__).parent.parent / "agent"))
+        from ui.control_panel import ControlPanelUI
+        HAS_CONTROL_PANEL = True
+    except ImportError:
+        HAS_CONTROL_PANEL = False
 
 
 def _get_connected_servers_info(coding_agent):
@@ -844,6 +855,31 @@ def create_unified_dashboard():
                                 This feature requires agent components to be installed.
                                 """
                             )
+
+            # Tab 6: Agent Control Panel
+            with gr.Tab("🤖 Agent Control Panel"):
+                if HAS_CONTROL_PANEL:
+                    try:
+                        # Initialize control panel
+                        control_panel = ControlPanelUI()
+                        # Create the control panel components
+                        control_panel.create_components()
+                    except Exception as e:
+                        gr.Markdown("### Agent Control Panel Error")
+                        gr.Markdown(f"Failed to initialize control panel: {str(e)}")
+                        gr.Markdown("Please ensure all agent dependencies are installed.")
+                else:
+                    gr.Markdown("### Agent Control Panel Unavailable")
+                    gr.Markdown(
+                        """
+                        The Agent Control Panel requires additional components to be installed.
+                        
+                        To enable this feature:
+                        1. Ensure the agent directory is properly set up
+                        2. Install required dependencies
+                        3. Restart the application
+                        """
+                    )
 
             # Tab 7: Settings
             with gr.Tab("⚙️ Settings"):
@@ -1679,6 +1715,11 @@ def create_unified_dashboard():
         if "connections_list" in locals():
             # Add load event to refresh connections
             dashboard.load(refresh_connections, outputs=[connections_list, connection_dropdown])
+        
+        # Also initialize servers list on load
+        if "servers_list" in locals() and HAS_CONFIG_MANAGER:
+            # Add another load event to refresh servers
+            dashboard.load(refresh_servers, outputs=[servers_list, server_dropdown])
 
     return dashboard
 
