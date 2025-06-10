@@ -12,6 +12,10 @@ from typing import Dict, List, Any, Optional, Tuple
 import warnings
 import logging
 
+# Import message handling functions from web_ui
+from .web_ui import handle_message_submit
+from .web_ui import process_message as web_ui_process_message
+
 # Suppress Pydantic warning
 warnings.filterwarnings("ignore", message="Field \"model_name\" has conflict with protected namespace \"model_\"", category=UserWarning)
 
@@ -229,6 +233,44 @@ def create_unified_dashboard():
         with gr.Tabs():
             # Tab 1: AI Assistant (Enhanced with Agent Builder)
             with gr.Tab("🤖 AI Assistant"):
+                # Model configuration section (available for all modes)
+                if coding_agent:
+                    with gr.Group():
+                        gr.Markdown("### Model Configuration")
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                hf_token_input = gr.Textbox(
+                                    label="HuggingFace API Token",
+                                    type="password",
+                                    placeholder="Enter your HuggingFace API token...",
+                                    info="Get your token from https://huggingface.co/settings/tokens",
+                                )
+
+                            with gr.Column(scale=1):
+                                # Get available models and set a valid default
+                                available_models = list(coding_agent.get_available_models().keys()) if coding_agent else []
+                                default_model = available_models[0] if available_models else None
+                                
+                                model_dropdown = gr.Dropdown(
+                                    label="Select Model",
+                                    choices=available_models,
+                                    value=default_model,
+                                    info="Choose a model for the AI assistant",
+                                )
+
+                        with gr.Row():
+                            configure_btn = gr.Button("🔧 Configure Model", variant="primary")
+                            
+                        config_status = gr.Textbox(
+                            label="Configuration Status",
+                            value="Not configured - please enter your HuggingFace token and configure a model",
+                            interactive=False,
+                        )
+
+                        # Model info display in collapsible section
+                        with gr.Accordion("📊 Selected Model Information", open=False, visible=False) as model_info_accordion:
+                            model_info = gr.JSON(label="", visible=True)
+                
                 # Mode selector with three modes
                 with gr.Row(elem_classes=["agent-mode-selector"]):
                     assistant_mode = gr.Radio(
@@ -289,44 +331,6 @@ def create_unified_dashboard():
                             "I'm specialized in helping you research, build, test, install, and connect MCP servers. Ask me about MCP best practices, server creation, or troubleshooting."
                         )
 
-                        # Model configuration section
-                        with gr.Row():
-                            with gr.Column(scale=2):
-                                gr.Markdown("#### Model Configuration")
-
-                                hf_token_input = gr.Textbox(
-                                    label="HuggingFace API Token",
-                                    type="password",
-                                    placeholder="Enter your HuggingFace API token...",
-                                    info="Get your token from https://huggingface.co/settings/tokens",
-                                )
-
-                            with gr.Column(scale=1):
-                                # Get available models and set a valid default
-                                available_models = list(coding_agent.get_available_models().keys()) if coding_agent else []
-                                default_model = available_models[0] if available_models else None
-                                
-                                model_dropdown = gr.Dropdown(
-                                    label="Select Model",
-                                    choices=available_models,
-                                    value=default_model,
-                                    info="Choose a model for the AI assistant",
-                                )
-
-                        with gr.Row():
-                            configure_btn = gr.Button("🔧 Configure Model", variant="primary")
-                            reset_chat_btn = gr.Button("🔄 Reset Chat", variant="secondary")
-
-                        config_status = gr.Textbox(
-                            label="Configuration Status",
-                            value="Not configured - please enter your HuggingFace token and configure a model",
-                            interactive=False,
-                        )
-
-                        # Model info display in collapsible section
-                        with gr.Accordion("📊 Selected Model Information", open=False, visible=False) as model_info_accordion:
-                            model_info = gr.JSON(label="", visible=True)
-
                         # Chat interface
                         chatbot = gr.Chatbot(
                             label="Chat with Liam",
@@ -350,6 +354,7 @@ def create_unified_dashboard():
                                 value=False,
                                 info="Display the AI's reasoning process step-by-step",
                             )
+                            reset_chat_btn = gr.Button("🔄 Reset Chat", variant="secondary", scale=1)
 
                     else:
                         gr.Markdown("### AI Assistant Unavailable")
@@ -773,17 +778,15 @@ def create_unified_dashboard():
         
         # Event handlers for all assistant modes
         if coding_agent:
-            # Import event handler functions from web_ui
+            # Import additional event handler functions from web_ui
             from .web_ui import (
-                handle_message_submit,
-                process_message as _process_message,
                 reset_conversation,
                 configure_model as _configure_model
             )
             
             # Create wrapper functions that include the coding_agent parameter
-            def process_message(history, show_thinking):
-                return _process_message(history, show_thinking, coding_agent)
+            def process_message_wrapper(history, show_thinking):
+                return web_ui_process_message(history, show_thinking, coding_agent)
             
             def configure_model(hf_token, model_name):
                 return _configure_model(hf_token, model_name, coding_agent)
@@ -794,7 +797,7 @@ def create_unified_dashboard():
                 inputs=[general_input, general_chatbot, general_show_thinking],
                 outputs=[general_chatbot, general_input],
             ).then(
-                process_message,
+                process_message_wrapper,
                 inputs=[general_chatbot, general_show_thinking],
                 outputs=[general_chatbot],
             )
@@ -804,7 +807,7 @@ def create_unified_dashboard():
                 inputs=[general_input, general_chatbot, general_show_thinking],
                 outputs=[general_chatbot, general_input],
             ).then(
-                process_message,
+                process_message_wrapper,
                 inputs=[general_chatbot, general_show_thinking],
                 outputs=[general_chatbot],
             )
@@ -830,7 +833,7 @@ def create_unified_dashboard():
                 inputs=[chat_input, chatbot, show_thinking],
                 outputs=[chatbot, chat_input],
             ).then(
-                process_message,
+                process_message_wrapper,
                 inputs=[chatbot, show_thinking],
                 outputs=[chatbot],
             )
@@ -840,7 +843,7 @@ def create_unified_dashboard():
                 inputs=[chat_input, chatbot, show_thinking],
                 outputs=[chatbot, chat_input],
             ).then(
-                process_message,
+                process_message_wrapper,
                 inputs=[chatbot, show_thinking],
                 outputs=[chatbot],
             )

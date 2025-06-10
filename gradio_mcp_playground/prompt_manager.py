@@ -30,10 +30,33 @@ class PromptManager:
         if str(file_path) in self._cache:
             return self._cache[str(file_path)]
 
+        # Try to use persistent cache
+        try:
+            from .cache_manager import get_cache_manager
+            cache_manager = get_cache_manager()
+            
+            # Check if we have a cached version
+            cached_data = cache_manager.get_config_cache(str(file_path))
+            if cached_data:
+                self._cache[str(file_path)] = cached_data
+                return cached_data
+        except ImportError:
+            # Cache manager not available, continue without it
+            pass
+
         try:
             with open(file_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
                 self._cache[str(file_path)] = data
+                
+                # Save to persistent cache if available
+                try:
+                    from .cache_manager import get_cache_manager
+                    cache_manager = get_cache_manager()
+                    cache_manager.set_config_cache(str(file_path), data)
+                except:
+                    pass  # Ignore cache errors
+                    
                 return data
         except FileNotFoundError:
             print(f"Warning: Configuration file not found: {file_path}")

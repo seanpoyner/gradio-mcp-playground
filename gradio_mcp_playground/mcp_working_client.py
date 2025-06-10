@@ -12,6 +12,7 @@ from threading import Thread
 from typing import Any, Dict, List, Optional
 
 from .path_translator import translate_server_config
+from .cache_manager import get_cache_manager
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,9 @@ class MCPServerProcess:
         self._stdout_queue = Queue()
         self._reader_thread = None
         self._stderr_thread = None
+        
+        # Get cache manager
+        self._cache_manager = get_cache_manager()
 
     def start(self) -> bool:
         """Start the server process"""
@@ -215,7 +219,22 @@ class MCPServerProcess:
                 del self._pending_requests[request_id]
 
     def initialize(self) -> bool:
-        """Initialize the server connection"""
+        """Initialize the server connection with caching support"""
+        # Check cache first
+        server_config = {
+            "command": self.command,
+            "args": self.args,
+            # Don't include env in cache key
+        }
+        
+        cached_data = self._cache_manager.get_server_cache(self.server_id, server_config)
+        if cached_data and 'tools' in cached_data:
+            # Use cached tools
+            self.tools = cached_data['tools']
+            logger.info(f"⚡ Loaded {len(self.tools)} tools from cache for {self.server_id}")
+            return True
+        
+        # Not in cache, initialize normally
         try:
             result = self._send_request(
                 "initialize",
@@ -236,6 +255,15 @@ class MCPServerProcess:
                 self.tools[tool["name"]] = tool
 
             logger.info(f"Found {len(self.tools)} tools in {self.server_id}")
+            
+            # Cache the server data
+            cache_data = {
+                'tools': self.tools,
+                'server_info': result.get('serverInfo', {}),
+                'initialized_at': time.time()
+            }
+            self._cache_manager.set_server_cache(self.server_id, server_config, cache_data)
+            
             return True
 
         except Exception as e:
@@ -438,15 +466,27 @@ def create_mcp_tools_for_server(server: MCPServerProcess) -> List[Any]:
     return tools
 
 
-async def load_mcp_tools_working() -> List[Any]:
-    """Load MCP tools using the working approach"""
+async def load_mcp_tools_working(use_cache: bool = True) -> List[Any]:
+    """Load MCP tools using the working approach with caching support
+    
+    Args:
+        use_cache: Whether to use cached data if available
+        
+    Returns:
+        List of MCP tools
+    """
     tools = []
+    
+    # Track loaded servers for cleanup
+    loaded_servers = {}
 
     try:
         from .mcp_server_config import MCPServerConfig
+        from .cache_manager import get_cache_manager
 
         config = MCPServerConfig()
         servers = config.list_servers()
+        cache_manager = get_cache_manager() if use_cache else None
 
         if not servers:
             logger.info("No MCP servers configured")
@@ -455,33 +495,83 @@ async def load_mcp_tools_working() -> List[Any]:
         logger.info(f"Loading {len(servers)} MCP servers...")
 
         for server_name, server_config in servers.items():
-            logger.info(f"Starting {server_name}...")
+            try:
+                # Check cache first if enabled
+                if cache_manager:
+                    cached_data = cache_manager.get_cached_mcp_server(server_name)
+                    if cached_data and not cache_manager.should_refresh_mcp_server(server_name, server_config):
+                        # Use cached tools
+                        cached_tools = cached_data.get('tools', [])
+                        if cached_tools:
+                            tools.extend(cached_tools)
+                            logger.info(f"✅ Loaded {len(cached_tools)} tools from cache for {server_name}")
+                            continue
 
-            command = server_config.get("command", "")
-            args = server_config.get("args", [])
-            env = server_config.get("env", {})
+                # Not in cache or cache invalid, load normally
+                logger.info(f"Starting {server_name}...")
 
-            # Create and start server
-            server = MCPServerProcess(server_name, command, args, env)
+                command = server_config.get("command", "")
+                args = server_config.get("args", [])
+                env = server_config.get("env", {})
 
-            if server.start():
-                if server.initialize():
-                    # Create tools
-                    server_tools = create_mcp_tools_for_server(server)
-                    tools.extend(server_tools)
-                    logger.info(f"✅ Loaded {len(server_tools)} tools from {server_name}")
+                # Create and start server
+                server = MCPServerProcess(server_name, command, args, env)
 
-                    # Keep server running (in production, store these for cleanup)
+                if server.start():
+                    if server.initialize():
+                        # Create tools
+                        server_tools = create_mcp_tools_for_server(server)
+                        tools.extend(server_tools)
+                        logger.info(f"✅ Loaded {len(server_tools)} tools from {server_name}")
+
+                        # Cache the server data and tools if caching enabled
+                        if cache_manager:
+                            cache_manager.cache_mcp_server(
+                                server_name,
+                                {
+                                    'command': command,
+                                    'args': args,
+                                    'env': env,
+                                    'tools_count': len(server_tools)
+                                },
+                                server_tools
+                            )
+
+                        # Keep server running (store for cleanup)
+                        loaded_servers[server_name] = server
+                    else:
+                        logger.error(f"Failed to initialize {server_name}")
+                        server.stop()
                 else:
-                    logger.error(f"Failed to initialize {server_name}")
-                    server.stop()
-            else:
-                logger.error(f"Failed to start {server_name}")
+                    logger.error(f"Failed to start {server_name}")
+                    
+            except Exception as e:
+                logger.error(f"Error loading server {server_name}: {e}")
+                continue
 
     except Exception as e:
         logger.error(f"Error loading MCP tools: {e}")
         import traceback
-
         traceback.print_exc()
 
+    # Store loaded servers globally for cleanup
+    global _active_servers
+    _active_servers = loaded_servers
+
     return tools
+
+
+# Global variable to track active servers
+_active_servers = {}
+
+
+def cleanup_mcp_servers():
+    """Clean up all active MCP server processes"""
+    global _active_servers
+    for server_name, server in _active_servers.items():
+        try:
+            server.stop()
+            logger.info(f"Stopped MCP server: {server_name}")
+        except Exception as e:
+            logger.error(f"Error stopping server {server_name}: {e}")
+    _active_servers.clear()

@@ -64,10 +64,17 @@ class ControlPanelUI:
     def _get_system_metrics(self) -> Dict[str, Any]:
         """Get comprehensive system metrics for monitoring"""
         try:
+            # Get disk usage for the appropriate root path
+            import platform
+            if platform.system() == 'Windows':
+                disk_path = 'C:\\'
+            else:
+                disk_path = '/'
+            
             return {
                 "cpu_percent": psutil.cpu_percent(interval=1),
                 "memory_percent": psutil.virtual_memory().percent,
-                "disk_percent": psutil.disk_usage('/').percent,
+                "disk_percent": psutil.disk_usage(disk_path).percent,
                 "network_connections": len(psutil.net_connections()),
                 "process_count": len(psutil.pids()),
                 "uptime": time.time() - psutil.boot_time()

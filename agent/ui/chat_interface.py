@@ -129,6 +129,7 @@ class ChatInterface:
                     self.examples_dropdown = gr.Dropdown(
                         label="Quick Examples",
                         choices=[
+                            "",  # Empty option as default
                             "Create a code review agent using Claude's system prompt",
                             "Build a creative writing assistant with v0's style",
                             "Make a data analysis agent with GitHub Copilot's approach",
@@ -138,7 +139,7 @@ class ChatInterface:
                             "Create a documentation writer agent",
                             "Build a Python tutor agent"
                         ],
-                        value=None,
+                        value="",
                         interactive=True
                     )
             
@@ -344,10 +345,12 @@ class ChatInterface:
     def _handle_example_selection(self, selected_example: str, chat_history: List[Dict]) -> Tuple[List[Dict], str, str, Dict[str, Any], str]:
         """Handle selection of an example prompt"""
         
-        if not selected_example:
+        print(f"Example selected: '{selected_example}'")  # Debug print
+        
+        if not selected_example or selected_example == "":
             return chat_history, "", "", {}, ""
         
-        # Set the example as the current message
+        # Set the example as the current message input and clear dropdown
         return chat_history, selected_example, "", {}, ""
     
     def _clear_conversation(self) -> Tuple[List[Dict], Dict[str, Any], str]:

@@ -5,6 +5,7 @@ Web-based dashboard for managing Gradio MCP servers.
 
 import warnings
 import json
+import os
 from pathlib import Path
 
 # Suppress Pydantic model_name warning
@@ -270,6 +271,14 @@ def create_dashboard():
 
     config_manager = ConfigManager()
     registry = ServerRegistry()
+    
+    # Check if caching is disabled via environment variable
+    use_cache = os.environ.get('GMP_DISABLE_CACHE', '').lower() not in ['1', 'true', 'yes']
+    
+    if use_cache:
+        print("🚀 Cache enabled for faster startup")
+    else:
+        print("⚠️  Cache disabled (GMP_DISABLE_CACHE is set)")
 
     # Only create connection manager if client manager is available
     if HAS_CLIENT_MANAGER:

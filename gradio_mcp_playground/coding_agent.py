@@ -429,7 +429,7 @@ if HAS_LLAMAINDEX:
                 print(f"DEBUG: Error adding MCP management tools: {e}")
 
         def _load_configured_mcp_servers(self):
-            """Load MCP servers from configuration"""
+            """Load MCP servers from configuration with caching support"""
             try:
                 import json
                 import os
@@ -438,9 +438,11 @@ if HAS_LLAMAINDEX:
                 from .mcp_server_config import MCPServerConfig
                 from .mcp_working_client import MCPServerProcess, create_mcp_tools_for_server
                 from .secure_storage import SecureTokenStorage
+                from .cache_manager import get_cache_manager
 
                 config = MCPServerConfig()
                 servers = config.list_servers()
+                cache_manager = get_cache_manager()
 
                 # Initialize secure storage for retrieving stored tokens
                 storage = SecureTokenStorage()
@@ -502,6 +504,17 @@ if HAS_LLAMAINDEX:
                 for server_name in servers:
                     print(f"  - {server_name}")
 
+                # Check if cache is available
+                try:
+                    from .cache_manager import get_cache_manager
+                    cache_manager = get_cache_manager()
+                    if cache_manager.enabled:
+                        cache_stats = cache_manager.get_cache_stats()
+                        if cache_stats['files']['servers'] > 0:
+                            print(f"\n📦 Cache enabled ({cache_stats['files']['servers']} servers cached)")
+                except:
+                    pass
+                
                 # Load MCP servers using the working approach
                 print("\n🔌 Loading MCP server tools...")
 
@@ -544,6 +557,19 @@ if HAS_LLAMAINDEX:
                                 print(f"   ⚠️  Skipping {server_name} - missing required: {', '.join(missing_vars)}")
                                 continue
 
+                        # Check cache first
+                        cached_data = cache_manager.get_cached_mcp_server(server_name)
+                        if cached_data and not cache_manager.should_refresh_mcp_server(server_name, server_config):
+                            # Use cached tools
+                            cached_tools = cached_data.get('tools', [])
+                            if cached_tools:
+                                self.tools.extend(cached_tools)
+                                self.mcp_tools[server_name] = cached_tools
+                                loaded_count += len(cached_tools)
+                                print(f"   ⚡ Loaded {len(cached_tools)} tools from cache for {server_name}")
+                                continue
+
+                        # Not in cache or cache invalid, load normally
                         # Create and start server
                         server = MCPServerProcess(server_name, command, args, env)
 
@@ -556,6 +582,18 @@ if HAS_LLAMAINDEX:
                                 self.tools.extend(server_tools)
                                 self.mcp_tools[server_name] = server_tools
                                 self._mcp_servers[server_name] = server
+
+                                # Cache the server data and tools
+                                cache_manager.cache_mcp_server(
+                                    server_name,
+                                    {
+                                        'command': command,
+                                        'args': args,
+                                        'env': {k: '***' if 'KEY' in k or 'TOKEN' in k else v for k, v in env.items()},  # Don't cache sensitive data
+                                        'tools_count': len(server_tools)
+                                    },
+                                    server_tools
+                                )
 
                                 loaded_count += len(server_tools)
                                 print(f"   ✅ Loaded {len(server_tools)} tools from {server_name}")

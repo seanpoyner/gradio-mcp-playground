@@ -575,6 +575,68 @@ def dashboard(port: int, public: bool, unified: bool, log_level: str):
             console.print(f"[red]Error starting dashboard: {e}[/red]")
 
 
+@main.group()
+def cache():
+    """Manage GMP cache"""
+    pass
+
+
+@cache.command()
+def status():
+    """Show cache statistics"""
+    try:
+        from .cache_manager import get_cache_manager
+        cache_manager = get_cache_manager()
+        stats = cache_manager.get_cache_stats()
+        
+        console.print(Panel.fit(
+            f"[bold]Cache Status[/bold]\n\n"
+            f"Enabled: {'Yes' if stats['enabled'] else 'No'}\n"
+            f"Location: {stats['cache_dir']}\n"
+            f"Total Size: {stats['size_readable']}\n\n"
+            f"Cached Files:\n"
+            f"  - Servers: {stats['files']['servers']}\n"
+            f"  - Tools: {stats['files']['tools']}\n"
+            f"  - Configs: {stats['files']['configs']}",
+            title="📦 Cache Statistics"
+        ))
+    except Exception as e:
+        console.print(f"[red]Error getting cache status: {e}[/red]")
+
+
+@cache.command()
+@click.option("--type", "-t", type=click.Choice(["all", "servers", "tools", "configs"]), default="all", help="Type of cache to clear")
+def clear(type: str):
+    """Clear cache"""
+    try:
+        from .cache_manager import get_cache_manager
+        cache_manager = get_cache_manager()
+        
+        if type != "all":
+            if not click.confirm(f"Clear {type} cache?"):
+                return
+        else:
+            if not click.confirm("Clear all cache?"):
+                return
+        
+        cache_manager.clear_cache(type if type != "all" else None)
+        console.print(f"[green]✓ Cleared {type} cache[/green]")
+    except Exception as e:
+        console.print(f"[red]Error clearing cache: {e}[/red]")
+
+
+@cache.command()
+def refresh():
+    """Force refresh cache on next run"""
+    try:
+        from .cache_manager import get_cache_manager
+        cache_manager = get_cache_manager()
+        cache_manager.clear_cache()
+        console.print("[green]✓ Cache cleared. Next run will refresh all data.[/green]")
+    except Exception as e:
+        console.print(f"[red]Error refreshing cache: {e}[/red]")
+
+
 @main.command()
 def mcp():
     """Run as MCP server"""
@@ -640,6 +702,105 @@ def setup_path():
     from .setup_path import main as setup_path_main
 
     setup_path_main()
+
+
+@main.group()
+def cache():
+    """Manage application cache"""
+    pass
+
+
+@cache.command("status")
+def cache_status():
+    """Show cache status and statistics"""
+    try:
+        from .cache_manager import get_cache_manager
+        
+        cache_manager = get_cache_manager()
+        stats = cache_manager.get_cache_stats()
+        
+        console.print("[bold]Cache Status[/bold]\n")
+        
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Metric", style="dim", width=25)
+        table.add_column("Value", width=20)
+        
+        table.add_row("Total Entries", str(stats['total_entries']))
+        table.add_row("MCP Servers Cached", str(stats['mcp_servers']))
+        table.add_row("Configs Cached", str(stats['configs']))
+        table.add_row("Models Cached", str(stats['models']))
+        table.add_row("Cache Size", f"{stats['cache_size_mb']} MB")
+        
+        if stats['oldest_entry']:
+            table.add_row("Oldest Entry", stats['oldest_entry'])
+        if stats['newest_entry']:
+            table.add_row("Newest Entry", stats['newest_entry'])
+        
+        console.print(table)
+        
+        # Show cache directory
+        console.print(f"\n[dim]Cache directory: {cache_manager.cache_dir}[/dim]")
+        
+    except Exception as e:
+        console.print(f"[red]Error getting cache status: {e}[/red]")
+
+
+@cache.command("clear")
+@click.option("--type", "-t", help="Type of cache to clear (mcp/config/model)")
+@click.option("--id", help="Specific cache ID to clear")
+@click.option("--force", "-f", is_flag=True, help="Skip confirmation")
+def cache_clear(type: Optional[str], id: Optional[str], force: bool):
+    """Clear cache entries"""
+    try:
+        from .cache_manager import get_cache_manager
+        
+        cache_manager = get_cache_manager()
+        
+        # Determine what we're clearing
+        if type and id:
+            clear_msg = f"cache entry for {type}/{id}"
+        elif type:
+            clear_msg = f"all {type} cache entries"
+        else:
+            clear_msg = "all cache entries"
+        
+        # Confirm unless forced
+        if not force:
+            if not click.confirm(f"Clear {clear_msg}?"):
+                console.print("[yellow]Cache clear cancelled.[/yellow]")
+                return
+        
+        # Clear cache
+        cache_manager.invalidate_cache(cache_type=type, cache_id=id)
+        
+        console.print(f"[green]✓ Successfully cleared {clear_msg}[/green]")
+        
+    except Exception as e:
+        console.print(f"[red]Error clearing cache: {e}[/red]")
+
+
+@cache.command("refresh")
+@click.argument("server_name", required=False)
+def cache_refresh(server_name: Optional[str]):
+    """Refresh MCP server cache"""
+    try:
+        from .cache_manager import get_cache_manager
+        
+        cache_manager = get_cache_manager()
+        
+        if server_name:
+            # Refresh specific server
+            cache_manager.invalidate_cache(cache_type="mcp", cache_id=server_name)
+            console.print(f"[green]✓ Cache refreshed for server '{server_name}'[/green]")
+            console.print("The server will be reloaded on next startup.")
+        else:
+            # Refresh all MCP servers
+            cache_manager.invalidate_cache(cache_type="mcp")
+            console.print("[green]✓ All MCP server caches refreshed[/green]")
+            console.print("Servers will be reloaded on next startup.")
+            
+    except Exception as e:
+        console.print(f"[red]Error refreshing cache: {e}[/red]")
 
 
 @main.command()
