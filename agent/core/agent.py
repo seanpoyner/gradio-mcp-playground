@@ -55,6 +55,7 @@ class IntentType(Enum):
     DEPLOY_SERVER = "deploy_server"
     MANAGE_SERVER = "manage_server"
     SEARCH_SERVERS = "search_servers"
+    CONFIRM_BUILD = "confirm_build"
     UNKNOWN = "unknown"
 
 
@@ -204,10 +205,33 @@ You are here to transform ideas into working MCP solutions through intelligent c
         """Parse user intent from message"""
         message_lower = user_message.lower()
         
+        # Check for follow-up responses first
+        if hasattr(self.context, 'last_intent') and self.context.last_intent == "create_server":
+            # Check if user is selecting a recommendation
+            if any(word in message_lower for word in ["yes", "go ahead", "create", "build", "1", "2", "3", "first", "second", "third", "option"]):
+                # Extract selection
+                selection = None
+                if "1" in user_message or "first" in message_lower or "option 1" in message_lower:
+                    selection = 0
+                elif "2" in user_message or "second" in message_lower or "option 2" in message_lower:
+                    selection = 1
+                elif "3" in user_message or "third" in message_lower or "option 3" in message_lower:
+                    selection = 2
+                elif any(word in message_lower for word in ["yes", "go ahead", "create", "build"]):
+                    selection = 0  # Default to first option
+                
+                return Intent(
+                    type=IntentType.CONFIRM_BUILD,
+                    confidence=0.9,
+                    entities={"selection": selection},
+                    requirements={}
+                )
+        
         # Intent patterns
         create_patterns = [
             r"create|build|make|generate|new",
-            r"server|tool|pipeline|application|app"
+            r"server|tool|pipeline|application|app",
+            r"help.*build.*server|build.*server"  # Added to match user's request
         ]
         
         pipeline_patterns = [
@@ -243,8 +267,15 @@ You are here to transform ideas into working MCP solutions through intelligent c
         # Extract entities
         entities = self._extract_entities(user_message)
         
+        # Special case for specific server requests
+        if "sentiment analysis" in message_lower:
+            entities["server_types"] = entities.get("server_types", [])
+            entities["server_types"].append("ai_tool")
+            entities["operations"] = entities.get("operations", [])
+            entities["operations"].append("sentiment_analysis")
+        
         # Determine intent
-        if self._matches_patterns(message_lower, create_patterns):
+        if self._matches_patterns(message_lower, create_patterns) or "help me build" in message_lower:
             intent_type = IntentType.CREATE_SERVER
             confidence = 0.8
         elif self._matches_patterns(message_lower, pipeline_patterns):
@@ -253,7 +284,7 @@ You are here to transform ideas into working MCP solutions through intelligent c
         elif self._matches_patterns(message_lower, modify_patterns):
             intent_type = IntentType.MODIFY_SERVER
             confidence = 0.6
-        elif self._matches_patterns(message_lower, help_patterns):
+        elif self._matches_patterns(message_lower, help_patterns) and not "build" in message_lower:
             intent_type = IntentType.GET_HELP
             confidence = 0.9
         elif self._matches_patterns(message_lower, deploy_patterns):
@@ -441,6 +472,9 @@ You are here to transform ideas into working MCP solutions through intelligent c
         elif intent.type == IntentType.SEARCH_SERVERS:
             return await self._handle_search_servers(intent, user_message)
         
+        elif intent.type == IntentType.CONFIRM_BUILD:
+            return await self._handle_confirm_build(intent, user_message)
+        
         else:
             return await self._handle_unknown_intent(intent, user_message)
     
@@ -535,6 +569,10 @@ What sounds good to you?"""
             "recommendations": recommendations,
             "servers": matching_servers
         }
+        
+        # Store recommendations in context for follow-up
+        self.context.recommendations = recommendations
+        self.context.last_intent = "create_server"
         
         return response, metadata
     
@@ -676,6 +714,141 @@ Would you like me to walk through creating any of these examples?"""
 What would you like to explore first? Feel free to ask questions in whatever way feels natural to you!"""
         
         metadata = {"action": "provide_help", "help_type": "general"}
+        return response, metadata
+    
+    async def _handle_confirm_build(self, intent: Intent, user_message: str) -> Tuple[str, Dict[str, Any]]:
+        """Handle server build confirmation"""
+        
+        # Get stored recommendations
+        if not hasattr(self.context, 'recommendations') or not self.context.recommendations:
+            response = """I don't have any server recommendations saved from our previous conversation.
+
+Could you remind me what type of server you wanted to create? For example:
+- "I need a sentiment analysis server"
+- "Create a calculator with advanced functions"
+- "Build a data processing tool"
+
+Once I understand your needs, I can recommend and build the perfect server for you!"""
+            
+            # Clear the last intent
+            self.context.last_intent = None
+            metadata = {"action": "no_recommendations"}
+            return response, metadata
+        
+        # Get the selected recommendation
+        selection = intent.entities.get("selection", 0)
+        recommendations = self.context.recommendations
+        
+        if selection >= len(recommendations):
+            selection = 0  # Default to first
+        
+        selected = recommendations[selection]
+        
+        # Build the server using ServerBuilder
+        response = f"""🚀 Great choice! I'm now building your **{selected['name']}** server.
+
+Building your server with:
+📝 **Description**: {selected['description']}
+🏗️ **Template**: {selected.get('template', 'custom')}
+
+Please wait while I:
+1. Generate the server code
+2. Set up the configuration
+3. Create the necessary files
+4. Prepare it for deployment
+"""
+        
+        try:
+            # Create server spec from recommendation
+            server_spec = {
+                "name": selected['name'].lower().replace(" ", "_"),
+                "description": selected['description'],
+                "template": selected.get('template', 'custom'),
+                "tools": [],  # Would be populated based on server type
+                "ui_config": {
+                    "components": ["inputs", "outputs"],
+                    "layout": "simple"
+                },
+                "dependencies": []
+            }
+            
+            # Use the server builder to generate code
+            if hasattr(self, 'server_builder') and self.server_builder:
+                build_result = await self.server_builder.build_server(server_spec)
+                
+                if build_result.get("success"):
+                    response += f"""
+✅ **Server built successfully!**
+
+📁 **Location**: `{build_result.get('output_dir', 'servers/' + server_spec['name'])}`
+📄 **Main file**: `server.py`
+
+**Next steps:**
+1. Navigate to the server directory
+2. Install dependencies: `pip install -r requirements.txt`
+3. Run the server: `python server.py`
+
+Would you like me to:
+- Show you the generated code
+- Help you customize it further
+- Deploy it online
+- Create another server
+"""
+                else:
+                    response += f"""
+⚠️ There was an issue building the server:
+{build_result.get('error', 'Unknown error')}
+
+Don't worry! I can:
+- Try a different approach
+- Help you build it manually
+- Suggest an alternative template
+
+What would you prefer?"""
+            else:
+                # Fallback without builder - provide manual instructions
+                response += f"""
+✅ Here's how to create your {selected['name']} server:
+
+**Step 1**: Create a new directory
+```bash
+mkdir {selected['name'].lower().replace(' ', '_')}
+cd {selected['name'].lower().replace(' ', '_')}
+```
+
+**Step 2**: I'll help you create the server files:
+- `server.py` - Main server implementation
+- `requirements.txt` - Dependencies
+- `README.md` - Documentation
+
+Would you like me to:
+1. Generate the complete server code for you
+2. Walk you through building it step by step
+3. Show you a similar example to customize
+
+What works best for you?"""
+        
+        except Exception as e:
+            response += f"""
+⚠️ I encountered an issue while building the server: {str(e)}
+
+But don't worry! I can still help you create this server. Would you like me to:
+1. Try a different approach
+2. Provide manual instructions
+3. Show you example code to get started
+
+Let me know how you'd like to proceed!"""
+        
+        # Clear the context
+        self.context.last_intent = None
+        self.context.recommendations = None
+        
+        metadata = {
+            "action": "build_server",
+            "server": selected,
+            "status": "completed"
+        }
+        
         return response, metadata
     
     async def _handle_deploy_server(self, intent: Intent, user_message: str) -> Tuple[str, Dict[str, Any]]:
