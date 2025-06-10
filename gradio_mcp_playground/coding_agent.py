@@ -4,8 +4,6 @@ Provides an intelligent coding assistant that can help with MCP server developme
 code analysis, and general programming tasks.
 """
 
-from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict
 
 # Optional imports
@@ -424,16 +422,17 @@ if HAS_LLAMAINDEX:
         def _load_configured_mcp_servers(self):
             """Load MCP servers from configuration"""
             try:
+                import json
+                import os
+                from pathlib import Path
+
                 from .mcp_server_config import MCPServerConfig
                 from .mcp_working_client import MCPServerProcess, create_mcp_tools_for_server
                 from .secure_storage import SecureTokenStorage
-                from pathlib import Path
-                import json
-                import os
 
                 config = MCPServerConfig()
                 servers = config.list_servers()
-                
+
                 # Initialize secure storage for retrieving stored tokens
                 storage = SecureTokenStorage()
 
@@ -464,7 +463,7 @@ if HAS_LLAMAINDEX:
                                     if server_name not in servers:
                                         # Extract environment variables that might contain API keys
                                         env_vars = server_config.get("env", {})
-                                        
+
                                         # Store API keys securely
                                         if env_vars:
                                             for env_key, env_value in env_vars.items():
@@ -472,7 +471,7 @@ if HAS_LLAMAINDEX:
                                                 if any(pattern in env_key.upper() for pattern in ["TOKEN", "KEY", "SECRET", "API"]):
                                                     storage.store_key(server_name, env_key, env_value)
                                                     print(f"  🔐 Encrypted {env_key} for {server_name}")
-                                        
+
                                         # Add server to our local config (without sensitive env vars)
                                         config.add_server(
                                             name=server_name,
@@ -480,7 +479,7 @@ if HAS_LLAMAINDEX:
                                             args=server_config.get("args"),
                                             env={}  # Don't store env vars in plain text
                                         )
-                                        
+
                                         servers[server_name] = server_config
                                         print(f"  📎 Imported {server_name} from Claude Desktop config")
                     except Exception as e:
@@ -529,7 +528,7 @@ if HAS_LLAMAINDEX:
                             "figma": ["FIGMA_TOKEN"],
                             "openai": ["OPENAI_API_KEY"],
                         }
-                        
+
                         if server_name in required_env_vars:
                             missing_vars = [var for var in required_env_vars[server_name] if var not in env]
                             if missing_vars:
@@ -742,7 +741,7 @@ if HAS_LLAMAINDEX:
             try:
                 from .environment_config import get_environment_info
                 env_info = get_environment_info()
-                
+
                 # Determine the appropriate home directory based on environment
                 if 'wsl' in env_info and 'windows_user_home' in env_info['wsl']:
                     # In WSL, use Windows home for Windows programs
@@ -753,7 +752,7 @@ if HAS_LLAMAINDEX:
                 else:
                     # Linux/Mac
                     home_dir = env_info['paths']['home']
-                
+
                 # Replace common phrases with actual paths
                 replacements = [
                     ("my home directory", home_dir),
@@ -762,20 +761,23 @@ if HAS_LLAMAINDEX:
                     ("~/", home_dir + "\\"),  # For Windows paths
                     ("~", home_dir),
                 ]
-                
+
                 processed = message
                 for phrase, replacement in replacements:
                     # Case-insensitive replacement
                     import re
                     pattern = re.compile(re.escape(phrase), re.IGNORECASE)
                     processed = pattern.sub(replacement, processed)
-                
-                # Also add explicit hint about the home directory
-                if any(phrase in message.lower() for phrase in ["home dir", "home folder", "save it in"]):
-                    processed += f" (Note: The user's home directory is {home_dir})"
-                    
+
+                # Also add explicit hint about the home directory and file paths
+                if any(phrase in message.lower() for phrase in ["home dir", "home folder", "save", "screenshot", "file", "path"]):
+                    if 'wsl' in env_info:
+                        processed += f"\n\n(IMPORTANT: Use Windows paths for files. The Windows home directory is {home_dir}. For example, save files as {home_dir}\\filename.png, NOT /home/user/filename.png)"
+                    else:
+                        processed += f"\n\n(Note: The home directory is {home_dir})"
+
                 return processed
-                
+
             except Exception as e:
                 # If preprocessing fails, just return original message
                 print(f"Warning: Message preprocessing failed: {e}")
@@ -789,7 +791,7 @@ if HAS_LLAMAINDEX:
             try:
                 # Preprocess the message to replace "my home directory" with actual path
                 processed_message = self._preprocess_message(message)
-                
+
                 # Check if user is introducing themselves
                 if any(phrase in message.lower() for phrase in ["my name is", "i am", "i'm"]):
                     # Check if memory server is available
@@ -835,7 +837,7 @@ if HAS_LLAMAINDEX:
             try:
                 # Preprocess the message to replace "my home directory" with actual path
                 processed_message = self._preprocess_message(message)
-                
+
                 # Create a custom handler to capture steps
                 steps = []
 
@@ -1082,7 +1084,7 @@ if HAS_LLAMAINDEX:
             should come from MCP servers via _connect_to_external_mcp_server.
             """
             tools = []
-            
+
             # Create placeholder tools for all connections
             for tool_name in connection_info.get("tools", []):
 

@@ -293,8 +293,34 @@ def create_mcp_tools_for_server(server: MCPServerProcess) -> List[Any]:
                         or value.startswith("c:\\")
                         or value.startswith("/mnt/")
                         or value.startswith("/home/")
+                        or value.startswith("/")  # Any absolute path
                         or "\\" in value
                     ):
+                        # Handle generic paths that models might use
+                        generic_paths = ["/home/user/", "~/", "/tmp/"]
+                        for generic_path in generic_paths:
+                            if value.startswith(generic_path):
+                                # Replace generic paths with actual Windows home
+                                from .environment_config import get_environment_info
+                                env_info = get_environment_info()
+                                if 'wsl' in env_info and 'windows_user_home' in env_info['wsl']:
+                                    # Use Windows home directory
+                                    windows_home = env_info['wsl']['windows_user_home']
+                                    if generic_path == "/tmp/":
+                                        # Use Windows temp directory
+                                        value = value.replace(generic_path, windows_home + "\\temp\\")
+                                    else:
+                                        value = value.replace(generic_path.rstrip("/"), windows_home).replace("/", "\\")
+                                    logger.info(f"Replaced generic path for {srv.server_id}.{name}: {generic_path} -> {windows_home}")
+                                elif env_info['os']['is_windows']:
+                                    # Native Windows
+                                    windows_home = env_info['paths']['home']
+                                    if generic_path == "/tmp/":
+                                        value = value.replace(generic_path, windows_home + "\\temp\\")
+                                    else:
+                                        value = value.replace(generic_path.rstrip("/"), windows_home).replace("/", "\\")
+                                break
+
                         # Translate the path
                         from .path_translator import translate_path
                         translated_value = translate_path(value)

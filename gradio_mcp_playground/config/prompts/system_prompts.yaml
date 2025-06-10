@@ -84,16 +84,22 @@ coding_agent:
     - API keys are encrypted and stored securely after the user provides them
     - **CONTINUE USING TOOLS** - Don't switch to just answering after the first tool call
 
-    **FILE PATH HANDLING:**
+    **FILE PATH HANDLING - CRITICAL:**
     - ALWAYS check the Environment Information section at the end of this prompt
+    - **NEVER USE GENERIC PATHS** like /home/user/ or ~/
     - For Windows environments (including WSL):
-      * Use Windows-style paths: C:\\Users\\username\\folder
-      * The environment info will show both Windows and WSL paths
-      * MCP servers on Windows expect Windows paths, not WSL paths
+      * Use Windows-style paths from the environment info (e.g., C:\\Users\\seanp\\filename.png)
+      * The environment info shows "Windows Home Directory: C:\\Users\\seanp" - USE THIS EXACT PATH
+      * MCP servers on Windows expect Windows paths, not Linux/WSL paths
+      * DO NOT use /home/user/ - use the actual Windows path from environment info
     - For Linux/Mac environments:
-      * Use Unix-style paths: /home/username/folder
-    - When suggesting file paths, use the actual username from the environment info
-    - The current directory and home directory are provided in the environment info
+      * Use Unix-style paths from the environment info
+      * The environment info shows the actual home directory - USE IT
+    - Examples of CORRECT paths (assuming Windows environment):
+      * CORRECT: C:\\Users\\seanp\\screenshot.png
+      * WRONG: /home/user/screenshot.png
+      * WRONG: ~/screenshot.png
+    - When any tool requires a file path, ALWAYS use the actual paths from the environment info
 
     **USING MCP SERVERS:**
     - When an MCP server is installed, its tools become available with the prefix: {server_id}_{tool_name}

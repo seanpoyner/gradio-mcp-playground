@@ -96,65 +96,54 @@ def create_dashboard():
             color: #dc3545;
             font-weight: bold;
         }
-        /* Fix chatbot message width */
+        
+        /* Fix chatbot message width for Gradio 4.x */
         .message-wrap {
             max-width: 100% !important;
-            width: 100% !important;
         }
-        .message {
+        .message-content {
             max-width: 100% !important;
-            width: 100% !important;
         }
+        
+        /* Target message containers by data-testid */
+        div[data-testid="user"] .prose,
+        div[data-testid="bot"] .prose {
+            max-width: 100% !important;
+        }
+        
+        /* Override Tailwind's prose max-width */
         .prose {
-            max-width: 100% !important;
-            width: 100% !important;
-        }
-        /* Ensure chat messages use full width */
-        div[class*="message"] {
-            max-width: 100% !important;
-        }
-        /* Override Gradio's default message bubble width */
-        .user, .bot {
-            max-width: 100% !important;
-            width: 100% !important;
-        }
-        /* Fix for message content */
-        .md-message {
-            max-width: 100% !important;
-            width: 100% !important;
-        }
-        /* Override prose styling that limits width */
-        .gradio-container .prose {
             max-width: none !important;
         }
-        /* Ensure code blocks also use full width */
-        .prose pre {
-            max-width: 100% !important;
-            overflow-x: auto;
-        }
-        /* Custom class for full-width chat */
-        .full-width-chat .message-wrap {
+        
+        /* Target message bubbles */
+        .message-bubble-border {
             max-width: 100% !important;
         }
-        .full-width-chat .message {
+        
+        /* For messages format */
+        .message-row {
+            justify-content: stretch !important;
+        }
+        .message-row > div {
+            max-width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+        
+        /* Target by role classes */
+        .role-user .prose,
+        .role-assistant .prose {
             max-width: 100% !important;
         }
-        /* Fix Gradio chatbot message bubbles */
-        .chatbot-message {
-            max-width: 100% !important;
-            width: 100% !important;
-        }
-        /* Override the default 48rem max-width */
-        [class*="max-w-\\[48rem\\]"] {
+        
+        /* Gradio 4 specific message classes */
+        .message.svelte-1s78gfg .prose {
             max-width: 100% !important;
         }
-        /* Target Gradio's specific message classes */
-        .gr-chatbot .message-row {
+        
+        /* Override any inline styles */
+        [style*="max-width"] {
             max-width: 100% !important;
-        }
-        .gr-chatbot .message-bubble-border {
-            max-width: 100% !important;
-            width: auto !important;
         }
     """,
     ) as dashboard:
@@ -229,7 +218,7 @@ def create_dashboard():
                         interactive=False,
                     )
 
-                    # Model info display in collapsible accordion
+                    # Model info display in collapsible section
                     with gr.Accordion("📊 Selected Model Information", open=False, visible=False) as model_info_accordion:
                         model_info = gr.JSON(label="", visible=True)
 
@@ -240,10 +229,7 @@ def create_dashboard():
                         height=400,
                         show_copy_button=True,
                         type="messages",
-                        elem_classes=["full-width-chat"],
-                        container=True,
-                        scale=1,
-                        min_width=None,
+                        bubble_full_width=True,
                     )
 
                     with gr.Row():
