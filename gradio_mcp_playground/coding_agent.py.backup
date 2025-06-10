@@ -371,15 +371,11 @@ if HAS_LLAMAINDEX:
                     example_args = {}
                     for arg in required_args:
                         if arg == "path":
-                            # Use actual home directory instead of generic path
-                            import os
-                            example_args[arg] = os.path.join(os.path.expanduser("~"), "workspace")
+                            example_args[arg] = "/home/user/workspace"
                         elif arg == "timezone":
                             example_args[arg] = "UTC"
                         elif arg == "vault_path1":
-                            # Use actual path example
-                            import os
-                            example_args[arg] = os.path.join(os.path.expanduser("~"), "Documents/ObsidianVault")
+                            example_args[arg] = "/path/to/obsidian/vault"
                         else:
                             example_args[arg] = f"YOUR_{arg.upper()}"
 
@@ -427,64 +423,9 @@ if HAS_LLAMAINDEX:
                 from .mcp_server_config import MCPServerConfig
                 from .mcp_working_client import MCPServerProcess, create_mcp_tools_for_server
                 from .secure_storage import SecureTokenStorage
-                from pathlib import Path
-                import json
-                import os
 
                 config = MCPServerConfig()
                 servers = config.list_servers()
-                
-                # Initialize secure storage for retrieving stored tokens
-                storage = SecureTokenStorage()
-
-                # Also check Claude Desktop config
-                claude_config_path = None
-                if os.name == "nt":
-                    claude_config_path = Path.home() / "AppData/Roaming/Claude/claude_desktop_config.json"
-                else:
-                    # WSL/Linux - check for Windows path
-                    possible_paths = [
-                        Path("/home/sean/.config/Claude/claude_desktop_config.json"),
-                        Path("/mnt/c/Users/seanp/AppData/Roaming/Claude/claude_desktop_config.json"),
-                        Path(f"/mnt/c/Users/{os.environ.get('USER', 'seanp')}/AppData/Roaming/Claude/claude_desktop_config.json"),
-                    ]
-                    for path in possible_paths:
-                        if path.exists():
-                            claude_config_path = path
-                            break
-
-                # Load servers from Claude Desktop if available
-                if claude_config_path and claude_config_path.exists():
-                    try:
-                        with open(claude_config_path) as f:
-                            claude_config = json.load(f)
-                            if "mcpServers" in claude_config:
-                                # Import Claude Desktop servers into our local config
-                                for server_name, server_config in claude_config["mcpServers"].items():
-                                    if server_name not in servers:
-                                        # Extract environment variables that might contain API keys
-                                        env_vars = server_config.get("env", {})
-                                        
-                                        # Store API keys securely
-                                        if env_vars:
-                                            for env_key, env_value in env_vars.items():
-                                                # Common API key patterns
-                                                if any(pattern in env_key.upper() for pattern in ["TOKEN", "KEY", "SECRET", "API"]):
-                                                    storage.store_key(server_name, env_key, env_value)
-                                                    print(f"  🔐 Encrypted {env_key} for {server_name}")
-                                        
-                                        # Add server to our local config (without sensitive env vars)
-                                        config.add_server(
-                                            name=server_name,
-                                            command=server_config.get("command"),
-                                            args=server_config.get("args"),
-                                            env={}  # Don't store env vars in plain text
-                                        )
-                                        
-                                        servers[server_name] = server_config
-                                        print(f"  📎 Imported {server_name} from Claude Desktop config")
-                    except Exception as e:
-                        print(f"Warning: Could not load Claude Desktop config: {e}")
 
                 if not servers:
                     print("No MCP servers configured")
@@ -503,6 +444,9 @@ if HAS_LLAMAINDEX:
                 if not hasattr(self, "_mcp_servers"):
                     self._mcp_servers = {}
 
+                # Initialize secure storage for retrieving stored tokens
+                storage = SecureTokenStorage()
+
                 loaded_count = 0
                 for server_name, server_config in servers.items():
                     try:
@@ -513,27 +457,19 @@ if HAS_LLAMAINDEX:
                         # Check for stored API keys for this server
                         stored_keys = storage.retrieve_server_keys(server_name)
 
-                        # If no env vars in config, check stored keys
-                        if not env and stored_keys:
-                            env = stored_keys
-                            print(f"   🔑 Using stored encrypted keys for {server_name}")
-                        elif stored_keys:
-                            # Merge stored keys with config env vars (stored keys take precedence)
-                            env.update(stored_keys)
-                            print(f"   🔑 Merged encrypted keys for {server_name}")
+                        # Add stored keys to environment variables
+                        if server_name == "github" and "GITHUB_TOKEN" in stored_keys:
+                            env["GITHUB_TOKEN"] = stored_keys["GITHUB_TOKEN"]
+                            print(f"   🔑 Using stored GitHub token for {server_name}")
+                        elif server_name == "brave-search" and "BRAVE_API_KEY" in stored_keys:
+                            env["BRAVE_API_KEY"] = stored_keys["BRAVE_API_KEY"]
+                            print(f"   🔑 Using stored Brave API key for {server_name}")
 
-                        # Skip servers that require API keys if none found
-                        required_env_vars = {
-                            "github": ["GITHUB_TOKEN"],
-                            "brave-search": ["BRAVE_API_KEY"],
-                            "figma": ["FIGMA_TOKEN"],
-                            "openai": ["OPENAI_API_KEY"],
-                        }
-                        
-                        if server_name in required_env_vars:
-                            missing_vars = [var for var in required_env_vars[server_name] if var not in env]
-                            if missing_vars:
-                                print(f"   ⚠️  Skipping {server_name} - missing required: {', '.join(missing_vars)}")
+                        # Also check if env vars should be loaded from the stored config
+                        if not env and server_name in ["github", "brave-search"]:
+                            # For servers that require API keys, skip if no stored keys found
+                            if not stored_keys:
+                                print(f"   ⚠️  Skipping {server_name} - no API key found")
                                 continue
 
                         # Create and start server
@@ -737,59 +673,12 @@ if HAS_LLAMAINDEX:
                 print(f"DEBUG: Traceback: {traceback.format_exc()}")
                 return {"success": False, "error": f"Unexpected error: {str(e)}"}
 
-        def _preprocess_message(self, message: str) -> str:
-            """Preprocess user message to replace generic references with specific paths"""
-            try:
-                from .environment_config import get_environment_info
-                env_info = get_environment_info()
-                
-                # Determine the appropriate home directory based on environment
-                if 'wsl' in env_info and 'windows_user_home' in env_info['wsl']:
-                    # In WSL, use Windows home for Windows programs
-                    home_dir = env_info['wsl']['windows_user_home']
-                elif env_info['os']['is_windows']:
-                    # Native Windows
-                    home_dir = env_info['paths']['home']
-                else:
-                    # Linux/Mac
-                    home_dir = env_info['paths']['home']
-                
-                # Replace common phrases with actual paths
-                replacements = [
-                    ("my home directory", home_dir),
-                    ("my home folder", home_dir),
-                    ("my home", home_dir),
-                    ("~/", home_dir + "\\"),  # For Windows paths
-                    ("~", home_dir),
-                ]
-                
-                processed = message
-                for phrase, replacement in replacements:
-                    # Case-insensitive replacement
-                    import re
-                    pattern = re.compile(re.escape(phrase), re.IGNORECASE)
-                    processed = pattern.sub(replacement, processed)
-                
-                # Also add explicit hint about the home directory
-                if any(phrase in message.lower() for phrase in ["home dir", "home folder", "save it in"]):
-                    processed += f" (Note: The user's home directory is {home_dir})"
-                    
-                return processed
-                
-            except Exception as e:
-                # If preprocessing fails, just return original message
-                print(f"Warning: Message preprocessing failed: {e}")
-                return message
-
         def chat(self, message: str) -> str:
             """Send a message to the coding agent"""
             if not self.agent:
                 return "Please configure a model first by providing your HuggingFace API token and selecting a model."
 
             try:
-                # Preprocess the message to replace "my home directory" with actual path
-                processed_message = self._preprocess_message(message)
-                
                 # Check if user is introducing themselves
                 if any(phrase in message.lower() for phrase in ["my name is", "i am", "i'm"]):
                     # Check if memory server is available
@@ -805,7 +694,7 @@ if HAS_LLAMAINDEX:
                         except Exception:
                             pass  # Silently fail if memory storage doesn't work
 
-                response = self.agent.chat(processed_message)
+                response = self.agent.chat(message)
                 response_str = str(response)
 
                 # Truncate very long responses to prevent UI issues
@@ -833,9 +722,6 @@ if HAS_LLAMAINDEX:
                 )
 
             try:
-                # Preprocess the message to replace "my home directory" with actual path
-                processed_message = self._preprocess_message(message)
-                
                 # Create a custom handler to capture steps
                 steps = []
 
@@ -916,7 +802,7 @@ if HAS_LLAMAINDEX:
                     self.agent._run_step = capture_step
 
                 # Get the response
-                response = self.agent.chat(processed_message)
+                response = self.agent.chat(message)
                 response_str = str(response)
 
                 # Restore original method
@@ -982,6 +868,10 @@ if HAS_LLAMAINDEX:
             try:
                 self.mcp_connections[connection_id] = connection_info
 
+                # Create a tool for this MCP connection
+                if connection_info.get("tools"):
+                    self._create_mcp_tools(connection_id, connection_info)
+
                 # For external MCP servers, try to connect and get actual tools
                 # Include all known registry servers
                 external_servers = [
@@ -1005,10 +895,6 @@ if HAS_LLAMAINDEX:
                 ]
                 if connection_id in external_servers:
                     self._connect_to_external_mcp_server(connection_id, connection_info)
-                else:
-                    # Only create placeholder tools if not an external server
-                    if connection_info.get("tools"):
-                        self._create_mcp_tools(connection_id, connection_info)
 
                 # Recreate agent with new tools if already configured
                 if self.is_configured():
@@ -1075,6 +961,7 @@ if HAS_LLAMAINDEX:
                 # Fall back to direct implementation tools
                 self._create_mcp_tools(server_id, connection_info)
                 print(f"Using direct implementation for {server_id} tools")
+
         def _create_mcp_tools(self, connection_id: str, connection_info: Dict[str, Any]):
             """Create placeholder LlamaIndex tools for MCP connections
             
@@ -1083,6 +970,373 @@ if HAS_LLAMAINDEX:
             """
             tools = []
             
+            # Create placeholder tools for all connections
+            for tool_name in connection_info.get("tools", []):
+
+                def create_placeholder_tool(conn_id, tool_n):
+                    """List all notes in the Obsidian vault"""
+                    try:
+                        import os
+
+                        notes = []
+                        for root, _dirs, files in os.walk(vault_path):
+                            # Skip .obsidian directory
+                            if ".obsidian" in root:
+                                continue
+                            for file in files:
+                                if file.endswith(".md"):
+                                    rel_path = os.path.relpath(os.path.join(root, file), vault_path)
+                                    notes.append(rel_path.replace("\\", "/"))
+                        if notes:
+                            return f"Found {len(notes)} notes in vault:\n" + "\n".join(
+                                f"- {note}" for note in notes
+                            )
+                        else:
+                            return "No notes found in vault"
+                    except Exception as e:
+                        return f"Error listing notes: {str(e)}"
+
+                def obsidian_read_note(path: str) -> str:
+                    """Read a note from the Obsidian vault"""
+                    try:
+                        import os
+
+                        full_path = os.path.join(vault_path, path)
+                        with open(full_path, encoding="utf-8") as f:
+                            content = f.read()
+                        return f"Content of {path}:\n\n{content}"
+                    except Exception as e:
+                        return f"Error reading note: {str(e)}"
+
+                def obsidian_create_note(path: str, content: str) -> str:
+                    """Create a new note in the Obsidian vault"""
+                    try:
+                        import os
+
+                        full_path = os.path.join(vault_path, path)
+                        # Create directory if needed
+                        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                        with open(full_path, "w", encoding="utf-8") as f:
+                            f.write(content)
+                        return f"Successfully created note: {path}"
+                    except Exception as e:
+                        return f"Error creating note: {str(e)}"
+
+                def obsidian_search_notes(query: str) -> str:
+                    """Search for notes containing a query string"""
+                    try:
+                        import os
+
+                        results = []
+                        for root, _dirs, files in os.walk(vault_path):
+                            if ".obsidian" in root:
+                                continue
+                            for file in files:
+                                if file.endswith(".md"):
+                                    full_path = os.path.join(root, file)
+                                    try:
+                                        with open(full_path, encoding="utf-8") as f:
+                                            content = f.read()
+                                            if query.lower() in content.lower():
+                                                rel_path = os.path.relpath(full_path, vault_path)
+                                                results.append(rel_path.replace("\\", "/"))
+                                    except Exception:
+                                        pass
+                        if results:
+                            return (
+                                f"Found {len(results)} notes containing '{query}':\n"
+                                + "\n".join(f"- {note}" for note in results)
+                            )
+                        else:
+                            return f"No notes found containing '{query}'"
+                    except Exception as e:
+                        return f"Error searching notes: {str(e)}"
+
+                tools.extend(
+                    [
+                        FunctionTool.from_defaults(
+                            fn=obsidian_list_notes, name="obsidian_list_notes"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=obsidian_read_note, name="obsidian_read_note"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=obsidian_create_note, name="obsidian_create_note"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=obsidian_search_notes, name="obsidian_search_notes"
+                        ),
+                    ]
+                )
+
+            # For filesystem connection, create actual working tools
+            elif connection_id == "filesystem":
+
+                def read_file_tool(path: str) -> str:
+                    """Read contents of a file"""
+                    try:
+                        import os
+
+                        with open(path, encoding="utf-8") as f:
+                            content = f.read()
+                        return f"File content from {os.path.abspath(path)}:\n\n{content}"
+                    except Exception as e:
+                        return f"Error reading file: {str(e)}"
+
+                def write_file_tool(path: str, content: str) -> str:
+                    """Write content to a file"""
+                    try:
+                        import os
+
+                        with open(path, "w", encoding="utf-8") as f:
+                            f.write(content)
+                        return f"Successfully wrote {len(content)} characters to {os.path.abspath(path)}"
+                    except Exception as e:
+                        return f"Error writing file: {str(e)}"
+
+                def list_directory_tool(path: str = ".") -> str:
+                    """List contents of a directory"""
+                    try:
+                        import os
+
+                        files = os.listdir(path)
+                        abs_path = os.path.abspath(path)
+                        file_list = "\n".join([f"  - {f}" for f in files])
+                        return (
+                            f"Directory contents of {abs_path} ({len(files)} items):\n{file_list}"
+                        )
+                    except Exception as e:
+                        return f"Error listing directory: {str(e)}"
+
+                def create_directory_tool(path: str) -> str:
+                    """Create a directory"""
+                    try:
+                        import os
+
+                        os.makedirs(path, exist_ok=True)
+                        return f"Successfully created directory: {os.path.abspath(path)}"
+                    except Exception as e:
+                        return f"Error creating directory: {str(e)}"
+
+                tools.extend(
+                    [
+                        FunctionTool.from_defaults(fn=read_file_tool, name="filesystem_read_file"),
+                        FunctionTool.from_defaults(
+                            fn=write_file_tool, name="filesystem_write_file"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=list_directory_tool, name="filesystem_list_directory"
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=create_directory_tool, name="filesystem_create_directory"
+                        ),
+                    ]
+                )
+
+            elif connection_id == "brave-search":
+                # Create actual brave search tool
+                def brave_search_tool(query: str, count: int = 10) -> str:
+                    """Search the web using Brave Search API"""
+                    try:
+                        import os
+
+                        import requests
+
+                        api_key = os.environ.get("BRAVE_API_KEY")
+                        if not api_key:
+                            return "Error: BRAVE_API_KEY environment variable not set"
+
+                        url = "https://api.search.brave.com/res/v1/web/search"
+                        headers = {"X-Subscription-Token": api_key}
+                        params = {"q": query, "count": count}
+
+                        response = requests.get(url, headers=headers, params=params)
+                        if response.status_code == 200:
+                            data = response.json()
+                            results = []
+                            for idx, result in enumerate(
+                                data.get("web", {}).get("results", [])[:count], 1
+                            ):
+                                results.append(
+                                    f"{idx}. {result.get('title', 'No title')}\n   URL: {result.get('url', 'No URL')}\n   {result.get('description', 'No description')}"
+                                )
+
+                            return (
+                                f"Brave Search Results for '{query}':\n\n" + "\n\n".join(results)
+                                if results
+                                else "No results found"
+                            )
+                        else:
+                            return f"Error: Brave Search API returned status {response.status_code}"
+                    except Exception as e:
+                        return f"Error performing brave search: {str(e)}"
+
+                tools.append(
+                    FunctionTool.from_defaults(
+                        fn=brave_search_tool,
+                        name="brave_search",
+                        description="Search the web using Brave Search",
+                    )
+                )
+
+            elif connection_id == "memory":
+                # Create memory server tools for conversation logging
+                def store_conversation(
+                    topic: str, content: str, metadata: Dict[str, Any] = None
+                ) -> str:
+                    """Store conversation in memory server's knowledge graph"""
+                    try:
+                        import json
+                        import os
+
+                        # Create a structured memory entry
+                        memory_entry = {
+                            "topic": topic,
+                            "content": content,
+                            "timestamp": datetime.now().isoformat(),
+                            "type": "conversation",
+                            "metadata": metadata or {},
+                        }
+
+                        # Store in the memory server's data directory
+                        memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
+                        os.makedirs(memory_dir, exist_ok=True)
+
+                        # Create a JSON file for the conversation
+                        filename = f"{topic.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                        filepath = os.path.join(memory_dir, filename)
+
+                        with open(filepath, "w", encoding="utf-8") as f:
+                            json.dump(memory_entry, f, indent=2)
+
+                        return f"✅ Stored conversation under topic '{topic}' in memory server"
+                    except Exception as e:
+                        return f"Error storing conversation: {str(e)}"
+
+                def retrieve_conversation(topic: str = None, limit: int = 10) -> str:
+                    """Retrieve conversations from memory server"""
+                    try:
+                        import json
+                        import os
+                        from pathlib import Path
+
+                        memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
+                        if not os.path.exists(memory_dir):
+                            return "No conversations found - memory server directory does not exist"
+
+                        # Get all JSON files
+                        json_files = list(Path(memory_dir).glob("*.json"))
+                        conversations = []
+
+                        for file_path in json_files:
+                            try:
+                                with open(file_path, encoding="utf-8") as f:
+                                    data = json.load(f)
+                                    if (
+                                        topic is None
+                                        or data.get("topic", "").lower() == topic.lower()
+                                    ):
+                                        conversations.append(data)
+                            except Exception:
+                                continue
+
+                        # Sort by timestamp (newest first)
+                        conversations.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+                        conversations = conversations[:limit]
+
+                        if conversations:
+                            output = f"📚 Retrieved {len(conversations)} conversations:\n\n"
+                            for conv in conversations:
+                                output += f"**Topic**: {conv.get('topic', 'Unknown')}\n"
+                                output += f"**Time**: {conv.get('timestamp', 'Unknown')}\n"
+                                output += f"**Content**: {conv.get('content', 'No content')}\n"
+                                if conv.get("metadata"):
+                                    output += f"**Metadata**: {json.dumps(conv.get('metadata'), indent=2)}\n"
+                                output += "-" * 50 + "\n\n"
+                            return output
+                        else:
+                            return "No conversations found in memory"
+                    except Exception as e:
+                        return f"Error retrieving conversations: {str(e)}"
+
+                def search_conversations(query: str) -> str:
+                    """Search conversations in memory server"""
+                    try:
+                        import json
+                        import os
+                        from pathlib import Path
+
+                        memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
+                        if not os.path.exists(memory_dir):
+                            return "No conversations found - memory server directory does not exist"
+
+                        # Get all JSON files
+                        json_files = list(Path(memory_dir).glob("*.json"))
+                        results = []
+                        query_lower = query.lower()
+
+                        for file_path in json_files:
+                            try:
+                                with open(file_path, encoding="utf-8") as f:
+                                    data = json.load(f)
+                                    content = data.get("content", "").lower()
+                                    topic = data.get("topic", "").lower()
+
+                                    # Simple relevance scoring
+                                    score = 0
+                                    if query_lower in topic:
+                                        score += 2
+                                    if query_lower in content:
+                                        score += content.count(query_lower)
+
+                                    if score > 0:
+                                        data["relevance_score"] = score
+                                        results.append(data)
+                            except Exception:
+                                continue
+
+                        # Sort by relevance score
+                        results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
+
+                        if results:
+                            output = (
+                                f"🔍 Found {len(results)} matching conversations for '{query}':\n\n"
+                            )
+                            for res in results[:10]:  # Limit to top 10 results
+                                output += f"**Topic**: {res.get('topic', 'Unknown')}\n"
+                                output += f"**Relevance**: {res.get('relevance_score', 0)}\n"
+                                output += f"**Time**: {res.get('timestamp', 'Unknown')}\n"
+                                content_preview = res.get("content", "No content")
+                                if len(content_preview) > 200:
+                                    content_preview = content_preview[:200] + "..."
+                                output += f"**Content**: {content_preview}\n"
+                                output += "-" * 50 + "\n\n"
+                            return output
+                        else:
+                            return f"No conversations found matching '{query}'"
+                    except Exception as e:
+                        return f"Error searching conversations: {str(e)}"
+
+                tools.extend(
+                    [
+                        FunctionTool.from_defaults(
+                            fn=store_conversation,
+                            name="memory_store_conversation",
+                            description="Store conversation in memory server",
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=retrieve_conversation,
+                            name="memory_retrieve_conversation",
+                            description="Retrieve conversations from memory server",
+                        ),
+                        FunctionTool.from_defaults(
+                            fn=search_conversations,
+                            name="memory_search_conversations",
+                            description="Search conversations in memory server",
+                        ),
+                    ]
+                )
+
             # Create placeholder tools for all connections
             for tool_name in connection_info.get("tools", []):
 
@@ -1103,7 +1357,6 @@ if HAS_LLAMAINDEX:
             if not hasattr(self, "mcp_tools"):
                 self.mcp_tools = {}
             self.mcp_tools[connection_id] = tools
-
 
         def _recreate_agent_with_mcp_tools(self):
             """Recreate the agent with MCP tools included"""

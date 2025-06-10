@@ -3,15 +3,14 @@
 This module provides a working MCP client that handles server startup correctly.
 """
 
-import asyncio
-import subprocess
 import json
 import logging
-from typing import Optional, Tuple, Dict, Any, List
+import subprocess
 import time
-from threading import Thread
 from queue import Queue
-import uuid
+from threading import Thread
+from typing import Any, Dict, List, Optional
+
 from .path_translator import translate_server_config
 
 logger = logging.getLogger(__name__)
@@ -31,18 +30,14 @@ class MCPServerProcess:
         self, server_id: str, command: str, args: List[str], env: Optional[Dict[str, str]] = None
     ):
         self.server_id = server_id
-        
+
         # Translate paths in the server configuration
-        config = translate_server_config({
-            "command": command,
-            "args": args,
-            "env": env or {}
-        })
-        
+        config = translate_server_config({"command": command, "args": args, "env": env or {}})
+
         self.command = config.get("command", command)
         self.args = config.get("args", args)
         self.env = config.get("env", env or {})
-        
+
         self.process = None
         self.tools = {}
         self._request_id = 0
@@ -82,13 +77,15 @@ class MCPServerProcess:
                             "/mnt/c/Program Files/nodejs/npx.cmd",
                             "/mnt/c/Program Files (x86)/nodejs/npx.cmd",
                         ]
-                        
+
                         for loc in npx_locations:
                             if os.path.exists(loc):
                                 command = loc
                                 break
                         else:
-                            logger.error(f"npx not found for {self.server_id}. Please install Node.js.")
+                            logger.error(
+                                f"npx not found for {self.server_id}. Please install Node.js."
+                            )
                             return False
 
             logger.info(f"Starting {self.server_id} with command: {command} {' '.join(args)}")
@@ -102,6 +99,8 @@ class MCPServerProcess:
                     stderr=subprocess.PIPE,  # Capture stderr for debugging
                     env=process_env,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     bufsize=0,
                 )
             except FileNotFoundError:
@@ -127,7 +126,7 @@ class MCPServerProcess:
                     _, stderr = self.process.communicate(timeout=0.1)
                     if stderr:
                         logger.error(f"Server {self.server_id} stderr: {stderr}")
-                except:
+                except Exception:
                     pass
                 return False
 
@@ -137,6 +136,7 @@ class MCPServerProcess:
         except Exception as e:
             logger.error(f"Failed to start {self.server_id}: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
@@ -169,7 +169,7 @@ class MCPServerProcess:
                 line = self.process.stderr.readline()
                 if not line:
                     break
-                
+
                 line = line.strip()
                 if line:
                     # Log stderr but don't treat as errors unless they're actual errors
@@ -177,7 +177,6 @@ class MCPServerProcess:
                         logger.error(f"{self.server_id} stderr: {line}")
                     else:
                         logger.debug(f"{self.server_id} stderr: {line}")
-                        
             except Exception as e:
                 logger.debug(f"Error reading stderr: {e}")
                 break
@@ -257,7 +256,7 @@ class MCPServerProcess:
             try:
                 self.process.terminate()
                 self.process.wait(timeout=5)
-            except:
+            except Exception:
                 self.process.kill()
             self.process = None
 
@@ -269,14 +268,46 @@ def create_mcp_tools_for_server(server: MCPServerProcess) -> List[Any]:
 
     tools = []
 
+    # Maximum output size to prevent token limit issues
+    MAX_OUTPUT_LENGTH = 15000  # Conservative limit to stay well under 32k tokens
+    TRUNCATION_MESSAGE = "\n\n... (output truncated to prevent token limit overflow)"
+
     for tool_name, tool_info in server.tools.items():
         # Create wrapper function
-        def make_wrapper(srv, name):
+        def make_wrapper(srv, name, info):
             def wrapper(**kwargs):
                 """MCP tool wrapper"""
-                result = srv.call_tool(name, kwargs)
+                # Translate paths in arguments if needed
+                translated_kwargs = {}
+                for key, value in kwargs.items():
+                    # Check if this argument might be a path
+                    if isinstance(value, str) and (
+                        # Common path-related parameter names
+                        "path" in key.lower()
+                        or "file" in key.lower()
+                        or "dir" in key.lower()
+                        or "folder" in key.lower()
+                        or "location" in key.lower()
+                        # Check if value looks like a path
+                        or value.startswith("C:\\")
+                        or value.startswith("c:\\")
+                        or value.startswith("/mnt/")
+                        or value.startswith("/home/")
+                        or "\\" in value
+                    ):
+                        # Translate the path
+                        from .path_translator import translate_path
+                        translated_value = translate_path(value)
+                        if translated_value != value:
+                            logger.info(f"Translated path for {srv.server_id}.{name}: {value} -> {translated_value}")
+                        translated_kwargs[key] = translated_value
+                    else:
+                        translated_kwargs[key] = value
+
+                result = srv.call_tool(name, translated_kwargs)
 
                 # Extract content from result
+                output = ""
                 if isinstance(result, dict):
                     if "content" in result:
                         if isinstance(result["content"], list):
@@ -287,20 +318,31 @@ def create_mcp_tools_for_server(server: MCPServerProcess) -> List[Any]:
                                     outputs.append(item["text"])
                                 else:
                                     outputs.append(str(item))
-                            return "\n".join(outputs)
+                            output = "\n".join(outputs)
                         else:
-                            return str(result["content"])
+                            output = str(result["content"])
                     elif "error" in result:
-                        return f"Error: {result['error']}"
+                        output = f"Error: {result['error']}"
+                    else:
+                        output = str(result)
+                else:
+                    output = str(result)
 
-                return str(result)
+                # Truncate if output is too large
+                if len(output) > MAX_OUTPUT_LENGTH:
+                    logger.warning(
+                        f"Truncating output from {srv.server_id}.{name}: {len(output)} chars -> {MAX_OUTPUT_LENGTH} chars"
+                    )
+                    output = output[:MAX_OUTPUT_LENGTH] + TRUNCATION_MESSAGE
+
+                return output
 
             wrapper.__name__ = f"{srv.server_id}_{name}"
-            wrapper.__doc__ = tool_info.get("description", f"Call {name} from {srv.server_id}")
+            wrapper.__doc__ = info.get("description", f"Call {name} from {srv.server_id}")
             return wrapper
 
         # Create tool
-        tool_fn = make_wrapper(server, tool_name)
+        tool_fn = make_wrapper(server, tool_name, tool_info)
         tool = FunctionTool.from_defaults(fn=tool_fn, name=f"{server.server_id}_{tool_name}")
         tools.append(tool)
 

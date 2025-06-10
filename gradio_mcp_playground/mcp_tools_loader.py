@@ -5,9 +5,8 @@ Loads MCP servers from configuration and creates LlamaIndex tools.
 
 import asyncio
 import logging
-from typing import List, Any, Dict, Optional, Tuple
 import threading
-import time
+from typing import Any, List
 
 logger = logging.getLogger(__name__)
 

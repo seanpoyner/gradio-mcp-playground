@@ -1,0 +1,89 @@
+# Gradio Components Help Information
+# This file contains help text for various Gradio components
+
+components:
+  textbox:
+    description: "gr.Textbox() - For text input/output. Use 'lines' parameter for multiline, 'type' for password fields."
+    example: |
+      gr.Textbox(
+          label="Enter text",
+          lines=3,
+          placeholder="Type here...",
+          type="text"  # or "password"
+      )
+
+  button:
+    description: "gr.Button() - For user actions. Use 'variant' parameter for styling (primary, secondary, stop)."
+    example: |
+      gr.Button(
+          "Click me",
+          variant="primary",  # or "secondary", "stop"
+          size="lg"
+      )
+
+  dropdown:
+    description: "gr.Dropdown() - For selection from options. Use 'choices' parameter for options list."
+    example: |
+      gr.Dropdown(
+          choices=["Option 1", "Option 2"],
+          label="Select an option",
+          value="Option 1"
+      )
+
+  slider:
+    description: "gr.Slider() - For numeric input. Set 'minimum', 'maximum', and 'step' parameters."
+    example: |
+      gr.Slider(
+          minimum=0,
+          maximum=100,
+          step=1,
+          label="Select value"
+      )
+
+  file:
+    description: "gr.File() - For file uploads. Use 'file_types' to restrict allowed types."
+    example: |
+      gr.File(
+          label="Upload file",
+          file_types=[".pdf", ".txt"],
+          type="filepath"
+      )
+
+  dataframe:
+    description: "gr.Dataframe() - For tabular data. Set 'headers' and use 'interactive' for editing."
+    example: |
+      gr.Dataframe(
+          headers=["Name", "Age"],
+          interactive=True,
+          row_count=(3, "dynamic")
+      )
+
+  plot:
+    description: "gr.Plot() - For matplotlib/plotly charts. Return plot objects from functions."
+    example: |
+      gr.Plot(label="Data visualization")
+
+  interface:
+    description: "gr.Interface() - Simple way to create UIs with inputs/outputs/function."
+    example: |
+      gr.Interface(
+          fn=process_function,
+          inputs=gr.Textbox(),
+          outputs=gr.Textbox()
+      )
+
+  blocks:
+    description: "gr.Blocks() - More flexible UI builder with layout control using rows/columns."
+    example: |
+      with gr.Blocks() as demo:
+          with gr.Row():
+              input = gr.Textbox()
+              output = gr.Textbox()
+
+general_tips:
+  - "Use clear labels for all components"
+  - "Provide examples for complex inputs"
+  - "Handle errors gracefully"
+  - "Test with different input types"
+  - "Consider mobile responsiveness"
+  - "Use appropriate component for the data type"

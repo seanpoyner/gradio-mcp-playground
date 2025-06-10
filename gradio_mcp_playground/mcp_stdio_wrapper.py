@@ -5,8 +5,7 @@ This module provides a wrapper around MCP servers that handle their startup mess
 
 import asyncio
 import logging
-from typing import Optional, Tuple, Dict, Any, List
-from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

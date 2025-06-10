@@ -9,7 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional
 
 # Optional imports for encryption
 try:
@@ -24,7 +24,7 @@ except ImportError:
 
 class SecureStorage:
     """Secure storage for API keys and sensitive configuration
-    
+
     This class provides encrypted storage for API keys at rest using the
     cryptography library. Keys are stored in an encrypted JSON file in the
     ~/.gradio-mcp/ directory.
@@ -244,7 +244,7 @@ class SecureStorage:
                     info[service][key_name] = {
                         "created_at": key_data.get("created_at", "unknown"),
                         "updated_at": key_data.get("updated_at", "unknown"),
-                        "has_value": True
+                        "has_value": True,
                     }
             return info
         except:
@@ -348,7 +348,9 @@ class SecureStorage:
 
             # Update existing key
             encrypted_key = self.cipher.encrypt(key_value.encode("utf-8"))
-            keys[service][key_name]["value"] = base64.urlsafe_b64encode(encrypted_key).decode("utf-8")
+            keys[service][key_name]["value"] = base64.urlsafe_b64encode(encrypted_key).decode(
+                "utf-8"
+            )
             keys[service][key_name]["updated_at"] = self._get_timestamp()
 
             return self._save_keys(keys)
@@ -426,16 +428,12 @@ class SecureStorage:
 
             # Export all keys
             keys = self._load_keys()
-            export_data = {
-                "version": 1,
-                "keys": keys,
-                "exported_at": self._get_timestamp()
-            }
+            export_data = {"version": 1, "keys": keys, "exported_at": self._get_timestamp()}
 
             # Encrypt and encode
             data = json.dumps(export_data)
             encrypted = cipher.encrypt(data.encode("utf-8"))
-            
+
             # Include salt in the export
             export = salt + encrypted
             return base64.urlsafe_b64encode(export).decode("utf-8")
@@ -457,7 +455,7 @@ class SecureStorage:
         try:
             # Decode export
             export = base64.urlsafe_b64decode(export_data.encode("utf-8"))
-            
+
             # Extract salt and encrypted data
             salt = export[:16]
             encrypted = export[16:]
@@ -479,7 +477,7 @@ class SecureStorage:
             # Merge with existing keys
             current_keys = self._load_keys()
             imported_keys = import_data.get("keys", {})
-            
+
             for service, service_keys in imported_keys.items():
                 if service not in current_keys:
                     current_keys[service] = {}
@@ -495,19 +493,19 @@ class SecureStorage:
 # Backward compatibility aliases
 class SecureTokenStorage(SecureStorage):
     """Alias for backward compatibility"""
-    
+
     def save_token(self, service: str, token: str) -> bool:
         """Backward compatibility method"""
         return self.store_key(service, "api_token", token)
-    
+
     def load_token(self, service: str) -> Optional[str]:
         """Backward compatibility method"""
         return self.retrieve_key(service, "api_token")
-    
+
     def delete_token(self, service: str) -> bool:
         """Backward compatibility method"""
         return self.delete_key(service, "api_token")
-    
+
     def clear_all_tokens(self) -> bool:
         """Backward compatibility method"""
         return self.clear_all_keys()

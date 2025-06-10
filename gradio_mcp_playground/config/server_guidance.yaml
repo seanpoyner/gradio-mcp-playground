@@ -1,0 +1,81 @@
+# Server-specific guidance messages
+# This file contains installation and usage guidance for MCP servers
+
+servers:
+  obsidian:
+    wsl_path_issue: |
+      **⚠️ WSL Path Issue Detected**
+
+      The Obsidian server cannot access Windows paths through WSL mounts.
+      Your path: {vault_path}
+
+      **Recommended Alternative:**
+      Use the filesystem server instead for cross-platform file access:
+      ```
+      install_mcp_server_from_registry(server_id='filesystem', path='{vault_path}')
+      ```
+
+      The filesystem server supports WSL mount paths and provides similar functionality.
+    
+    success: |
+      **✅ Obsidian tools are now available in this chat!**
+      You can use:
+      - `obsidian_read_note()` - Read a note from your vault
+      - `obsidian_create_note()` - Create a new note
+      - `obsidian_search_notes()` - Search through your notes
+      - `obsidian_list_notes()` - List notes in your vault
+
+      Your vault path: {vault_path}
+
+  filesystem:
+    success: |
+      **✅ Filesystem tools are now available in this chat!**
+      You can use:
+      - `filesystem_read_file()` - Read file contents
+      - `filesystem_write_file()` - Write to files
+      - `filesystem_list_directory()` - List directory contents
+      - `filesystem_create_directory()` - Create directories
+
+      Access path: {path}
+
+  github:
+    success: |
+      **✅ GitHub tools are now available in this chat!**
+      You can use:
+      - `github_list_repos()` - List your repositories
+      - `github_get_issues()` - Get issues from a repo
+      - `github_create_issue()` - Create a new issue
+      - And many more GitHub operations!
+
+  brave-search:
+    success: |
+      **✅ Brave Search is ready!**
+      You can use `brave_search(query='your search')` directly in this chat!
+
+  memory:
+    success: |
+      **✅ Memory server is ready!**
+      You can use:
+      - `memory_store_conversation(topic='topic', content='content')` to store
+      - `memory_retrieve_conversation(topic='topic')` to retrieve
+      - `memory_search_conversations(query='search term')` to search
+
+  time:
+    success: |
+      **✅ Time server tools are now available!**
+      You can use:
+      - `time_get_current_time()` - Get current time
+      - `time_convert_timezone()` - Convert between timezones
+      - `time_format_date()` - Format dates
+
+      Configured timezone: {timezone}
+
+# Default messages for servers not explicitly configured
+default:
+  success: |
+    **✅ {server_name} is now available!**
+    The tools from this server have been added to your chat interface.
+    
+  error: |
+    **❌ Failed to connect to {server_name}**
+    Please check the server configuration and try again.
