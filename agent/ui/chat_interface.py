@@ -84,10 +84,63 @@ class ChatInterface:
                 self.suggestions_display = gr.Markdown(
                     "**Suggestions will appear here based on our conversation...**"
                 )
-        
+            
+            # Hugging Face Model Configuration
+            with gr.Accordion("🤖 AI Model Configuration", open=False):
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        self.hf_token_input = gr.Textbox(
+                            label="Hugging Face Token",
+                            placeholder="Enter your HF token (hf_...)",
+                            type="password",
+                            interactive=True
+                        )
+                    
+                    with gr.Column(scale=2):
+                        self.model_dropdown = gr.Dropdown(
+                            label="Model Selection",
+                            choices=[
+                                "Qwen/Qwen2.5-Coder-32B-Instruct",
+                                "mistralai/Mixtral-8x7B-Instruct-v0.1",
+                                "HuggingfaceH4/zephyr-7b-beta"
+                            ],
+                            value=None,
+                            interactive=True
+                        )
+                
+                with gr.Row():
+                    self.save_token_btn = gr.Button("💾 Save Token", variant="secondary", size="sm")
+                    self.load_model_btn = gr.Button("🔄 Load Model", variant="primary", size="sm")
+                    self.unload_model_btn = gr.Button("🗑️ Unload Model", variant="secondary", size="sm")
+                
+                self.model_status = gr.Markdown("**Model Status**: Initializing...")
+
         # Set up event handlers
         self._setup_event_handlers()
+        
+        # Initialize HF interface after setup
+        self._initialize_hf_interface()
     
+    def _initialize_hf_interface(self) -> None:
+        """Initialize HF interface components after agent setup"""
+        try:
+            # Load existing token if available
+            existing_token = self.agent.get_hf_token()
+            if existing_token:
+                self.hf_token_input.value = "••••••••••••" + existing_token[-8:] if len(existing_token) > 8 else "••••••••"
+            
+            # Set current model selection
+            current_model = self.agent.get_current_model()
+            if current_model:
+                self.model_dropdown.value = current_model
+            
+            # Update model status
+            status_text = self._update_model_status()
+            self.model_status.value = status_text
+            
+        except Exception as e:
+            print(f"Warning: Failed to initialize HF interface: {e}")
+
     def set_mcp_connections_panel(self, panel) -> None:
         """Set the MCP connections panel reference"""
         self.mcp_connections_panel = panel
@@ -134,7 +187,26 @@ class ChatInterface:
             fn=self._show_load_dialog,
             outputs=[self.chatbot, self.context_display]
         )
-    
+        
+        # HF Model configuration handlers
+        self.save_token_btn.click(
+            fn=self._save_hf_token,
+            inputs=[self.hf_token_input],
+            outputs=[self.model_status]
+        )
+        
+        self.load_model_btn.click(
+            fn=self._load_hf_model,
+            inputs=[self.model_dropdown],
+            outputs=[self.model_status],
+            show_progress=True
+        )
+        
+        self.unload_model_btn.click(
+            fn=self._unload_hf_model,
+            outputs=[self.model_status]
+        )
+
     async def _handle_message(self, message: str, chat_history: List[Dict]) -> Tuple[List[Dict], str, Dict[str, Any], str]:
         """Handle user message and generate response"""
         
@@ -161,8 +233,13 @@ class ChatInterface:
                 "intent": metadata.get("intent", "unknown"),
                 "confidence": metadata.get("confidence", 0.0),
                 "entities": metadata.get("entities", {}),
-                "action": metadata.get("action", "respond")
+                "action": metadata.get("action", "respond"),
+                "source": metadata.get("source", "rule_based")
             }
+            
+            # Add model info if HF was used
+            if metadata.get("source") == "huggingface_model":
+                context_info["model"] = metadata.get("model", "unknown")
             
             # Generate suggestions
             suggestions = self._generate_suggestions(metadata)
@@ -229,8 +306,14 @@ class ChatInterface:
         
         action = metadata.get("action", "")
         intent = metadata.get("intent", "")
+        source = metadata.get("source", "rule_based")
         
         suggestions = "## 💡 What you can do next:\n\n"
+        
+        # Add AI model info if used
+        if source == "huggingface_model":
+            model_name = metadata.get("model", "Unknown")
+            suggestions += f"🤖 *Response generated using {model_name}*\n\n"
         
         if action == "show_recommendations":
             suggestions += """
@@ -282,9 +365,80 @@ class ChatInterface:
         
         return suggestions
     
+    # Hugging Face Model Configuration Methods
+    
+    def _update_model_status(self) -> str:
+        """Update and return current model status"""
+        try:
+            status = self.agent.get_model_status()
+            
+            if not status["has_transformers"]:
+                return "**Model Status**: ❌ Transformers library not installed. Run: `pip install transformers torch`"
+            
+            if not status["has_secure_storage"]:
+                return "**Model Status**: ❌ Secure storage not available. Install cryptography: `pip install cryptography`"
+            
+            if not status["has_token"]:
+                return "**Model Status**: ⚠️ No HuggingFace token found. Please enter your token above."
+            
+            if status["model_loaded"]:
+                return f"**Model Status**: ✅ Model loaded: `{status['current_model']}`"
+            
+            return "**Model Status**: 🔄 Ready to load model. Select a model and click 'Load Model'."
+            
+        except Exception as e:
+            return f"**Model Status**: ❌ Error checking status: {str(e)}"
+    
+    def _save_hf_token(self, token: str) -> str:
+        """Save HuggingFace token securely"""
+        try:
+            if not token or len(token.strip()) < 10:
+                return "**Model Status**: ❌ Please enter a valid HuggingFace token"
+            
+            # Don't save if it's the masked display value
+            if "••••" in token:
+                return "**Model Status**: ⚠️ Token already saved. Enter a new token to update."
+            
+            if self.agent.set_hf_token(token.strip()):
+                return "**Model Status**: ✅ Token saved securely!"
+            else:
+                return "**Model Status**: ❌ Failed to save token. Check secure storage setup."
+                
+        except Exception as e:
+            return f"**Model Status**: ❌ Error saving token: {str(e)}"
+    
+    async def _load_hf_model(self, model_name: str) -> str:
+        """Load selected HuggingFace model"""
+        try:
+            if not model_name:
+                return "**Model Status**: ❌ Please select a model"
+            
+            # Check if token is available
+            if not self.agent.get_hf_token():
+                return "**Model Status**: ❌ Please save your HuggingFace token first"
+            
+            success = await self.agent.load_hf_model(model_name)
+            
+            if success:
+                return f"**Model Status**: ✅ Model loaded successfully: `{model_name}`"
+            else:
+                return f"**Model Status**: ❌ Failed to load model: `{model_name}`. Check logs for details."
+                
+        except Exception as e:
+            return f"**Model Status**: ❌ Error loading model: {str(e)}"
+    
+    def _unload_hf_model(self) -> str:
+        """Unload current HuggingFace model"""
+        try:
+            self.agent.unload_hf_model()
+            return "**Model Status**: ✅ Model unloaded successfully"
+        except Exception as e:
+            return f"**Model Status**: ❌ Error unloading model: {str(e)}"
+
+    # Additional helper methods for server building UI
+
     def update_chat_with_progress(self, progress_message: str) -> None:
         """Update chat with progress information"""
-        
         # This would be called during long-running operations
         # to show progress to the user
         pass

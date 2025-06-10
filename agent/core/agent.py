@@ -13,9 +13,32 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 from enum import Enum
 
+# Hugging Face integration
+try:
+    from transformers import AutoTokenizer, AutoModelForCausalLM
+    import torch
+    HAS_TRANSFORMERS = True
+except ImportError:
+    HAS_TRANSFORMERS = False
+
 from .server_builder import ServerBuilder
 from .registry import EnhancedRegistry
 from .knowledge import KnowledgeBase
+
+# Import secure storage from the main package
+try:
+    from gradio_mcp_playground.secure_storage import SecureStorage, get_secure_storage
+except ImportError:
+    # Fallback for different import paths
+    try:
+        import sys
+        import os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+        from gradio_mcp_playground.secure_storage import SecureStorage, get_secure_storage
+    except ImportError:
+        print("Warning: Could not import secure storage. HF token storage will not be available.")
+        SecureStorage = None
+        get_secure_storage = lambda: None
 
 
 class MessageRole(Enum):
@@ -82,6 +105,23 @@ class GMPAgent:
         self.knowledge = KnowledgeBase()
         self.context = ConversationContext(messages=[])
         self.mcp_connections = {}  # Store active MCP connections
+        
+        # Initialize secure storage for HF tokens
+        try:
+            self.secure_storage = get_secure_storage() if get_secure_storage else None
+        except Exception as e:
+            print(f"Warning: Secure storage initialization failed: {e}")
+            self.secure_storage = None
+        
+        # HF model configuration
+        self.hf_model = None
+        self.hf_tokenizer = None
+        self.current_model_name = None
+        self.available_models = [
+            "Qwen/Qwen2.5-Coder-32B-Instruct",
+            "mistralai/Mixtral-8x7B-Instruct-v0.1", 
+            "HuggingfaceH4/zephyr-7b-beta"
+        ]
         
         # Initialize with system message
         self._add_system_message(
@@ -297,8 +337,32 @@ class GMPAgent:
         # Parse intent
         intent = self.parse_intent(user_message)
         
-        # Generate response based on intent
-        response, metadata = await self._generate_response(intent, user_message)
+        # Try to use HF model for enhanced responses if available
+        hf_enhanced_response = None
+        if self.hf_model and self.hf_tokenizer:
+            try:
+                # Create a context-aware prompt for the HF model
+                context_prompt = self._build_context_prompt(user_message, intent)
+                hf_enhanced_response = await self.generate_hf_response(context_prompt, max_length=1024)
+            except Exception as e:
+                print(f"HF model response failed, falling back to default: {e}")
+        
+        # Generate response based on intent (fallback or primary)
+        if hf_enhanced_response and len(hf_enhanced_response.strip()) > 20:
+            # Use HF enhanced response
+            response = hf_enhanced_response
+            metadata = {
+                "intent": intent.type.value,
+                "confidence": intent.confidence,
+                "entities": intent.entities,
+                "requirements": intent.requirements,
+                "source": "huggingface_model",
+                "model": self.current_model_name
+            }
+        else:
+            # Use default rule-based response
+            response, metadata = await self._generate_response(intent, user_message)
+            metadata["source"] = "rule_based"
         
         # Add assistant response to context
         self._add_assistant_message(response, metadata)
@@ -724,3 +788,228 @@ Could you rephrase your request or let me know what you'd like to accomplish?"""
                 tools_by_connection[name] = connection.get('tools', [])
         
         return tools_by_connection
+    
+    # Hugging Face Model Integration Methods
+    
+    def set_hf_token(self, token: str) -> bool:
+        """Set and securely store Hugging Face token"""
+        if not self.secure_storage:
+            return False
+        
+        try:
+            return self.secure_storage.store_key("huggingface", "token", token)
+        except Exception as e:
+            print(f"Error storing HF token: {e}")
+            return False
+    
+    def get_hf_token(self) -> Optional[str]:
+        """Get stored Hugging Face token"""
+        if not self.secure_storage:
+            return None
+        
+        try:
+            return self.secure_storage.retrieve_key("huggingface", "token")
+        except Exception as e:
+            print(f"Error retrieving HF token: {e}")
+            return None
+    
+    def get_available_models(self) -> List[str]:
+        """Get list of available HF models"""
+        return self.available_models.copy()
+    
+    async def load_hf_model(self, model_name: str) -> bool:
+        """Load a Hugging Face model for AI-powered responses"""
+        if not HAS_TRANSFORMERS:
+            print("Transformers library not available. Install with: pip install transformers torch")
+            return False
+        
+        if model_name not in self.available_models:
+            print(f"Model {model_name} not in available models list")
+            return False
+        
+        # Get HF token
+        hf_token = self.get_hf_token()
+        if not hf_token:
+            print("Hugging Face token required for model access")
+            return False
+        
+        try:
+            print(f"Loading model {model_name}...")
+            
+            # Load tokenizer
+            self.hf_tokenizer = AutoTokenizer.from_pretrained(
+                model_name,
+                token=hf_token,
+                trust_remote_code=True
+            )
+            
+            # Load model (use smaller precision for memory efficiency)
+            self.hf_model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                token=hf_token,
+                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                device_map="auto" if torch.cuda.is_available() else None,
+                trust_remote_code=True
+            )
+            
+            self.current_model_name = model_name
+            print(f"Successfully loaded {model_name}")
+            return True
+            
+        except Exception as e:
+            print(f"Error loading model {model_name}: {e}")
+            self.hf_model = None
+            self.hf_tokenizer = None
+            self.current_model_name = None
+            return False
+    
+    def unload_hf_model(self) -> None:
+        """Unload the current HF model to free memory"""
+        if self.hf_model is not None:
+            del self.hf_model
+            self.hf_model = None
+        
+        if self.hf_tokenizer is not None:
+            del self.hf_tokenizer
+            self.hf_tokenizer = None
+        
+        self.current_model_name = None
+        
+        # Clear GPU cache if available
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        print("HF model unloaded")
+    
+    def get_current_model(self) -> Optional[str]:
+        """Get the currently loaded model name"""
+        return self.current_model_name
+    
+    async def generate_hf_response(self, prompt: str, max_length: int = 512) -> Optional[str]:
+        """Generate a response using the loaded HF model"""
+        if not self.hf_model or not self.hf_tokenizer:
+            return None
+        
+        try:
+            # Prepare the prompt for the model
+            if "Qwen" in self.current_model_name:
+                # Qwen format
+                messages = [
+                    {"role": "system", "content": "You are a helpful AI assistant specialized in building MCP servers and helping with code generation."},
+                    {"role": "user", "content": prompt}
+                ]
+                formatted_prompt = self.hf_tokenizer.apply_chat_template(messages, tokenize=False)
+            elif "zephyr" in self.current_model_name:
+                # Zephyr format
+                messages = [
+                    {"role": "system", "content": "You are a helpful AI assistant specialized in building MCP servers and helping with code generation."},
+                    {"role": "user", "content": prompt}
+                ]
+                formatted_prompt = self.hf_tokenizer.apply_chat_template(messages, tokenize=False)
+            else:
+                # Default format for Mixtral and others
+                formatted_prompt = f"<s>[INST] You are a helpful AI assistant specialized in building MCP servers and helping with code generation.\n\n{prompt} [/INST]"
+            
+            # Tokenize
+            inputs = self.hf_tokenizer(
+                formatted_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=2048
+            )
+            
+            # Move to device if model is on GPU
+            if self.hf_model.device.type != "cpu":
+                inputs = {k: v.to(self.hf_model.device) for k, v in inputs.items()}
+            
+            # Generate
+            with torch.no_grad():
+                outputs = self.hf_model.generate(
+                    **inputs,
+                    max_new_tokens=max_length,
+                    do_sample=True,
+                    temperature=0.7,
+                    top_p=0.9,
+                    pad_token_id=self.hf_tokenizer.eos_token_id
+                )
+            
+            # Decode response
+            generated_tokens = outputs[0][inputs['input_ids'].shape[1]:]
+            response = self.hf_tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            
+            return response.strip()
+            
+        except Exception as e:
+            print(f"Error generating HF response: {e}")
+            return None
+    
+    def get_model_status(self) -> Dict[str, Any]:
+        """Get current model loading status"""
+        return {
+            "has_transformers": HAS_TRANSFORMERS,
+            "has_secure_storage": self.secure_storage is not None,
+            "has_token": self.get_hf_token() is not None,
+            "current_model": self.current_model_name,
+            "model_loaded": self.hf_model is not None,
+            "available_models": self.available_models
+        }
+    
+    def _build_context_prompt(self, user_message: str, intent: Intent) -> str:
+        """Build a context-aware prompt for HF model based on conversation history and intent"""
+        
+        # Get recent conversation history
+        recent_messages = []
+        for msg in self.context.messages[-6:]:  # Last 6 messages for context
+            if msg.role != MessageRole.SYSTEM:
+                recent_messages.append(f"{msg.role.value}: {msg.content}")
+        
+        # Build context based on intent
+        context_info = ""
+        if intent.type == IntentType.CREATE_SERVER:
+            context_info = """You are helping to create an MCP server. Focus on:
+- Understanding what type of server/tool the user wants
+- Suggesting appropriate technologies and approaches
+- Asking clarifying questions if needed
+- Providing step-by-step guidance"""
+            
+        elif intent.type == IntentType.BUILD_PIPELINE:
+            context_info = """You are helping to build a multi-component pipeline. Focus on:
+- Understanding the data flow and processing steps
+- Suggesting how to connect different components
+- Explaining integration approaches
+- Breaking down complex workflows"""
+            
+        elif intent.type == IntentType.GET_HELP:
+            context_info = """You are providing help and guidance about MCP servers and Gradio. Focus on:
+- Clear, educational explanations
+- Practical examples and code snippets
+- Step-by-step tutorials
+- Best practices and tips"""
+            
+        elif intent.type == IntentType.DEPLOY_SERVER:
+            context_info = """You are helping with server deployment. Focus on:
+- Deployment platform options
+- Configuration requirements
+- Step-by-step deployment guides
+- Troubleshooting common issues"""
+            
+        else:
+            context_info = """You are an intelligent assistant for building MCP servers using Gradio. 
+Provide helpful, practical advice and ask clarifying questions when needed."""
+        
+        # Build the full prompt
+        conversation_context = "\n".join(recent_messages) if recent_messages else "No previous conversation"
+        
+        prompt = f"""{context_info}
+
+Previous conversation:
+{conversation_context}
+
+Current user message: {user_message}
+
+Entities detected: {intent.entities}
+Requirements: {intent.requirements}
+
+Provide a helpful, detailed response that addresses the user's needs. Be practical and actionable."""
+
+        return prompt

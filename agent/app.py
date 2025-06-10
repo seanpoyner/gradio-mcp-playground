@@ -136,20 +136,22 @@ def create_agent_interface() -> gr.Interface:
         css=css,
         theme=gr.themes.Soft()
     ) as interface:
-        
-        # Header
+          # Header
         gr.Markdown("""
         # 🤖 GMP Agent - Intelligent MCP Server Builder
         
         Welcome! I'm your intelligent assistant for building and managing MCP servers. 
         Tell me what you want to create in plain language, and I'll help you build it using the Gradio MCP Playground toolkit.
         
+        ## ✨ NEW: AI-Powered Responses
+        Configure HuggingFace models in the chat interface for enhanced, context-aware responses!
+        
         **Examples:**
         - "Create a calculator server with basic math operations"
-        - "Build an image processing pipeline that can resize and filter images"
+        - "Build an image processing pipeline that can resize and filter images"  
         - "I need a data analysis tool that works with CSV files"
+        - "Help me understand how MCP servers work"
         """)
-        
         with gr.Tabs() as tabs:
             
             # Chat Tab - Main conversation interface
@@ -225,12 +227,32 @@ def create_agent_interface() -> gr.Interface:
                         - Data analysis platforms
                         - API integration servers
                         - Multi-tool interfaces
-                        
-                        ### AI-Powered Servers
+                          ### AI-Powered Servers
                         - LLM-based tools
                         - Image generation servers
                         - ML model inference
                         - Natural language processing
+                        
+                        ## 🤖 AI Model Integration
+                        
+                        The GMP Agent now supports Hugging Face models for enhanced responses:
+                        
+                        ### Setup Instructions:
+                        1. **Get HF Token**: Get your token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+                        2. **Save Token**: Use the "AI Model Configuration" panel in the Chat tab
+                        3. **Select Model**: Choose from Qwen, Mixtral, or Zephyr models
+                        4. **Load Model**: Click "Load Model" (may take a few minutes)
+                        
+                        ### Available Models:
+                        - **Qwen/Qwen2.5-Coder-32B-Instruct**: Best for code generation
+                        - **mistralai/Mixtral-8x7B-Instruct-v0.1**: Balanced performance
+                        - **HuggingfaceH4/zephyr-7b-beta**: Fastest, good for chat
+                        
+                        ### Security:
+                        - Tokens are encrypted with AES-256 encryption
+                        - Stored locally with machine-specific keys
+                        - Persist across app restarts
+                        - Can be deleted anytime
                         
                         ## 🔗 Integration Capabilities
                         

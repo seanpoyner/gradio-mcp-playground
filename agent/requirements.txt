@@ -20,6 +20,12 @@ tweepy>=4.14.0
 google-generativeai>=0.3.1
 watchdog>=3.0.0
 
+# Hugging Face Model Integration
+transformers>=4.36.0
+torch>=2.1.0
+tokenizers>=0.15.0
+accelerate>=0.25.0
+
 # Optional MCP dependencies
 mcp>=1.0.0
 
