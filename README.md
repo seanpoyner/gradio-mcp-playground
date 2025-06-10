@@ -326,7 +326,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Core Team
 - **Sean Poyner** - Project Lead & Creator
-- **Ranadeep Laskar ([@flickinshots](https://github.com/flickinshots))** - Project Member & Collaborator
+- **Ranadeep Laskar ([@RanL703](https://github.com/RanL703))** - Project Member & Collaborator
 
 ### Special Thanks
 - Built with [Gradio](https://gradio.app) by Hugging Face
