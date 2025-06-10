@@ -277,6 +277,22 @@ def create_unified_dashboard():
         .agent-mode-selector {
             margin-bottom: 20px;
         }
+        
+        /* Agent viewer iframe styles */
+        #agent-viewer-iframe iframe {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            background: white;
+        }
+        
+        #agent-viewer-iframe {
+            min-height: 600px;
+            background: #f7f8fa;
+            border-radius: 8px;
+            overflow: hidden;
+        }
         """,
     ) as dashboard:
         gr.Markdown(
@@ -677,7 +693,108 @@ def create_unified_dashboard():
                             lines=10,
                         )
 
-            # Tab 4: MCP Connections (Merged)
+            # Tab 4: Agent Control Panel (moved after Server Management)
+            with gr.Tab("🤖 Agent Control Panel"):
+                if HAS_CONTROL_PANEL:
+                    try:
+                        # Initialize control panel
+                        control_panel = ControlPanelUI()
+                        
+                        # Add iframe viewer for deployed agents
+                        with gr.Row():
+                            with gr.Column(scale=3):
+                                # Create the control panel components
+                                control_panel.create_components()
+                            
+                            with gr.Column(scale=2):
+                                gr.Markdown("### 🌐 Agent Viewer")
+                                gr.Markdown("Open deployed agents directly in the dashboard")
+                                
+                                # Agent viewer controls
+                                with gr.Row():
+                                    deployed_agent_dropdown = gr.Dropdown(
+                                        label="Select Deployed Agent",
+                                        choices=[],
+                                        value=None,
+                                        interactive=True
+                                    )
+                                    open_agent_btn = gr.Button("🔗 Open Agent", variant="primary")
+                                
+                                # Iframe to display the agent
+                                agent_iframe = gr.HTML(
+                                    value='<div style="text-align: center; padding: 50px; color: #666;">Select a deployed agent to view it here</div>',
+                                    label="Agent Interface",
+                                    elem_id="agent-viewer-iframe"
+                                )
+                                
+                                # Refresh deployed agents list
+                                def refresh_deployed_agents():
+                                    """Get list of deployed agents with their ports"""
+                                    if control_panel and control_panel.agent_runner:
+                                        agents = control_panel.agent_runner.list_agents()
+                                        choices = []
+                                        for name, info in agents.items():
+                                            if info.get('status') == 'running' and info.get('port'):
+                                                choices.append(f"{name} (port {info['port']})")
+                                        return gr.update(choices=choices)
+                                    return gr.update(choices=[])
+                                
+                                # Open agent in iframe
+                                def open_agent_in_iframe(agent_selection):
+                                    """Open selected agent in iframe"""
+                                    if not agent_selection:
+                                        return '<div style="text-align: center; padding: 50px; color: #666;">Select a deployed agent to view it here</div>'
+                                    
+                                    # Extract port from selection
+                                    import re
+                                    port_match = re.search(r'\(port (\d+)\)', agent_selection)
+                                    if port_match:
+                                        port = port_match.group(1)
+                                        # Create iframe HTML
+                                        iframe_html = f'''
+                                        <iframe 
+                                            src="http://localhost:{port}" 
+                                            width="100%" 
+                                            height="600px" 
+                                            style="border: 1px solid #ddd; border-radius: 8px;"
+                                            title="{agent_selection}">
+                                        </iframe>
+                                        '''
+                                        return iframe_html
+                                    return '<div style="text-align: center; padding: 50px; color: #f00;">Could not determine agent port</div>'
+                                
+                                # Auto-refresh deployed agents dropdown
+                                deployed_agents_timer = gr.Timer(10.0)
+                                deployed_agents_timer.tick(
+                                    fn=refresh_deployed_agents,
+                                    outputs=[deployed_agent_dropdown]
+                                )
+                                
+                                # Open agent button handler
+                                open_agent_btn.click(
+                                    fn=open_agent_in_iframe,
+                                    inputs=[deployed_agent_dropdown],
+                                    outputs=[agent_iframe]
+                                )
+                                
+                    except Exception as e:
+                        gr.Markdown("### Agent Control Panel Error")
+                        gr.Markdown(f"Failed to initialize control panel: {str(e)}")
+                        gr.Markdown("Please ensure all agent dependencies are installed.")
+                else:
+                    gr.Markdown("### Agent Control Panel Unavailable")
+                    gr.Markdown(
+                        """
+                        The Agent Control Panel requires additional components to be installed.
+                        
+                        To enable this feature:
+                        1. Ensure the agent directory is properly set up
+                        2. Install required dependencies
+                        3. Restart the application
+                        """
+                    )
+
+            # Tab 5: MCP Connections (Merged)
             with gr.Tab("🔌 MCP Connections"):
                 gr.Markdown("### MCP Server Connections")
                 gr.Markdown("Connect to multiple MCP servers for enhanced capabilities")
@@ -768,7 +885,7 @@ def create_unified_dashboard():
                             lines=3,
                         )
 
-            # Tab 5: Help & Resources
+            # Tab 6: Help & Resources
             with gr.Tab("📚 Help & Resources"):
                 with gr.Tabs():
                     # Documentation
@@ -855,31 +972,6 @@ def create_unified_dashboard():
                                 This feature requires agent components to be installed.
                                 """
                             )
-
-            # Tab 6: Agent Control Panel
-            with gr.Tab("🤖 Agent Control Panel"):
-                if HAS_CONTROL_PANEL:
-                    try:
-                        # Initialize control panel
-                        control_panel = ControlPanelUI()
-                        # Create the control panel components
-                        control_panel.create_components()
-                    except Exception as e:
-                        gr.Markdown("### Agent Control Panel Error")
-                        gr.Markdown(f"Failed to initialize control panel: {str(e)}")
-                        gr.Markdown("Please ensure all agent dependencies are installed.")
-                else:
-                    gr.Markdown("### Agent Control Panel Unavailable")
-                    gr.Markdown(
-                        """
-                        The Agent Control Panel requires additional components to be installed.
-                        
-                        To enable this feature:
-                        1. Ensure the agent directory is properly set up
-                        2. Install required dependencies
-                        3. Restart the application
-                        """
-                    )
 
             # Tab 7: Settings
             with gr.Tab("⚙️ Settings"):
