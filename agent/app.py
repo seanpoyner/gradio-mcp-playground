@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""GMP Agent - Intelligent MCP Server Builder
+"""GMP Agent - Intelligent Builder
 
 Main application entry point for the GMP Agent, a conversational AI interface
-for building and managing MCP servers using the Gradio MCP Playground toolkit.
+for building and managing Agents and MCP servers using the Gradio MCP Playground toolkit.
 """
 
 import argparse
@@ -137,24 +137,21 @@ def create_agent_interface() -> gr.Interface:
     """
     
     with gr.Blocks(
-        title="GMP Agent - Intelligent MCP Server Builder",
+        title="GMP Agent - Intelligent Builder",
         css=css,
         theme=gr.themes.Soft()
     ) as interface:
           # Header
         gr.Markdown("""
-        # 🤖 GMP Agent - Intelligent MCP Server Builder
+        # 🤖 GMP Agent - Intelligent Builder
         
-        Welcome! I'm your intelligent assistant for building and managing MCP servers. 
+        Welcome! I'm your intelligent assistant for building and managing AI agents and MCP servers. 
         Tell me what you want to create in plain language, and I'll help you build it using the Gradio MCP Playground toolkit.
-        
-        ## ✨ NEW: AI-Powered Responses
-        Configure HuggingFace models in the chat interface for enhanced, context-aware responses!
-        
+
         **Examples:**
-        - "Create a calculator server with basic math operations"
+        - "Create a calculator agent with basic math operations"
         - "Build an image processing pipeline that can resize and filter images"  
-        - "I need a data analysis tool that works with CSV files"
+        - "I need a data analysis server that works with CSV files"
         - "Help me understand how MCP servers work"
         """)
         with gr.Tabs() as tabs:
@@ -187,7 +184,7 @@ def create_agent_interface() -> gr.Interface:
                         gr.Markdown("""
                         ## 🚀 Quick Start
                         
-                        1. **Start a Conversation**: Go to the Chat tab and describe what you want to build
+                        1. **Start a Conversation**: Go to the Chat tab and choose an agent mode(Agent/MCP) describe what you want to build
                         2. **Review Suggestions**: I'll suggest relevant servers and configurations
                         3. **Build Your Server**: Approve the approach and I'll create your MCP server
                         4. **Test & Deploy**: Use the built-in tools to test and deploy your server
@@ -240,7 +237,7 @@ def create_agent_interface() -> gr.Interface:
                         
                         ## 🤖 AI Model Integration
                         
-                        The GMP Agent now supports Hugging Face models for enhanced responses:
+                        The GMP Agent supports Hugging Face models for enhanced responses:
                         
                         ### Setup Instructions:
                         1. **Get HF Token**: Get your token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
