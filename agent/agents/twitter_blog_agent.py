@@ -224,29 +224,48 @@ class TweetGenerator:
         metadata = blog_post.metadata or {}
         title = metadata.get('title', '') if isinstance(metadata, dict) else ''
         
-        prompt = f"""
-        Generate an engaging Twitter thread about this blog post.
-        Format as [MAIN] for first tweet and [REPLY] for subsequent tweets.
+        prompt = f"""You are an expert social media strategist and content creator, specializing in transforming blog content into engaging Twitter threads that drive meaningful engagement and follower growth.
 
-        Guidelines:
-        - First tweet should hook readers with the main value proposition
-        - Each subsequent tweet should dive deep into specific aspects
-        - Use full 280 characters when needed for detailed explanations
-        - Make it conversational yet informative
-        - Include emojis and hashtags naturally
-        - Add specific examples and key points
-        - Main tweet should include 2-3 relevant hashtags
-        - Break complex ideas into digestible chunks
-        - End with a compelling call to action
-        - Generate 5-8 tweets total for a comprehensive thread
+<task_context>
+Transform the provided blog post into a compelling Twitter thread that captures attention, provides value, and encourages interaction. Your expertise lies in distilling complex information into digestible, engaging social media content.
+</task_context>
 
-        DO NOT include labels like "Tweet 1:" or "Step 1:"
-        Each tweet should read naturally as part of a thread.
+<content_strategy>
+**Thread Structure Requirements:**
+- **Hook Tweet**: Create an attention-grabbing opener that promises clear value or insight
+- **Value Tweets**: 4-7 substantive tweets that deliver on the hook's promise
+- **Engagement Tweet**: End with a question, call-to-action, or invitation for discussion
 
-        Blog title: {title}
-        Blog content:
-        {blog_post.content[:4000]}  # Limit content to avoid token limits
-        """
+**Content Optimization Guidelines:**
+- Utilize the full 280-character limit when valuable context demands it
+- Incorporate emojis strategically to enhance readability and emotional connection
+- Include 2-3 relevant hashtags in the main tweet, avoiding hashtag overload
+- Break complex concepts into clear, standalone insights
+- Use numbered lists, bullet points, or step-by-step breakdowns when appropriate
+- Add specific examples, statistics, or actionable advice from the source material
+</content_strategy>
+
+<voice_and_tone>
+- **Conversational yet authoritative**: Write like an expert sharing insights with a peer
+- **Educational but accessible**: Simplify without dumbing down the content
+- **Engaging and interactive**: Use language that invites responses and shares
+- **Authentic and human**: Avoid corporate speak or overly promotional language
+</voice_and_tone>
+
+<formatting_instructions>
+Format your response using:
+- [MAIN] for the hook tweet (this becomes the main thread starter)
+- [REPLY] for each subsequent tweet in the thread
+
+CRITICAL: Never include labels like "Tweet 1:", "Step 2:", or any numbering in the actual tweet content. Each tweet should read naturally and standalone while contributing to the overall thread narrative.
+</formatting_instructions>
+
+<source_content>
+Blog Title: {title}
+Blog Content: {blog_post.content[:4000]}
+</source_content>
+
+Generate a thread that transforms this blog content into Twitter gold - content that people will want to read, engage with, and share."""
 
         try:
             response = self.model.generate_content(prompt)
@@ -278,20 +297,26 @@ class TweetGenerator:
         title = metadata.get('title', '') if isinstance(metadata, dict) else ''
         
         # Combine custom prompt with blog content
-        full_prompt = f"""
-        {custom_prompt}
+        full_prompt = f"""You are an expert social media strategist and content creator. You've been given specific instructions for this Twitter thread generation task.
 
-        Blog title: {title}
-        Blog content:
-        {blog_post.content[:4000]}  # Limit content to avoid token limits
-        
-        Format your response as:
-        [MAIN] for the first tweet
-        [REPLY] for subsequent tweets
-        
-        Each tweet should be under 280 characters.
-        DO NOT include labels like "Tweet 1:" or "Step 1:"
-        """
+<custom_instructions>
+{custom_prompt}
+</custom_instructions>
+
+<content_guidelines>
+- Transform the blog content below according to the custom instructions above
+- Maintain Twitter thread best practices: engaging hooks, valuable content, clear call-to-actions
+- Format as [MAIN] for the first tweet and [REPLY] for subsequent tweets
+- Each tweet should be under 280 characters and read naturally without labels
+- Ensure the thread flows logically and provides genuine value to readers
+</content_guidelines>
+
+<source_material>
+Blog Title: {title}
+Blog Content: {blog_post.content[:4000]}
+</source_material>
+
+Create a Twitter thread that fulfills both the custom instructions and delivers exceptional social media content."""
 
         try:
             response = self.model.generate_content(full_prompt)
