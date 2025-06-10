@@ -16,6 +16,15 @@ import gradio as gr
 from rich.console import Console
 from rich.logging import RichHandler
 
+console = Console()
+
+# Apply Gradio component fixes before importing UI components
+try:
+    from core.event_handlers_fix import patch_gradio_components
+    patch_gradio_components()
+except ImportError:
+    console.print("[yellow]Warning: Could not load event handler fixes[/yellow]")
+
 # Import core components
 try:
     from core.agent import GMPAgent
@@ -28,8 +37,6 @@ except ImportError as e:
     console.print(f"[red]Import error: {e}[/red]")
     console.print("[yellow]Make sure you're running from the agent directory or have proper Python path setup[/yellow]")
     sys.exit(1)
-
-console = Console()
 
 def setup_logging(log_level: str = "INFO") -> None:
     """Setup logging configuration"""

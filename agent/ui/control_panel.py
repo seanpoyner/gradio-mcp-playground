@@ -540,8 +540,17 @@ class ControlPanelUI:
         
         return agent['code']
     
-    def _validate_code(self, code: str) -> Tuple[str, str]:
+    def _validate_code(self, code: Any) -> Tuple[str, str]:
         """Validate Python code syntax"""
+        # Handle different input types
+        if isinstance(code, list):
+            if not code:
+                return "❌ Validation Failed", "Code is empty"
+            code = code[0] if len(code) > 0 else ""
+            
+        if not isinstance(code, str):
+            code = str(code) if code else ""
+            
         if not code.strip():
             return "❌ Validation Failed", "Code is empty"
         

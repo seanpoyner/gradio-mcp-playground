@@ -21,6 +21,20 @@ except ImportError:
     MCPConnectionManager = None
     GradioMCPClient = None
 
+# Import safe handlers
+try:
+    from ..utils import safe_dropdown_handler
+except ImportError:
+    # Fallback if utils not available
+    def safe_dropdown_handler(default_return=None):
+        def decorator(func):
+            def wrapper(value, *args, **kwargs):
+                if not value:
+                    return default_return
+                return func(value, *args, **kwargs)
+            return wrapper
+        return decorator
+
 logger = logging.getLogger(__name__)
 
 
@@ -527,6 +541,7 @@ class MCPConnectionsPanel:
         
         return list(self.connection_manager.connections.keys())
     
+    @safe_dropdown_handler(default_return=({}, [], []))
     def _load_connection_details(self, connection_name: str) -> Tuple[Dict, List[List[str]], List[str]]:
         """Load details for a selected connection"""
         
@@ -560,6 +575,7 @@ class MCPConnectionsPanel:
         
         return details, tools_data, tool_names
     
+    @safe_dropdown_handler(default_return={"status": "error", "error": "No connection selected"})
     def _test_connection(self, connection_name: str) -> Dict[str, Any]:
         """Test a connection"""
         
@@ -580,6 +596,7 @@ class MCPConnectionsPanel:
         except Exception as e:
             return {"status": "error", "error": str(e)}
     
+    @safe_dropdown_handler(default_return=([], []))
     def _disconnect_connection(self, connection_name: str) -> Tuple[List[List[Any]], List[str]]:
         """Disconnect a specific connection"""
         
@@ -593,11 +610,15 @@ class MCPConnectionsPanel:
         
         return self._get_connections_data(), self._get_connection_choices()
     
+    @safe_dropdown_handler(default_return={"error": "Please select a connection first"})
     def _reconnect_connection(self, connection_name: str) -> Dict[str, Any]:
         """Reconnect to a server"""
         
-        if not self.connection_manager or not connection_name:
-            return {"error": "Invalid connection"}
+        if not self.connection_manager:
+            return {"error": "Connection manager not available"}
+            
+        if not connection_name:
+            return {"error": "Please select a connection first"}
         
         try:
             # Get saved connection info
@@ -617,6 +638,7 @@ class MCPConnectionsPanel:
         except Exception as e:
             return {"status": "error", "error": str(e)}
     
+    @safe_dropdown_handler(default_return={"error": "No connection selected"})
     def _call_tool(self, connection_name: str, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
         """Call a tool on a connection"""
         

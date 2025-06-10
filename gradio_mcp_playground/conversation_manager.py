@@ -60,6 +60,10 @@ class ConversationManager:
                     image_id = self.store_image(image_data)
                     processed = processed[:start_idx] + f"[Image stored as {image_id}]" + processed[end_idx:]
         
+        # Truncate very long observations to prevent UI issues
+        if len(processed) > 5000:
+            processed = processed[:5000] + "\n... (observation truncated)"
+        
         return processed
     
     def get_image(self, image_id: str) -> Optional[Dict[str, Any]]:

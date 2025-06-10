@@ -211,11 +211,11 @@ def create_unified_dashboard():
         theme=gr.themes.Soft(),
         css="""
         .mcp-connection-card {
-            border: 1px solid #e1e5e9;
+            border: 1px solid var(--border-color-primary);
             border-radius: 8px;
             padding: 16px;
             margin: 8px;
-            background: #fafbfc;
+            background: var(--background-fill-secondary);
         }
         .mcp-connection-card:hover {
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -291,14 +291,14 @@ def create_unified_dashboard():
         #agent-viewer-iframe iframe {
             width: 100%;
             height: 600px;
-            border: 1px solid #e1e5e9;
+            border: 1px solid var(--border-color-primary);
             border-radius: 8px;
-            background: white;
+            background: var(--background-fill-primary);
         }
         
         #agent-viewer-iframe {
             min-height: 600px;
-            background: #f7f8fa;
+            background: var(--background-fill-secondary);
             border-radius: 8px;
             overflow: hidden;
         }
@@ -315,10 +315,10 @@ def create_unified_dashboard():
         }
         
         #pipeline-canvas {
-            background: #f8f9fa;
+            background: var(--background-fill-secondary);
             background-image: 
-                linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px);
+                linear-gradient(var(--border-color-primary) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border-color-primary) 1px, transparent 1px);
             background-size: 20px 20px;
         }
         
@@ -329,7 +329,7 @@ def create_unified_dashboard():
             padding: 16px;
         }
         
-        /* Template gallery styles */
+        /* Template gallery styles - Works in both light and dark modes */
         .templates-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -338,8 +338,8 @@ def create_unified_dashboard():
         }
         
         .template-card {
-            background: white;
-            border: 2px solid #e1e5e9;
+            background: #374151;
+            border: 2px solid #4b5563;
             border-radius: 12px;
             padding: 24px;
             transition: all 0.3s ease;
@@ -349,8 +349,8 @@ def create_unified_dashboard():
         }
         
         .template-card:hover {
-            border-color: #3b82f6;
-            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.15);
+            border-color: #60a5fa;
+            box-shadow: 0 6px 20px rgba(96, 165, 250, 0.3);
             transform: translateY(-2px);
         }
         
@@ -364,13 +364,13 @@ def create_unified_dashboard():
             font-size: 20px;
             font-weight: 600;
             margin: 0 0 8px 0;
-            color: #1f2937;
+            color: #f3f4f6;
         }
         
         .template-category {
             display: inline-block;
-            background: #f3f4f6;
-            color: #6b7280;
+            background: #1f2937;
+            color: #d1d5db;
             padding: 4px 12px;
             border-radius: 16px;
             font-size: 12px;
@@ -379,7 +379,7 @@ def create_unified_dashboard():
         }
         
         .template-description {
-            color: #4b5563;
+            color: #d1d5db;
             font-size: 14px;
             line-height: 1.5;
             margin: 0 0 16px 0;
@@ -404,18 +404,20 @@ def create_unified_dashboard():
         }
         
         .template-details {
-            background: #f9fafb;
+            background: #374151;
             border-radius: 8px;
             padding: 20px;
             min-height: 400px;
+            color: #f3f4f6;
         }
         
         .template-details h3 {
             margin-top: 0;
+            color: #f3f4f6;
         }
         
         .template-details h4 {
-            color: #1f2937;
+            color: #f3f4f6;
             margin-top: 24px;
             margin-bottom: 12px;
         }
@@ -423,13 +425,15 @@ def create_unified_dashboard():
         .template-details ul {
             margin: 0;
             padding-left: 20px;
+            color: #d1d5db;
         }
         
         .template-details code {
-            background: #e5e7eb;
+            background: #1f2937;
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 13px;
+            color: #f3f4f6;
         }
         """,
     ) as dashboard:
@@ -1091,11 +1095,11 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                             # Return template name to be handled by parent
                             return template_name
                         
-                        use_template_btn.click(
-                            switch_to_quick_create_with_template,
-                            inputs=[selected_template_dropdown],
-                            outputs=[]  # Will be connected later
-                        )
+                        # This will be connected to template_dropdown after it's created
+                        def use_template_handler(template_name):
+                            if template_name:
+                                return gr.update(value=template_name)
+                            return gr.update()
 
             # Tab 3: Server Management (Unified)
             with gr.Tab("🖥️ Server Management"):
@@ -1378,90 +1382,494 @@ Ready to use this template? Click the button above or use the Quick Create tab t
             # Tab 6: Help & Resources
             with gr.Tab("📚 Help & Resources"):
                 with gr.Tabs():
-                    # Documentation
-                    with gr.Tab("📖 Documentation"):
+                    # User Guides
+                    with gr.Tab("📖 User Guides"):
+                        with gr.Row():
+                            with gr.Column(scale=1):
+                                # Documentation selector
+                                doc_category = gr.Radio(
+                                    label="Documentation Category",
+                                    choices=["Getting Started", "Configuration", "Advanced Topics", "API Reference"],
+                                    value="Getting Started"
+                                )
+                                
+                                doc_list = gr.Dataframe(
+                                    headers=["Document", "Description"],
+                                    label="Available Documents",
+                                    interactive=False,
+                                    value=[
+                                        ["Getting Started Guide", "Learn the basics of Gradio MCP Playground"],
+                                        ["User Guide", "Comprehensive guide to all features"]
+                                    ]
+                                )
+                                
+                                doc_selector = gr.Dropdown(
+                                    label="Select Document",
+                                    choices=["getting-started.md", "user_guide.md"],
+                                    value="getting-started.md",
+                                    interactive=True
+                                )
+                                
+                                load_doc_btn = gr.Button("📄 Load Document", variant="primary")
+                            
+                            with gr.Column(scale=2):
+                                # Document viewer
+                                doc_viewer = gr.Markdown(
+                                    value="# Welcome to Gradio MCP Playground\n\nSelect a document from the left to view its contents.",
+                                    label="Document Viewer",
+                                    elem_id="doc-viewer"
+                                )
+                    
+                    # Configuration Guide
+                    with gr.Tab("⚙️ Configuration"):
+                        with gr.Row():
+                            with gr.Column(scale=1):
+                                config_topic = gr.Radio(
+                                    label="Configuration Topics",
+                                    choices=[
+                                        "Basic Configuration",
+                                        "API Keys & Security",
+                                        "Model Configuration",
+                                        "Server Configuration"
+                                    ],
+                                    value="Basic Configuration"
+                                )
+                                
+                                config_doc_selector = gr.Dropdown(
+                                    label="Select Guide",
+                                    choices=["configuration.md", "api_key_handling.md"],
+                                    value="configuration.md",
+                                    interactive=True
+                                )
+                                
+                                load_config_doc_btn = gr.Button("📄 Load Guide")
+                            
+                            with gr.Column(scale=2):
+                                config_doc_viewer = gr.Markdown(
+                                    value="# Configuration Guide\n\nSelect a configuration topic to learn more."
+                                )
+                    
+                    # Quick Start
+                    with gr.Tab("🚀 Quick Start"):
                         gr.Markdown(
                             """
-                            ### Gradio MCP Playground Documentation
+                            # 🚀 Quick Start Guide
                             
-                            **Getting Started:**
-                            1. Configure your AI assistant with a HuggingFace token
-                            2. Create or connect to MCP servers
-                            3. Use the AI assistant to help build and manage servers
+                            ## Welcome to Gradio MCP Playground!
                             
-                            **Key Features:**
-                            - **AI Assistant**: Get help with coding and MCP development
-                            - **Agent Builder**: Create custom Gradio agents
-                            - **Server Builder**: Quick create servers or build complex pipelines
-                            - **MCP Connections**: Connect to multiple servers simultaneously
-                            - **Agent Control Panel**: Deploy and manage agents with embedded viewer
+                            ### 🎯 Getting Started in 3 Steps:
                             
-                            **Resources:**
-                            - [MCP Documentation](https://github.com/anthropics/mcp)
+                            **1. Configure Your AI Assistant** 🤖
+                            - Go to the **AI Assistant** tab
+                            - Enter your HuggingFace API token (get one at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
+                            - Click "Configure Model" to activate the AI assistant
+                            
+                            **2. Create or Connect MCP Servers** 🔧
+                            - **Quick Create**: Use the Server Builder tab to create servers from templates
+                            - **Connect Existing**: Use MCP Connections tab to connect to running servers
+                            - **Visual Pipeline**: Build complex workflows with the Pipeline Builder
+                            
+                            **3. Deploy and Manage Agents** 🌐
+                            - Use the **Agent Control Panel** to deploy Gradio agents
+                            - View deployed agents directly in the embedded viewer
+                            - Monitor agent health and performance in real-time
+                            
+                            ### 📚 Key Features:
+                            
+                            **AI Assistants** 🤖
+                            - **Adam**: General assistant with MCP tool access
+                            - **Liam**: MCP development specialist
+                            - **Arthur**: Agent creation specialist
+                            
+                            **Server Management** 🖥️
+                            - Create servers from templates
+                            - Manage server lifecycle
+                            - Browse and install from registry
+                            
+                            **Agent Deployment** 🚀
+                            - Deploy custom Gradio agents
+                            - Real-time monitoring
+                            - Embedded agent viewer
+                            
+                            **MCP Connections** 🔌
+                            - Connect to multiple MCP servers
+                            - Quick connect to popular servers
+                            - Custom server connections
+                            
+                            ### 💡 Pro Tips:
+                            
+                            1. **Use the AI Assistant**: Ask questions like "How do I create a calculator server?" or "Help me build a data processing pipeline"
+                            
+                            2. **Explore Templates**: Check out the Server Builder templates for quick starts
+                            
+                            3. **Monitor Performance**: Keep an eye on the Agent Control Panel for agent health
+                            
+                            4. **Read the Docs**: Use the documentation tabs for detailed guides
+                            
+                            ### 🔗 Useful Resources:
+                            - [MCP Protocol Documentation](https://github.com/anthropics/mcp)
                             - [Gradio Documentation](https://gradio.app/docs)
-                            - [Project GitHub](https://github.com/seanpoyner/gradio-mcp-playground)
+                            - [Project Repository](https://github.com/seanpoyner/gradio-mcp-playground)
+                            
+                            ### ❓ Need Help?
+                            - Check the other documentation tabs for detailed guides
+                            - Use the AI Assistant for interactive help
+                            - Report issues on [GitHub](https://github.com/seanpoyner/gradio-mcp-playground/issues)
                             """
                         )
-
-                    # Examples
-                    with gr.Tab("💡 Examples"):
-                        gr.Markdown(
-                            """
-                            ### Example Use Cases
-                            
-                            **1. Create a Simple Calculator Server:**
-                            ```python
-                            # Use the Calculator template
-                            # Name: my-calculator
-                            # Port: 7860
-                            ```
-                            
-                            **2. Build a Data Processing Pipeline:**
-                            - Use Pipeline Builder to connect:
-                              - File input → Data processor → Visualization → Output
-                            
-                            **3. Connect to GitHub:**
-                            - Go to MCP Connections
-                            - Click on GitHub in Quick Connect
-                            - Provide your GitHub token
-                            - Use tools to manage repos
-                            """
-                        )
-
-                    # Agent Control Panel (from agent app)
-                    with gr.Tab("🤖 Agent Monitor"):
-                        if HAS_AGENT_COMPONENTS:
-                            try:
-                                # The control panel creates its own interface, so we can't embed it directly
-                                # Instead, we'll show a placeholder with instructions
-                                gr.Markdown("### Agent Control Panel")
-                                gr.Markdown(
+                    
+                    # Tutorials & Examples
+                    with gr.Tab("💡 Tutorials"):
+                        with gr.Row():
+                            with gr.Column(scale=1):
+                                tutorial_category = gr.Radio(
+                                    label="Tutorial Category",
+                                    choices=[
+                                        "Basic Examples",
+                                        "Server Creation",
+                                        "Pipeline Building",
+                                        "Agent Development",
+                                        "Advanced Topics"
+                                    ],
+                                    value="Basic Examples"
+                                )
+                                
+                                example_list = gr.Markdown(
                                     """
-                                    The Agent Control Panel provides advanced monitoring and control features.
+                                    ### Available Tutorials:
                                     
-                                    To access the full control panel, run:
-                                    ```bash
-                                    cd agent && python app.py
-                                    ```
+                                    **Basic Examples:**
+                                    - Creating your first server
+                                    - Connecting to MCP servers
+                                    - Using the AI assistant
                                     
-                                    Features include:
-                                    - Real-time agent monitoring
-                                    - Performance metrics
-                                    - Log viewing
-                                    - Agent lifecycle management
+                                    **Server Creation:**
+                                    - Calculator server
+                                    - Text processor
+                                    - Image tools
+                                    - Data analyzer
                                     """
                                 )
-                            except Exception as e:
-                                gr.Markdown("### Agent Control Panel")
-                                gr.Markdown(f"Control panel initialization error: {str(e)}")
-                        else:
-                            gr.Markdown("### Agent Control Panel")
-                            gr.Markdown(
-                                """
-                                Monitor and control deployed agents.
-                                This feature requires agent components to be installed.
-                                """
-                            )
+                            
+                            with gr.Column(scale=2):
+                                gr.Markdown(
+                                    """
+                                    # 📚 Example Tutorials
+                                    
+                                    ## 1. Create a Simple Calculator Server
+                                    
+                                    **Step 1:** Go to Server Builder → Quick Create
+                                    ```
+                                    - Template: Calculator
+                                    - Name: my-calculator
+                                    - Port: Auto (or specify 7860)
+                                    ```
+                                    
+                                    **Step 2:** Click "Create Server"
+                                    
+                                    **Step 3:** Navigate to the created server directory and run:
+                                    ```bash
+                                    python server.py
+                                    ```
+                                    
+                                    ## 2. Build a Data Processing Pipeline
+                                    
+                                    **Using the Pipeline Builder:**
+                                    1. Go to Server Builder → Pipeline Builder
+                                    2. Add servers:
+                                       - CSV Reader
+                                       - Data Processor
+                                       - Chart Generator
+                                    3. Connect them in sequence
+                                    4. Configure data flow
+                                    5. Deploy the pipeline
+                                    
+                                    ## 3. Connect to GitHub MCP Server
+                                    
+                                    **Quick Connect Method:**
+                                    1. Go to MCP Connections → Quick Connect
+                                    2. Click "Connect" under GitHub
+                                    3. Set environment variable:
+                                       ```bash
+                                       export GITHUB_TOKEN="your_github_token"
+                                       ```
+                                    4. Use GitHub tools in AI Assistant
+                                    
+                                    ## 4. Deploy a Custom Agent
+                                    
+                                    **Using Agent Control Panel:**
+                                    1. Go to Agent Control Panel
+                                    2. Select an agent template
+                                    3. Click "Deploy Agent"
+                                    4. View in embedded viewer
+                                    5. Monitor health status
+                                    
+                                    ## 5. Create Custom MCP Tools
+                                    
+                                    **Example: Weather Tool**
+                                    ```python
+                                    from mcp.server import tool
+                                    
+                                    @tool()
+                                    async def get_weather(location: str) -> str:
+                                        # Implementation here
+                                        return f"Weather for {location}: Sunny, 72°F"
+                                    ```
+                                    
+                                    ## 💡 Pro Tips:
+                                    
+                                    - **Use Templates**: Start with templates and modify them
+                                    - **Test Locally**: Always test servers locally first
+                                    - **Monitor Logs**: Check server logs for debugging
+                                    - **Ask the AI**: Use the assistant for code help
+                                    """
+                                )
+                    
+                    # API Reference
+                    with gr.Tab("🔧 API Reference"):
+                        with gr.Row():
+                            with gr.Column(scale=1):
+                                api_category = gr.Dropdown(
+                                    label="API Category",
+                                    choices=[
+                                        "MCP Protocol",
+                                        "Server API",
+                                        "Client API",
+                                        "Tool Development",
+                                        "Agent API"
+                                    ],
+                                    value="MCP Protocol"
+                                )
+                                
+                                api_method_list = gr.Markdown(
+                                    """
+                                    ### MCP Protocol Methods:
+                                    
+                                    **Core Methods:**
+                                    - `initialize()`
+                                    - `list_tools()`
+                                    - `call_tool()`
+                                    - `list_resources()`
+                                    
+                                    **Server Methods:**
+                                    - `create_server()`
+                                    - `start_server()`
+                                    - `stop_server()`
+                                    """
+                                )
+                            
+                            with gr.Column(scale=2):
+                                gr.Markdown(
+                                    """
+                                    # 🔧 API Reference
+                                    
+                                    ## MCP Protocol Overview
+                                    
+                                    The Model Context Protocol (MCP) provides a standard interface for AI models to interact with external tools and resources.
+                                    
+                                    ### Core Concepts
+                                    
+                                    **1. Tools** - Functions that can be called by the AI
+                                    ```python
+                                    @server.tool()
+                                    async def my_tool(param: str) -> str:
+                                        return f"Processed: {param}"
+                                    ```
+                                    
+                                    **2. Resources** - Data that can be accessed by the AI
+                                    ```python
+                                    @server.resource()
+                                    async def get_data() -> Dict[str, Any]:
+                                        return {"data": "value"}
+                                    ```
+                                    
+                                    **3. Servers** - Host tools and resources
+                                    ```python
+                                    server = Server("my-server")
+                                    await server.run()
+                                    ```
+                                    
+                                    ### Creating MCP Servers
+                                    
+                                    **Basic Server Structure:**
+                                    ```python
+                                    from mcp.server import Server, tool
+                                    from mcp.server.stdio import stdio_server
+                                    
+                                    # Create server instance
+                                    server = Server("my-server")
+                                    
+                                    # Define tools
+                                    @server.tool()
+                                    async def hello(name: str) -> str:
+                                        return f"Hello, {name}!"
+                                    
+                                    # Run server
+                                    async def main():
+                                        async with stdio_server() as (read, write):
+                                            await server.run(read, write)
+                                    ```
+                                    
+                                    ### Client API
+                                    
+                                    **Connecting to Servers:**
+                                    ```python
+                                    from gradio_mcp_playground import GradioMCPClient
+                                    
+                                    client = GradioMCPClient()
+                                    await client.connect_to_server("my-server")
+                                    
+                                    # List available tools
+                                    tools = await client.list_tools()
+                                    
+                                    # Call a tool
+                                    result = await client.call_tool("hello", {"name": "World"})
+                                    ```
+                                    
+                                    ### Agent Development API
+                                    
+                                    **Creating Custom Agents:**
+                                    ```python
+                                    class MyAgent:
+                                        def __init__(self):
+                                            self.name = "My Agent"
+                                        
+                                        async def process_request(self, request: str) -> str:
+                                            # Agent logic here
+                                            return "Response"
+                                    ```
+                                    
+                                    ### Best Practices
+                                    
+                                    1. **Error Handling**: Always handle errors gracefully
+                                    2. **Type Hints**: Use type hints for tool parameters
+                                    3. **Async/Await**: Use async functions for I/O operations
+                                    4. **Documentation**: Document your tools clearly
+                                    5. **Testing**: Write tests for your servers
+                                    """
+                                )
+                    
+                    # Troubleshooting
+                    with gr.Tab("🛠️ Troubleshooting"):
+                        gr.Markdown(
+                            """
+                            # 🛠️ Troubleshooting Guide
+                            
+                            ## Common Issues and Solutions
+                            
+                            ### 🔴 AI Assistant Not Working
+                            
+                            **Problem:** Assistant says "Please configure a model first"
+                            
+                            **Solution:**
+                            1. Get a HuggingFace token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+                            2. Enter the token in the AI Assistant tab
+                            3. Select a model from the dropdown
+                            4. Click "Configure Model"
+                            
+                            ### 🔴 Server Won't Start
+                            
+                            **Problem:** Error when creating or starting a server
+                            
+                            **Common Causes:**
+                            - Port already in use
+                            - Missing dependencies
+                            - Syntax errors in code
+                            
+                            **Solutions:**
+                            1. **Port conflict**: Change the port number or stop the conflicting process
+                            2. **Dependencies**: Run `pip install -r requirements.txt` in the server directory
+                            3. **Syntax**: Check the server logs for error details
+                            
+                            ### 🔴 MCP Connection Failed
+                            
+                            **Problem:** Can't connect to MCP servers
+                            
+                            **Solutions:**
+                            1. **Check server is running**: Ensure the MCP server process is active
+                            2. **Verify credentials**: Some servers need API keys (GitHub, Brave Search)
+                            3. **Network issues**: Check firewall settings
+                            4. **Path issues**: Use absolute paths for stdio servers
+                            
+                            ### 🔴 Agent Deployment Fails
+                            
+                            **Problem:** Agent won't deploy from Control Panel
+                            
+                            **Solutions:**
+                            1. **Check code syntax**: Use the Validate button first
+                            2. **Port conflicts**: Agents auto-assign ports (7860-7869)
+                            3. **Dependencies**: Ensure required packages are installed
+                            4. **Logs**: Check the Agent Health Monitor for errors
+                            
+                            ### 🔴 Pipeline Builder Issues
+                            
+                            **Problem:** Pipeline won't execute or connect servers
+                            
+                            **Solutions:**
+                            1. **Check connections**: Ensure all servers are properly connected
+                            2. **Circular dependencies**: Avoid creating loops in the pipeline
+                            3. **Server compatibility**: Verify data formats match between servers
+                            
+                            ### 🟡 Performance Issues
+                            
+                            **Slow Response Times:**
+                            - Reduce the number of active agents
+                            - Check CPU/Memory usage in Control Panel
+                            - Consider using lighter models for AI assistant
+                            
+                            ### 🟡 Security Warnings
+                            
+                            **API Key Storage:**
+                            - Use secure storage for sensitive keys
+                            - Never commit API keys to version control
+                            - Set environment variables for production
+                            
+                            ## 📋 Diagnostic Commands
+                            
+                            **Check Python Version:**
+                            ```bash
+                            python --version  # Should be 3.8+
+                            ```
+                            
+                            **Check Dependencies:**
+                            ```bash
+                            pip list | grep gradio
+                            pip list | grep mcp
+                            ```
+                            
+                            **Test MCP Server:**
+                            ```bash
+                            # Test a simple echo server
+                            echo '{"method": "list_tools"}' | python -m your_server
+                            ```
+                            
+                            **View Logs:**
+                            - Server logs: Check terminal where server is running
+                            - Agent logs: Use Agent Health Monitor
+                            - System logs: Check `~/.gmp/logs/`
+                            
+                            ## 🆘 Getting Help
+                            
+                            1. **Check Documentation**: Review guides in other tabs
+                            2. **AI Assistant**: Ask Liam for MCP-specific help
+                            3. **GitHub Issues**: [Report bugs](https://github.com/seanpoyner/gradio-mcp-playground/issues)
+                            4. **Community**: Join discussions on GitHub
+                            
+                            ## 🔍 Debug Mode
+                            
+                            Enable debug logging:
+                            ```python
+                            import logging
+                            logging.basicConfig(level=logging.DEBUG)
+                            ```
+                            
+                            This will show detailed information about:
+                            - MCP protocol messages
+                            - Server connections
+                            - Tool executions
+                            - Error traces
+                            """
+                        )
 
             # Tab 7: Settings
             with gr.Tab("⚙️ Settings"):
@@ -1490,6 +1898,89 @@ Ready to use this template? Click the button above or use the Quick Create tab t
 
                 save_settings_btn = gr.Button("💾 Save Settings", variant="primary")
                 settings_output = gr.Textbox(label="Settings Output", visible=False)
+
+        # Documentation loading functions
+        def load_documentation(doc_file: str) -> str:
+            """Load documentation from /docs directory"""
+            try:
+                docs_dir = Path(__file__).parent.parent / "docs"
+                doc_path = docs_dir / doc_file
+                
+                if not doc_path.exists():
+                    return f"# Document Not Found\n\nThe document '{doc_file}' was not found in the documentation directory."
+                
+                with open(doc_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Add a header if the file doesn't start with one
+                if not content.strip().startswith("#"):
+                    title = doc_file.replace('.md', '').replace('_', ' ').title()
+                    content = f"# {title}\n\n{content}"
+                
+                return content
+            except Exception as e:
+                return f"# Error Loading Documentation\n\nAn error occurred while loading '{doc_file}':\n\n```\n{str(e)}\n```"
+        
+        def update_doc_list(category: str) -> Tuple[gr.Dataframe, gr.Dropdown, gr.Dropdown]:
+            """Update document list based on category"""
+            doc_mapping = {
+                "Getting Started": [
+                    ["Getting Started Guide", "Learn the basics of Gradio MCP Playground"],
+                    ["User Guide", "Comprehensive guide to all features"]
+                ],
+                "Configuration": [
+                    ["Configuration Guide", "Complete configuration reference"],
+                    ["API Key Handling", "Secure storage and management of API keys"],
+                    ["Requirements-based Installation", "Installing specific feature sets"]
+                ],
+                "Advanced Topics": [
+                    ["MCP Server Types", "Understanding different server implementations"],
+                    ["Performance Optimization", "Tips for optimizing your servers"],
+                    ["Obsidian WSL Guide", "Using Obsidian vault with WSL"]
+                ],
+                "API Reference": [
+                    ["GitHub Tools Reference", "Complete GitHub MCP server reference"],
+                    ["MCP Protocol", "Model Context Protocol specification"]
+                ]
+            }
+            
+            file_mapping = {
+                "Getting Started Guide": "getting-started.md",
+                "User Guide": "user_guide.md",
+                "Configuration Guide": "configuration.md",
+                "API Key Handling": "api_key_handling.md",
+                "Requirements-based Installation": "requirements_based_installation.md",
+                "MCP Server Types": "mcp_server_types.md",
+                "Performance Optimization": "performance_optimization.md",
+                "Obsidian WSL Guide": "obsidian_wsl_guide.md",
+                "GitHub Tools Reference": "github_tools_reference.md"
+            }
+            
+            docs = doc_mapping.get(category, [])
+            doc_choices = [file_mapping.get(doc[0], "") for doc in docs if doc[0] in file_mapping]
+            default_doc = doc_choices[0] if doc_choices else "getting-started.md"
+            
+            # Return proper Gradio updates
+            return (
+                gr.update(value=docs),  # Update dataframe with new docs
+                gr.update(choices=doc_choices, value=default_doc),  # Update dropdown choices
+                gr.update(choices=doc_choices, value=default_doc)   # Update both dropdowns
+            )
+        
+        def update_config_doc_list(topic: str) -> Tuple[gr.Dropdown, str]:
+            """Update configuration document based on topic"""
+            topic_mapping = {
+                "Basic Configuration": ["configuration.md"],
+                "API Keys & Security": ["api_key_handling.md"],
+                "Model Configuration": ["configuration.md"],
+                "Server Configuration": ["mcp_server_types.md"]
+            }
+            
+            choices = topic_mapping.get(topic, ["configuration.md"])
+            doc_file = choices[0]
+            content = load_documentation(doc_file)
+            
+            return gr.update(choices=choices, value=doc_file), content
 
         # Event handlers
 
@@ -2302,6 +2793,44 @@ To complete installation, run the command above or use the MCP Connections tab t
                     ],
                     outputs=[settings_output],
                 )
+            
+            # Documentation event handlers
+            if "doc_category" in locals():
+                # Update document list when category changes
+                doc_category.change(
+                    update_doc_list,
+                    inputs=[doc_category],
+                    outputs=[doc_list, doc_selector, doc_selector]
+                )
+                
+                # Load document when button is clicked
+                load_doc_btn.click(
+                    load_documentation,
+                    inputs=[doc_selector],
+                    outputs=[doc_viewer]
+                )
+                
+                # Also load document when selection changes
+                doc_selector.change(
+                    load_documentation,
+                    inputs=[doc_selector],
+                    outputs=[doc_viewer]
+                )
+            
+            if "config_topic" in locals():
+                # Update config document when topic changes
+                config_topic.change(
+                    update_config_doc_list,
+                    inputs=[config_topic],
+                    outputs=[config_doc_selector, config_doc_viewer]
+                )
+                
+                # Load config document when button is clicked
+                load_config_doc_btn.click(
+                    load_documentation,
+                    inputs=[config_doc_selector],
+                    outputs=[config_doc_viewer]
+                )
 
 
             # Connection management buttons
@@ -2312,6 +2841,13 @@ To complete installation, run the command above or use the MCP Connections tab t
                     outputs=[gr.Textbox(visible=False)],  # Status message
                 ).then(refresh_connections, outputs=[connections_list, connection_dropdown])
 
+            # Connect Template Browser button to Quick Create template dropdown
+            if "use_template_btn" in locals() and "template_dropdown" in locals():
+                use_template_btn.click(
+                    use_template_handler,
+                    inputs=[selected_template_dropdown],
+                    outputs=[template_dropdown]
+                )
 
         # Initialize on load
         if "connections_list" in locals():

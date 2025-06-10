@@ -11,6 +11,20 @@ import gradio as gr
 from datetime import datetime
 import yaml
 
+# Import safe handlers
+try:
+    from ..utils import safe_dropdown_handler
+except ImportError:
+    # Fallback if utils not available
+    def safe_dropdown_handler(default_return=None):
+        def decorator(func):
+            def wrapper(value, *args, **kwargs):
+                if not value:
+                    return default_return
+                return func(value, *args, **kwargs)
+            return wrapper
+        return decorator
+
 
 class PipelineView:
     """Visual pipeline builder interface"""
@@ -1231,6 +1245,7 @@ if __name__ == "__main__":
         
         return details
     
+    @safe_dropdown_handler(default_return="Select a server to see details...")
     def _select_server_by_name(self, server_name: str) -> str:
         """Handle server selection by name from dropdown"""
         
