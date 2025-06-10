@@ -1523,95 +1523,37 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                 tutorial_category = gr.Radio(
                                     label="Tutorial Category",
                                     choices=[
-                                        "Basic Examples",
+                                        "Quick Start",
                                         "Server Creation",
-                                        "Pipeline Building",
+                                        "MCP Connections",
                                         "Agent Development",
                                         "Advanced Topics"
                                     ],
-                                    value="Basic Examples"
+                                    value="Quick Start"
                                 )
                                 
-                                example_list = gr.Markdown(
-                                    """
-                                    ### Available Tutorials:
-                                    
-                                    **Basic Examples:**
-                                    - Creating your first server
-                                    - Connecting to MCP servers
-                                    - Using the AI assistant
-                                    
-                                    **Server Creation:**
-                                    - Calculator server
-                                    - Text processor
-                                    - Image tools
-                                    - Data analyzer
-                                    """
+                                # Tutorial list that updates based on category
+                                tutorial_list = gr.Dataframe(
+                                    headers=["Tutorial", "Description"],
+                                    interactive=True,
+                                    value=[
+                                        ["Getting Started", "Learn the basics of Gradio MCP Playground"],
+                                        ["Your First Server", "Create and run your first MCP server"],
+                                        ["Using AI Assistant", "How to use the AI assistant effectively"]
+                                    ]
+                                )
+                                
+                                # Hidden dropdown for tutorial selection
+                                tutorial_dropdown = gr.Dropdown(
+                                    visible=False,
+                                    choices=["getting-started.md"],
+                                    value="getting-started.md"
                                 )
                             
                             with gr.Column(scale=2):
-                                gr.Markdown(
-                                    """
-                                    # 📚 Example Tutorials
-                                    
-                                    ## 1. Create a Simple Calculator Server
-                                    
-                                    **Step 1:** Go to Server Builder → Quick Create
-                                    ```
-                                    - Template: Calculator
-                                    - Name: my-calculator
-                                    - Port: Auto (or specify 7860)
-                                    ```
-                                    
-                                    **Step 2:** Click "Create Server"
-                                    
-                                    **Step 3:** Navigate to the created server directory and run:
-                                    ```bash
-                                    python server.py
-                                    ```
-                                    
-                                    ## 2. Build a Data Processing Pipeline
-                                    
-                                    **Using the Pipeline Builder:**
-                                    1. Go to Server Builder → Pipeline Builder
-                                    2. Add servers:
-                                       - CSV Reader
-                                       - Data Processor
-                                       - Chart Generator
-                                    3. Connect them in sequence
-                                    4. Configure data flow
-                                    5. Deploy the pipeline
-                                    
-                                    ## 3. Connect to GitHub MCP Server
-                                    
-                                    **Quick Connect Method:**
-                                    1. Go to MCP Connections → Quick Connect
-                                    2. Click "Connect" under GitHub
-                                    3. Set environment variable:
-                                       ```bash
-                                       export GITHUB_TOKEN="your_github_token"
-                                       ```
-                                    4. Use GitHub tools in AI Assistant
-                                    
-                                    ## 4. Deploy a Custom Agent
-                                    
-                                    **Using Agent Control Panel:**
-                                    1. Go to Agent Control Panel
-                                    2. Select an agent template
-                                    3. Click "Deploy Agent"
-                                    4. View in embedded viewer
-                                    5. Monitor health status
-                                    
-                                    ## 5. Create Custom MCP Tools
-                                    
-                                    **Example: Weather Tool**
-                                    ```python
-                                    from mcp.server import tool
-                                    
-                                    @tool()
-                                    async def get_weather(location: str) -> str:
-                                        # Implementation here
-                                        return f"Weather for {location}: Sunny, 72°F"
+                                tutorial_content = gr.Markdown(
+                                    value=load_documentation("getting-started.md")
+                                )
                                     ```
                                     
                                     ## 💡 Pro Tips:
@@ -1979,6 +1921,98 @@ Ready to use this template? Click the button above or use the Quick Create tab t
             content = load_documentation(doc_file)
             
             return gr.update(choices=choices, value=doc_file), content
+        
+        def update_tutorial_list(category: str) -> Tuple[gr.Dataframe, gr.Dropdown, str]:
+            """Update tutorial list based on category"""
+            tutorial_mapping = {
+                "Quick Start": [
+                    ["Getting Started", "Learn the basics of Gradio MCP Playground"],
+                    ["Your First Server", "Create and run your first MCP server"],
+                    ["Using AI Assistant", "How to use the AI assistant effectively"]
+                ],
+                "Server Creation": [
+                    ["Calculator Server", "Build a calculator with MCP tools"],
+                    ["Text Processor", "Create text processing tools"],
+                    ["Image Tools", "Build image manipulation servers"],
+                    ["Data Analyzer", "Create data analysis servers"]
+                ],
+                "MCP Connections": [
+                    ["Connecting to Servers", "How to connect to MCP servers"],
+                    ["GitHub Integration", "Connect and use GitHub MCP server"],
+                    ["Filesystem Access", "Use the filesystem MCP server"],
+                    ["Managing Connections", "Manage multiple MCP connections"]
+                ],
+                "Agent Development": [
+                    ["Agent Builder Basics", "Create agents with Agent Builder"],
+                    ["Custom System Prompts", "Write effective system prompts"],
+                    ["Agent Templates", "Use and customize agent templates"],
+                    ["Deploying Agents", "Deploy agents to production"]
+                ],
+                "Advanced Topics": [
+                    ["Pipeline Building", "Create complex server pipelines"],
+                    ["Custom MCP Tools", "Build your own MCP tools"],
+                    ["Performance Tips", "Optimize server performance"],
+                    ["Security Best Practices", "Secure your MCP servers"]
+                ]
+            }
+            
+            # Map tutorial names to documentation files
+            file_mapping = {
+                "Getting Started": "getting-started.md",
+                "Your First Server": "getting-started.md",
+                "Using AI Assistant": "user_guide.md",
+                "Calculator Server": "getting-started.md",
+                "Agent Builder Basics": "user_guide.md",
+                "Pipeline Building": "user_guide.md",
+                "Performance Tips": "performance_optimization.md",
+                "Connecting to Servers": "mcp_server_types.md"
+            }
+            
+            tutorials = tutorial_mapping.get(category, tutorial_mapping["Quick Start"])
+            
+            # Get the first tutorial's file
+            first_tutorial = tutorials[0][0] if tutorials else "Getting Started"
+            doc_file = file_mapping.get(first_tutorial, "getting-started.md")
+            
+            # Create dropdown choices
+            choices = []
+            for tutorial in tutorials:
+                mapped_file = file_mapping.get(tutorial[0], "getting-started.md")
+                if mapped_file not in choices:
+                    choices.append(mapped_file)
+            
+            content = load_documentation(doc_file)
+            
+            return (
+                gr.update(value=tutorials),  # Update dataframe
+                gr.update(choices=choices, value=doc_file),  # Update dropdown
+                content  # Return content as string
+            )
+        
+        def handle_tutorial_selection(evt: gr.SelectData, tutorial_list_data) -> Tuple[str, str]:
+            """Handle clicking on a tutorial in the dataframe"""
+            if evt and hasattr(evt, 'index'):
+                row_idx = evt.index[0]
+                if row_idx < len(tutorial_list_data):
+                    tutorial_name = tutorial_list_data[row_idx][0]
+                    
+                    # Map tutorial name to file
+                    file_mapping = {
+                        "Getting Started": "getting-started.md",
+                        "Your First Server": "getting-started.md",
+                        "Using AI Assistant": "user_guide.md",
+                        "Calculator Server": "getting-started.md",
+                        "Agent Builder Basics": "user_guide.md",
+                        "Pipeline Building": "user_guide.md",
+                        "Performance Tips": "performance_optimization.md",
+                        "Connecting to Servers": "mcp_server_types.md"
+                    }
+                    
+                    doc_file = file_mapping.get(tutorial_name, "getting-started.md")
+                    content = load_documentation(doc_file)
+                    return doc_file, content
+            
+            return gr.update(), gr.update()
 
         # Event handlers
 
@@ -2829,7 +2863,28 @@ To complete installation, run the command above or use the MCP Connections tab t
                     inputs=[config_doc_selector],
                     outputs=[config_doc_viewer]
                 )
-
+            
+            if "tutorial_category" in locals():
+                # Update tutorial list when category changes
+                tutorial_category.change(
+                    update_tutorial_list,
+                    inputs=[tutorial_category],
+                    outputs=[tutorial_list, tutorial_dropdown, tutorial_content]
+                )
+                
+                # Handle clicking on a tutorial in the list
+                tutorial_list.select(
+                    handle_tutorial_selection,
+                    inputs=[tutorial_list],
+                    outputs=[tutorial_dropdown, tutorial_content]
+                )
+                
+                # Also update content when dropdown changes
+                tutorial_dropdown.change(
+                    load_documentation,
+                    inputs=[tutorial_dropdown],
+                    outputs=[tutorial_content]
+                )
 
             # Connection management buttons
             if "disconnect_btn" in locals():
