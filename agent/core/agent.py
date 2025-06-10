@@ -380,7 +380,7 @@ You are here to transform ideas into working MCP solutions through intelligent c
         
         # Try to use HF model for enhanced responses if available
         hf_enhanced_response = None
-        if self.hf_model and self.hf_tokenizer:
+        if self.hf_client:
             try:
                 # Create a context-aware prompt for the HF model
                 context_prompt = self._build_context_prompt(user_message, intent)
