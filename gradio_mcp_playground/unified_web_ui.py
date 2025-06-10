@@ -15,27 +15,9 @@ import logging
 # We'll define message handling functions locally instead of importing
 # because the web_ui versions expect a different scope
 
-# Try to import server management functions
-try:
-    from .web_ui import (
-        create_server,
-        refresh_servers,
-        start_server,
-        stop_server,
-        delete_server,  # Add this import
-        show_server_info,
-        show_template_info,
-        install_registry_server,
-        search_registry,
-        get_registry_server_choices,
-        quick_connect_mcp,
-        test_mcp_connection,
-    )
-
-    HAS_SERVER_FUNCTIONS = True
-except ImportError as e:
-    print(f"Failed to import server functions: {e}")
-    HAS_SERVER_FUNCTIONS = False
+# Server management functions are defined locally in this file
+# No need to import from web_ui as they were causing import errors
+HAS_SERVER_FUNCTIONS = True
 
 # Suppress Pydantic warning
 warnings.filterwarnings(
