@@ -307,7 +307,11 @@ while True:
                                 label="Template Code"
                             )
                             
-                            creation_result = gr.JSON(label="Creation Result")
+                            creation_result = gr.Textbox(
+                                label="Creation Result",
+                                lines=5,
+                                interactive=False
+                            )
                         
                         # Pipeline Builder Tab
                         with gr.Tab("Pipeline Builder [DEMO]"):
@@ -352,9 +356,11 @@ while True:
                         with gr.Tab("Active Servers"):
                             gr.Markdown("### Running MCP Servers")
                             
-                            server_list = gr.JSON(
-                                value={"servers": [], "message": "No active servers"},
-                                label="Server Status"
+                            server_list = gr.Textbox(
+                                value='{"servers": [], "message": "No active servers"}',
+                                label="Server Status",
+                                lines=5,
+                                interactive=False
                             )
                             
                             with gr.Row():
@@ -400,24 +406,29 @@ while True:
                                         value="Filesystem"
                                     )
                                     
-                                    connect_params = gr.JSON(
-                                        value={"path": "/home/user"},
-                                        label="Connection Parameters"
+                                    connect_params = gr.Textbox(
+                                        value='{"path": "/workspace"}',
+                                        label="Connection Parameters (JSON)",
+                                        lines=3
                                     )
                                     
                                     connect_btn = gr.Button("🔗 Connect [DEMO]", variant="primary")
                                 
                                 with gr.Column():
-                                    connection_status = gr.JSON(
-                                        value={"status": "Not connected"},
-                                        label="Connection Status"
+                                    connection_status = gr.Textbox(
+                                        value='{"status": "Not connected"}',
+                                        label="Connection Status",
+                                        lines=3,
+                                        interactive=False
                                     )
                         
                         with gr.Tab("Active Connections [DEMO]"):
                             gr.Markdown("### Currently Connected Servers")
-                            gr.JSON(
-                                value={"connections": [], "message": "No active connections in demo"},
-                                label="Active Connections"
+                            gr.Textbox(
+                                value='{"connections": [], "message": "No active connections in demo"}',
+                                label="Active Connections",
+                                lines=5,
+                                interactive=False
                             )
                         
                         with gr.Tab("Custom Connection [DEMO]"):
@@ -527,7 +538,7 @@ while True:
             )
             
             connect_btn.click(
-                lambda: {"status": "Demo mode - install full version to connect to real MCP servers"},
+                lambda: '{"status": "Demo mode - install full version to connect to real MCP servers"}',
                 inputs=[],
                 outputs=[connection_status]
             )
@@ -606,7 +617,7 @@ while True:
         template = next((t for t in self.templates if t["name"] == template_name), None)
         return template["code"] if template else ""
     
-    def create_server(self, template_name: str, session_id: str) -> Dict:
+    def create_server(self, template_name: str, session_id: str) -> str:
         """Create a demo server"""
         # Initialize session
         if session_id not in self.sessions:
@@ -622,24 +633,28 @@ while True:
         
         self.sessions[session_id]["servers"].append(server_info)
         
-        return {
+        result = {
             "success": True,
             "message": f"Server created from {template_name} template",
             "server": server_info,
             "note": "This is a demo - install full version for real server creation"
         }
+        
+        return json.dumps(result, indent=2)
     
-    def refresh_status(self, session_id: str) -> Dict:
+    def refresh_status(self, session_id: str) -> str:
         """Refresh server status"""
         session = self.sessions.get(session_id, {})
         servers = session.get("servers", [])
         
-        return {
+        result = {
             "servers": servers,
             "count": len(servers),
             "message": f"{len(servers)} active server(s)" if servers else "No active servers",
             "timestamp": datetime.now().isoformat()
         }
+        
+        return json.dumps(result, indent=2)
 
 # Create and launch the app
 print("🚀 Starting Gradio MCP Playground...")
