@@ -27,7 +27,7 @@ short_description: Open-source MCP tools without expensive LLM subscriptions!
   
   **Open-source access to MCP tools without expensive LLM subscriptions**
   
-  [Try Demo](https://huggingface.co/spaces/seanpoyner/gradio-mcp-playground) | [Documentation](https://github.com/seanpoyner/gradio-mcp-playground/wiki) | [Report Bug](https://github.com/seanpoyner/gradio-mcp-playground/issues)
+  [Try Demo](https://huggingface.co/spaces/seanpoyner/gradio-mcp-playground) | [Documentation](https://github.com/seanpoyner/gradio-mcp-playground) | [Report Bug](https://github.com/seanpoyner/gradio-mcp-playground/issues)
 
 </div>
 
