@@ -91,6 +91,20 @@ try:
     HAS_AGENT_COMPONENTS = True
     HAS_CONTROL_PANEL = True
     HAS_PIPELINE_VIEW = True
+    
+    # Apply UI patches to fix event handler issues
+    try:
+        from agent_ui_fixes import apply_all_patches
+        apply_all_patches()
+    except ImportError:
+        # Try loading from parent directory
+        try:
+            sys.path.insert(0, str(Path(__file__).parent.parent))
+            from agent_ui_fixes import apply_all_patches
+            apply_all_patches()
+        except Exception as patch_error:
+            print(f"Could not apply UI patches: {patch_error}")
+            
 except ImportError as e:
     HAS_AGENT_COMPONENTS = False
     HAS_CONTROL_PANEL = False

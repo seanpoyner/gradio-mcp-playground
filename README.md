@@ -40,6 +40,16 @@ Or install with all extras:
 pip install "gradio-mcp-playground[all]"
 ```
 
+### 🔄 Claude Desktop Integration
+
+Gradio MCP Playground **automatically detects and imports** your existing Claude Desktop MCP servers! No manual configuration needed - just launch the dashboard and your Claude Desktop servers will appear alongside your Gradio servers.
+
+**Features:**
+- 🔍 Auto-detects Claude Desktop configuration
+- 📊 Shows real-time server status from Claude logs
+- 🔗 Unified view of all MCP servers
+- 🚦 Health monitoring and error tracking
+
 **🔧 Troubleshooting Installation:**
 
 If you see "mcp (optional) missing - some features will be limited":
@@ -92,8 +102,10 @@ Three specialized AI assistants to help you:
 ### 🖥️ Server Management Tab
 
 - **Active Servers**: Monitor running MCP servers in real-time
+- **Claude Desktop Integration**: Automatically imports and displays your Claude Desktop MCP servers
 - **Server Registry**: Browse and install servers from the community registry
 - **Quick Install**: One-click installation of popular servers
+- **Unified Dashboard**: See both Gradio and Claude Desktop servers in one place
 
 ### 🔌 MCP Connections Tab
 
@@ -107,6 +119,35 @@ Three specialized AI assistants to help you:
 - **Quick Start**: Get up and running in minutes
 - **Tutorials**: Step-by-step guides for common tasks
 - **API Reference**: Complete API documentation
+
+## 🔄 Claude Desktop Integration
+
+Gradio MCP Playground seamlessly integrates with your existing Claude Desktop setup:
+
+### Automatic Server Detection
+
+The playground automatically detects and imports MCP servers from Claude Desktop:
+
+- **Windows**: Reads from `%APPDATA%/Roaming/Claude/claude_desktop_config.json`
+- **WSL/Linux**: Detects from `/mnt/c/Users/{username}/AppData/Roaming/Claude/`
+- **Real-time Status**: Monitors Claude Desktop server logs for health status
+- **Unified Management**: Manage all servers from one dashboard
+
+### What Gets Imported
+
+- All MCP server configurations (filesystem, memory, GitHub, etc.)
+- Server command and arguments
+- Environment variables and API keys (securely handled)
+- Running status and health information
+
+### How It Works
+
+1. Launch the dashboard: `gmp dashboard`
+2. Your Claude Desktop servers appear automatically
+3. View status, logs, and health metrics
+4. Connect to servers just like native Gradio servers
+
+No configuration needed - it just works! 🎉
 
 ## 🛠️ CLI Tools
 

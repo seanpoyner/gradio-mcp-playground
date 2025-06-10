@@ -52,6 +52,7 @@ A comprehensive platform for building, managing, and deploying Model Context Pro
 - **🎨 Visual Development** - Build complex agents through an intuitive UI
 - **📚 Learning Platform** - Understand MCP concepts through interactive examples
 - **🌍 Community Driven** - Share and discover agents built by others
+- **🔄 Claude Desktop Integration** - Automatically imports your existing MCP servers
 
 ## 🏆 Features Overview
 
@@ -79,9 +80,12 @@ Create MCP servers without extensive coding:
 Professional-grade server lifecycle management:
 
 - **Active Servers** - Monitor running MCP servers in real-time
+- **Claude Desktop Integration** - Auto-imports servers from Claude Desktop
+- **Unified Dashboard** - See Gradio and Claude Desktop servers together
 - **Server Registry** - Browse and install community servers
 - **Quick Deploy** - One-click deployment to Hugging Face Spaces
 - **Performance Monitoring** - Track server health and usage
+- **Real-time Status** - Live updates from Claude Desktop server logs
 
 ### 🔌 MCP Connections
 Connect to any MCP server with ease:
@@ -184,6 +188,30 @@ gmp deploy my-server         # Deploy to Hugging Face Spaces
 - **Custom Assistants** - Build domain-specific agents
 - **Team Collaboration** - Share tools internally
 - **Cost-Effective Development** - Prototype without API costs
+
+## 🔄 Claude Desktop Integration
+
+The full version seamlessly integrates with Claude Desktop:
+
+### Automatic Server Import
+
+When you install locally, Gradio MCP Playground automatically:
+- Detects your Claude Desktop installation
+- Imports all configured MCP servers
+- Shows real-time server status
+- Monitors server health from logs
+
+### Supported Platforms
+- **Windows**: Auto-detects from `%APPDATA%/Roaming/Claude/`
+- **WSL/Linux**: Finds config at `/mnt/c/Users/{username}/AppData/Roaming/Claude/`
+- **Cross-platform**: Works seamlessly across environments
+
+### Benefits
+- No manual configuration needed
+- Unified dashboard for all servers
+- Real-time health monitoring
+- Secure handling of API keys
+- Compatible with all Claude Desktop servers
 
 ## 🛠️ Creating MCP Servers
 
