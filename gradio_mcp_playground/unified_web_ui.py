@@ -355,9 +355,9 @@ def create_unified_dashboard():
                 # General Assistant Mode (conversational with MCP agency)
                 with gr.Group(visible=True) as general_assistant_group:
                     if coding_agent:
-                        gr.Markdown("### Claude - General Assistant with MCP Tools")
+                        gr.Markdown("### Adam - General Assistant with MCP Tools")
                         gr.Markdown(
-                            "I'm Claude, your general-purpose assistant with access to all connected MCP tools. I can help with any task using the available servers."
+                            "I'm Adam, your general-purpose assistant with access to all connected MCP tools. I can help with any task using the available servers."
                         )
 
                         # Show connected MCP servers
@@ -371,7 +371,7 @@ def create_unified_dashboard():
 
                         # General chat interface
                         general_chatbot = gr.Chatbot(
-                            label="Chat with Claude",
+                            label="Chat with Adam",
                             height=600,
                             show_copy_button=True,
                             type="messages",
@@ -449,9 +449,9 @@ def create_unified_dashboard():
                 # Agent Builder Mode (from agent app)
                 with gr.Group(visible=False) as agent_builder_group:
                     if HAS_AGENT_COMPONENTS and gmp_agent:
-                        gr.Markdown("### Architect - Agent Builder")
+                        gr.Markdown("### Arthur - Agent Builder")
                         gr.Markdown(
-                            "I'm Architect, your agent creation specialist. I can help you create custom Gradio agents using system prompts from top AI assistants."
+                            "I'm Arthur, your agent creation specialist. I can help you create custom Gradio agents using system prompts from top AI assistants."
                         )
 
                         # Agent builder chat interface
@@ -464,7 +464,7 @@ def create_unified_dashboard():
                             value=[
                                 {
                                     "role": "assistant",
-                                    "content": "👋 Hello! I'm Architect, your agent creation specialist.\n\nI can help you create custom Gradio agents for various tasks. Here are some things you can ask me:\n\n• **Show available templates** - See what agent templates are available\n• **Create a data analysis agent** - Build an agent for data science tasks\n• **Make a creative writing assistant** - Design an agent for content creation\n• **Build a code review agent** - Create an agent for code analysis\n\nWhat kind of agent would you like to create today?",
+                                    "content": "👋 Hello! I'm Arthur, your agent creation specialist.\n\nI can help you create custom Gradio agents for various tasks. Here are some things you can ask me:\n\n• **Show available templates** - See what agent templates are available\n• **Create a data analysis agent** - Build an agent for data science tasks\n• **Make a creative writing assistant** - Design an agent for content creation\n• **Build a code review agent** - Create an agent for code analysis\n\nWhat kind of agent would you like to create today?",
                                 }
                             ],
                         )
@@ -1217,7 +1217,7 @@ def create_unified_dashboard():
             def initialize_general_greeting():
                 """General assistant greeting"""
                 greeting = (
-                    "👋 Hello! I'm Claude, your general assistant with access to MCP tools.\n\n"
+                    "👋 Hello! I'm Adam, your general assistant with access to MCP tools.\n\n"
                 )
 
                 # Show available tools
