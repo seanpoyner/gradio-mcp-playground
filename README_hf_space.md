@@ -13,6 +13,7 @@ tags:
   - agents
   - gradio
   - hackathon
+  - agent-demo-track
 short_description: Open-source MCP tools without expensive LLM subscriptions!
 ---
 
@@ -40,6 +41,10 @@ We believe everyone should be able to:
 - **👩‍💻 Learn AI agent development** through hands-on experience  
 - **🌈 Build and deploy tools** using Gradio's intuitive interface
 - **🤝 Contribute to the open-source ecosystem** regardless of budget
+
+## 🎥 Video Overview
+
+[Watch the video demo](YOUR_VIDEO_LINK_HERE) - Learn how Gradio MCP Playground democratizes access to MCP technology and see the powerful agentic capabilities in action!
 
 ## ✨ What is Gradio MCP Playground?
 

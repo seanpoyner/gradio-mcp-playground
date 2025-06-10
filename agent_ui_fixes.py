@@ -20,6 +20,7 @@ def patch_control_panel():
         # Store original methods
         original_test_code = control_panel.ControlPanelUI._test_code
         original_save_agent = control_panel.ControlPanelUI._save_agent
+        original_deploy_from_editor = control_panel.ControlPanelUI._deploy_from_editor
         
         # Create wrapper for _test_code that handles missing inputs
         def safe_test_code(self, code=None):
@@ -37,9 +38,17 @@ def patch_control_panel():
                 return "❌ Save Failed", "No code to save"
             return original_save_agent(self, agent_name, code)
         
+        # Create wrapper for _deploy_from_editor that validates inputs
+        def safe_deploy_from_editor(self, agent_name=None, code=None):
+            """Safe wrapper for _deploy_from_editor that validates inputs"""
+            if agent_name is None or code is None:
+                return "❌ Deploy Failed: Missing agent name or code", []
+            return original_deploy_from_editor(self, agent_name, code)
+        
         # Apply patches
         control_panel.ControlPanelUI._test_code = safe_test_code
         control_panel.ControlPanelUI._save_agent = safe_save_agent
+        control_panel.ControlPanelUI._deploy_from_editor = safe_deploy_from_editor
         
         print("✅ Patched control panel event handlers")
         

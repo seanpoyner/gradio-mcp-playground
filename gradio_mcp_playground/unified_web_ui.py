@@ -3,14 +3,14 @@ Unified Gradio MCP Playground Dashboard
 Combines the main dashboard with agent builder functionality
 """
 
-import gradio as gr
-import json
+import logging
 import os
 import sys
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
 import warnings
-import logging
+from pathlib import Path
+from typing import Tuple
+
+import gradio as gr
 
 # We'll define message handling functions locally instead of importing
 # because the web_ui versions expect a different scope
@@ -84,36 +84,39 @@ except ImportError:
 try:
     sys.path.insert(0, str(Path(__file__).parent.parent / "agent"))
     from core.agent import GMPAgent
-    from ui.pipeline_view import PipelineView
-    from ui.control_panel import ControlPanelUI
     from ui.chat_interface import ChatInterface
+    from ui.control_panel import ControlPanelUI
+    from ui.pipeline_view import PipelineView
 
     HAS_AGENT_COMPONENTS = True
     HAS_CONTROL_PANEL = True
     HAS_PIPELINE_VIEW = True
-    
+
     # Apply UI patches to fix event handler issues
     try:
         from agent_ui_fixes import apply_all_patches
+
         apply_all_patches()
     except ImportError:
         # Try loading from parent directory
         try:
             sys.path.insert(0, str(Path(__file__).parent.parent))
             from agent_ui_fixes import apply_all_patches
+
             apply_all_patches()
         except Exception as patch_error:
             print(f"Could not apply UI patches: {patch_error}")
-            
+
 except ImportError as e:
     HAS_AGENT_COMPONENTS = False
     HAS_CONTROL_PANEL = False
     HAS_PIPELINE_VIEW = False
     print(f"Agent components not available - some features will be disabled: {e}")
-    
+
     # Try to import individual components
     try:
         from ui.pipeline_view import PipelineView
+
         HAS_PIPELINE_VIEW = True
     except ImportError:
         pass
@@ -123,6 +126,7 @@ if not HAS_CONTROL_PANEL:
     try:
         sys.path.insert(0, str(Path(__file__).parent.parent / "agent"))
         from ui.control_panel import ControlPanelUI
+
         HAS_CONTROL_PANEL = True
     except ImportError:
         HAS_CONTROL_PANEL = False
@@ -138,7 +142,7 @@ def _get_connected_servers_info(coding_agent):
         return "**No MCP servers connected.** Connect servers in the MCP Connections tab."
 
     info = f"**🔌 {len(servers)} MCP Servers Connected:**\n\n"
-    for server_name, server in servers.items():
+    for server_name, _server in servers.items():
         tool_count = len(coding_agent.mcp_tools.get(server_name, []))
         info += f"• **{server_name}** ({tool_count} tools)\n"
 
@@ -661,12 +665,16 @@ def create_unified_dashboard():
                     with gr.Tab("⚡ Quick Create"):
                         with gr.Row():
                             # Get available templates and ensure default value is valid
-                            available_templates = registry.list_templates() if HAS_REGISTRY else ["basic"]
+                            available_templates = (
+                                registry.list_templates() if HAS_REGISTRY else ["basic"]
+                            )
                             # Ensure we have a fallback if no templates are available
                             if not available_templates:
                                 available_templates = ["basic"]
-                            default_template = available_templates[0] if available_templates else None
-                            
+                            default_template = (
+                                available_templates[0] if available_templates else None
+                            )
+
                             template_dropdown = gr.Dropdown(
                                 choices=available_templates,
                                 label="Server Template",
@@ -737,17 +745,21 @@ def create_unified_dashboard():
                             Each template includes complete code, configuration, and documentation.
                             """
                         )
-                        
+
                         # Define helper functions first
                         def create_templates_grid(category="All", search_query=""):
                             """Create a professional grid display of templates"""
                             if not HAS_REGISTRY:
-                                return '<div class="template-grid-empty">Registry not available</div>'
-                            
+                                return (
+                                    '<div class="template-grid-empty">Registry not available</div>'
+                                )
+
                             templates = registry.list_templates()
                             if not templates:
-                                return '<div class="template-grid-empty">No templates available</div>'
-                            
+                                return (
+                                    '<div class="template-grid-empty">No templates available</div>'
+                                )
+
                             # Template metadata with better organization
                             template_metadata = {
                                 "basic": {
@@ -755,32 +767,60 @@ def create_unified_dashboard():
                                     "category": "Starter",
                                     "description": "Simple MCP server with basic structure",
                                     "difficulty": "Beginner",
-                                    "features": ["Single tool", "Minimal setup", "Great for learning"],
-                                    "use_cases": ["Learning MCP", "Simple utilities", "Quick prototypes"]
+                                    "features": [
+                                        "Single tool",
+                                        "Minimal setup",
+                                        "Great for learning",
+                                    ],
+                                    "use_cases": [
+                                        "Learning MCP",
+                                        "Simple utilities",
+                                        "Quick prototypes",
+                                    ],
                                 },
                                 "calculator": {
                                     "icon": "🔢",
                                     "category": "Tools",
                                     "description": "Mathematical operations server",
                                     "difficulty": "Beginner",
-                                    "features": ["Basic math", "Scientific functions", "Unit conversion"],
-                                    "use_cases": ["Calculations", "Data processing", "Educational tools"]
+                                    "features": [
+                                        "Basic math",
+                                        "Scientific functions",
+                                        "Unit conversion",
+                                    ],
+                                    "use_cases": [
+                                        "Calculations",
+                                        "Data processing",
+                                        "Educational tools",
+                                    ],
                                 },
                                 "basic-tool": {
                                     "icon": "🔧",
                                     "category": "Starter",
                                     "description": "Template for single-tool servers",
                                     "difficulty": "Beginner",
-                                    "features": ["Tool scaffold", "Error handling", "Type validation"],
-                                    "use_cases": ["Custom tools", "API wrappers", "Simple automation"]
+                                    "features": [
+                                        "Tool scaffold",
+                                        "Error handling",
+                                        "Type validation",
+                                    ],
+                                    "use_cases": [
+                                        "Custom tools",
+                                        "API wrappers",
+                                        "Simple automation",
+                                    ],
                                 },
                                 "multi-tool": {
                                     "icon": "🛠️",
                                     "category": "Tools",
                                     "description": "Server with multiple tools",
                                     "difficulty": "Intermediate",
-                                    "features": ["Multiple tools", "Shared state", "Complex operations"],
-                                    "use_cases": ["Tool suites", "Workflows", "Complex utilities"]
+                                    "features": [
+                                        "Multiple tools",
+                                        "Shared state",
+                                        "Complex operations",
+                                    ],
+                                    "use_cases": ["Tool suites", "Workflows", "Complex utilities"],
                                 },
                                 "image-generator": {
                                     "icon": "🎨",
@@ -788,42 +828,55 @@ def create_unified_dashboard():
                                     "description": "AI-powered image generation",
                                     "difficulty": "Advanced",
                                     "features": ["Stable Diffusion", "DALL-E", "Image editing"],
-                                    "use_cases": ["Content creation", "Design tools", "Creative apps"]
-                                }
+                                    "use_cases": [
+                                        "Content creation",
+                                        "Design tools",
+                                        "Creative apps",
+                                    ],
+                                },
                             }
-                            
+
                             # Build grid HTML
                             grid_html = '<div class="templates-grid">'
-                            
+
                             for template_name in templates:
                                 template_info = registry.get_template(template_name)
                                 if not template_info:
                                     continue
-                                
+
                                 # Get metadata
-                                meta = template_metadata.get(template_name, {
-                                    "icon": "📦",
-                                    "category": "Other",
-                                    "description": template_info.get('description', 'Custom MCP server template'),
-                                    "difficulty": "Intermediate",
-                                    "features": [],
-                                    "use_cases": []
-                                })
-                                
+                                meta = template_metadata.get(
+                                    template_name,
+                                    {
+                                        "icon": "📦",
+                                        "category": "Other",
+                                        "description": template_info.get(
+                                            "description", "Custom MCP server template"
+                                        ),
+                                        "difficulty": "Intermediate",
+                                        "features": [],
+                                        "use_cases": [],
+                                    },
+                                )
+
                                 # Apply filters
                                 if category != "All" and meta["category"] != category:
                                     continue
-                                if search_query and search_query.lower() not in template_name.lower() and search_query.lower() not in meta["description"].lower():
+                                if (
+                                    search_query
+                                    and search_query.lower() not in template_name.lower()
+                                    and search_query.lower() not in meta["description"].lower()
+                                ):
                                     continue
-                                
+
                                 # Difficulty badge color
                                 difficulty_colors = {
                                     "Beginner": "#28a745",
                                     "Intermediate": "#ffc107",
-                                    "Advanced": "#dc3545"
+                                    "Advanced": "#dc3545",
                                 }
-                                
-                                grid_html += f'''
+
+                                grid_html += f"""
                                 <div class="template-card" data-template="{template_name}">
                                     <div class="template-icon">{meta["icon"]}</div>
                                     <h3 class="template-name">{template_name}</h3>
@@ -833,20 +886,28 @@ def create_unified_dashboard():
                                         {meta["difficulty"]}
                                     </div>
                                 </div>
-                                '''
-                            
-                            grid_html += '</div>'
+                                """
+
+                            grid_html += "</div>"
                             return grid_html
-                        
+
                         def show_template_details(template_name=None):
                             """Show detailed information about a template"""
                             if not template_name or not HAS_REGISTRY:
-                                return "### Select a template to view details", gr.update(visible=False), gr.update(visible=False)
-                            
+                                return (
+                                    "### Select a template to view details",
+                                    gr.update(visible=False),
+                                    gr.update(visible=False),
+                                )
+
                             template_info = registry.get_template(template_name)
                             if not template_info:
-                                return "### Template not found", gr.update(visible=False), gr.update(visible=False)
-                            
+                                return (
+                                    "### Template not found",
+                                    gr.update(visible=False),
+                                    gr.update(visible=False),
+                                )
+
                             # Enhanced template metadata
                             template_metadata = {
                                 "basic": {
@@ -858,16 +919,16 @@ def create_unified_dashboard():
                                         "Single tool implementation",
                                         "Basic error handling",
                                         "Minimal dependencies",
-                                        "Clear code structure"
+                                        "Clear code structure",
                                     ],
                                     "use_cases": [
                                         "Learning MCP basics",
                                         "Building simple utilities",
                                         "Quick prototypes",
-                                        "Testing MCP concepts"
+                                        "Testing MCP concepts",
                                     ],
                                     "requirements": ["Python 3.8+", "mcp package"],
-                                    "setup_time": "< 5 minutes"
+                                    "setup_time": "< 5 minutes",
                                 },
                                 "calculator": {
                                     "icon": "🔢",
@@ -879,16 +940,16 @@ def create_unified_dashboard():
                                         "Scientific functions (sin, cos, log, etc.)",
                                         "Memory functions",
                                         "Expression evaluation",
-                                        "Unit conversions"
+                                        "Unit conversions",
                                     ],
                                     "use_cases": [
                                         "Mathematical calculations",
                                         "Data processing pipelines",
                                         "Educational applications",
-                                        "Scientific computing"
+                                        "Scientific computing",
                                     ],
                                     "requirements": ["Python 3.8+", "math module", "mcp package"],
-                                    "setup_time": "< 5 minutes"
+                                    "setup_time": "< 5 minutes",
                                 },
                                 "multi-tool": {
                                     "icon": "🛠️",
@@ -900,16 +961,16 @@ def create_unified_dashboard():
                                         "Shared state management",
                                         "Tool interdependencies",
                                         "Advanced error handling",
-                                        "Configuration system"
+                                        "Configuration system",
                                     ],
                                     "use_cases": [
                                         "Complex tool suites",
                                         "Workflow automation",
                                         "Integrated services",
-                                        "Professional utilities"
+                                        "Professional utilities",
                                     ],
                                     "requirements": ["Python 3.8+", "mcp package", "pydantic"],
-                                    "setup_time": "5-10 minutes"
+                                    "setup_time": "5-10 minutes",
                                 },
                                 "image-generator": {
                                     "icon": "🎨",
@@ -922,37 +983,42 @@ def create_unified_dashboard():
                                         "DALL-E API support",
                                         "Image editing capabilities",
                                         "Batch processing",
-                                        "Style transfer"
+                                        "Style transfer",
                                     ],
                                     "use_cases": [
                                         "Content creation",
                                         "Design automation",
                                         "Creative applications",
                                         "Marketing tools",
-                                        "Game asset generation"
+                                        "Game asset generation",
                                     ],
                                     "requirements": [
                                         "Python 3.8+",
                                         "GPU recommended",
                                         "transformers or diffusers",
-                                        "API keys for cloud services"
+                                        "API keys for cloud services",
                                     ],
-                                    "setup_time": "15-30 minutes"
-                                }
+                                    "setup_time": "15-30 minutes",
+                                },
                             }
-                            
+
                             # Get metadata
-                            meta = template_metadata.get(template_name, {
-                                "icon": "📦",
-                                "category": "Other",
-                                "description": template_info.get('description', 'Custom MCP server template'),
-                                "difficulty": "Intermediate",
-                                "features": ["Custom implementation"],
-                                "use_cases": ["Specific use cases"],
-                                "requirements": ["Python 3.8+", "mcp package"],
-                                "setup_time": "Varies"
-                            })
-                            
+                            meta = template_metadata.get(
+                                template_name,
+                                {
+                                    "icon": "📦",
+                                    "category": "Other",
+                                    "description": template_info.get(
+                                        "description", "Custom MCP server template"
+                                    ),
+                                    "difficulty": "Intermediate",
+                                    "features": ["Custom implementation"],
+                                    "use_cases": ["Specific use cases"],
+                                    "requirements": ["Python 3.8+", "mcp package"],
+                                    "setup_time": "Varies",
+                                },
+                            )
+
                             # Build detailed view
                             details = f"""
 ### {meta['icon']} {template_name}
@@ -964,24 +1030,24 @@ def create_unified_dashboard():
 
 #### ✨ Key Features
 """
-                            for feature in meta['features']:
+                            for feature in meta["features"]:
                                 details += f"- {feature}\n"
-                            
+
                             details += "\n#### 🎯 Use Cases\n"
-                            for use_case in meta['use_cases']:
+                            for use_case in meta["use_cases"]:
                                 details += f"- {use_case}\n"
-                            
+
                             details += "\n#### 📋 Requirements\n"
-                            for req in meta['requirements']:
+                            for req in meta["requirements"]:
                                 details += f"- {req}\n"
-                            
+
                             # Add file structure if available
-                            if 'files' in template_info:
+                            if "files" in template_info:
                                 details += "\n#### 📁 Template Structure\n```\n"
-                                for filename in template_info['files'].keys():
+                                for filename in template_info["files"].keys():
                                     details += f"{filename}\n"
                                 details += "```\n"
-                            
+
                             # Add quick start guide
                             details += f"""
 #### 🚀 Quick Start
@@ -1006,27 +1072,31 @@ def create_unified_dashboard():
    python app.py
    ```
 """
-                            
+
                             # Show action buttons
-                            actions = f"""
+                            actions = """
 Ready to use this template? Click the button above or use the Quick Create tab to get started!
 """
-                            
-                            return details, gr.update(visible=True), gr.update(value=actions, visible=True)
-                        
+
+                            return (
+                                details,
+                                gr.update(visible=True),
+                                gr.update(value=actions, visible=True),
+                            )
+
                         def filter_templates(category, search=None):
                             # Handle cases where search might not be provided
                             if search is None:
                                 search = ""
                             return create_templates_grid(category, search)
-                        
+
                         def use_selected_template(template_name=None):
                             # Switch to Quick Create tab and pre-select the template
                             # This would require updating the Quick Create template dropdown
                             if template_name:
                                 return gr.update(value=template_name)
                             return gr.update()
-                        
+
                         # Now create the UI components
                         # Template categories
                         with gr.Row():
@@ -1034,71 +1104,71 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                 choices=["All", "Starter", "Tools", "AI/ML", "Data", "Integration"],
                                 value="All",
                                 label="Filter by Category",
-                                interactive=True
+                                interactive=True,
                             )
                             template_search = gr.Textbox(
-                                placeholder="Search templates...",
-                                label="Search",
-                                scale=2
+                                placeholder="Search templates...", label="Search", scale=2
                             )
-                        
+
                         # Templates grid
                         with gr.Row():
                             templates_grid = gr.HTML(value=create_templates_grid())
-                        
+
                         # Selected template details
                         with gr.Row():
                             with gr.Column(scale=1):
                                 # Get available templates and ensure safe initialization
-                                available_templates = registry.list_templates() if HAS_REGISTRY else []
-                                
+                                available_templates = (
+                                    registry.list_templates() if HAS_REGISTRY else []
+                                )
+
                                 selected_template_dropdown = gr.Dropdown(
                                     choices=available_templates,
                                     label="Select Template",
                                     value=None,
-                                    interactive=True
+                                    interactive=True,
                                 )
-                                
+
                                 use_template_btn = gr.Button(
                                     "🚀 Use This Template",
                                     variant="primary",
                                     size="lg",
-                                    visible=False
+                                    visible=False,
                                 )
-                                
+
                                 template_actions = gr.Markdown(visible=False)
-                            
+
                             with gr.Column(scale=2):
                                 template_details = gr.Markdown(
                                     value="### Select a template to view details",
-                                    elem_classes=["template-details"]
+                                    elem_classes=["template-details"],
                                 )
-                        
+
                         # Setup event handlers after all components are created
                         template_category_filter.change(
                             filter_templates,
                             inputs=[template_category_filter, template_search],
-                            outputs=[templates_grid]
+                            outputs=[templates_grid],
                         )
-                        
+
                         template_search.change(
                             filter_templates,
                             inputs=[template_category_filter, template_search],
-                            outputs=[templates_grid]
+                            outputs=[templates_grid],
                         )
-                        
+
                         selected_template_dropdown.change(
                             show_template_details,
                             inputs=[selected_template_dropdown],
-                            outputs=[template_details, use_template_btn, template_actions]
+                            outputs=[template_details, use_template_btn, template_actions],
                         )
-                        
+
                         # Note: This references template_dropdown from Quick Create tab
                         # We'll handle this connection at the dashboard level instead
                         def switch_to_quick_create_with_template(template_name):
                             # Return template name to be handled by parent
                             return template_name
-                        
+
                         # This will be connected to template_dropdown after it's created
                         def use_template_handler(template_name):
                             if template_name:
@@ -1193,17 +1263,17 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                     try:
                         # Initialize control panel
                         control_panel = ControlPanelUI()
-                        
+
                         # Add iframe viewer for deployed agents
                         with gr.Row():
                             with gr.Column(scale=3):
                                 # Create the control panel components
                                 control_panel.create_components()
-                            
+
                             with gr.Column(scale=2):
                                 gr.Markdown("### 🌐 Agent Viewer")
                                 gr.Markdown("Open deployed agents directly in the dashboard")
-                                
+
                                 # Agent viewer controls
                                 with gr.Row():
                                     deployed_agent_dropdown = gr.Dropdown(
@@ -1211,17 +1281,17 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                         choices=["No agents deployed yet"],
                                         value=None,
                                         interactive=True,
-                                        allow_custom_value=False
+                                        allow_custom_value=False,
                                     )
                                     open_agent_btn = gr.Button("🔗 Open Agent", variant="primary")
-                                
+
                                 # Iframe to display the agent
                                 agent_iframe = gr.HTML(
                                     value='<div style="text-align: center; padding: 50px; color: #666;">Select a deployed agent to view it here</div>',
                                     label="Agent Interface",
-                                    elem_id="agent-viewer-iframe"
+                                    elem_id="agent-viewer-iframe",
                                 )
-                                
+
                                 # Refresh deployed agents list
                                 def refresh_deployed_agents():
                                     """Get list of deployed agents with their ports"""
@@ -1229,27 +1299,33 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                         agents = control_panel.agent_runner.list_agents()
                                         choices = []
                                         for name, info in agents.items():
-                                            if info.get('status') == 'running' and info.get('port'):
+                                            if info.get("status") == "running" and info.get("port"):
                                                 choices.append(f"{name} (port {info['port']})")
                                         if choices:
                                             return gr.update(choices=choices, value=None)
                                         else:
-                                            return gr.update(choices=["No agents deployed yet"], value=None)
+                                            return gr.update(
+                                                choices=["No agents deployed yet"], value=None
+                                            )
                                     return gr.update(choices=["No agents deployed yet"], value=None)
-                                
+
                                 # Open agent in iframe
                                 def open_agent_in_iframe(agent_selection):
                                     """Open selected agent in iframe"""
-                                    if not agent_selection or agent_selection == "No agents deployed yet":
+                                    if (
+                                        not agent_selection
+                                        or agent_selection == "No agents deployed yet"
+                                    ):
                                         return '<div style="text-align: center; padding: 50px; color: #666;">Select a deployed agent to view it here</div>'
-                                    
+
                                     # Extract port from selection
                                     import re
-                                    port_match = re.search(r'\(port (\d+)\)', agent_selection)
+
+                                    port_match = re.search(r"\(port (\d+)\)", agent_selection)
                                     if port_match:
                                         port = port_match.group(1)
                                         # Create iframe HTML
-                                        iframe_html = f'''
+                                        iframe_html = f"""
                                         <iframe 
                                             src="http://localhost:{port}" 
                                             width="100%" 
@@ -1257,24 +1333,23 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                             style="border: 1px solid #ddd; border-radius: 8px;"
                                             title="{agent_selection}">
                                         </iframe>
-                                        '''
+                                        """
                                         return iframe_html
                                     return '<div style="text-align: center; padding: 50px; color: #f00;">Could not determine agent port</div>'
-                                
+
                                 # Auto-refresh deployed agents dropdown
                                 deployed_agents_timer = gr.Timer(10.0)
                                 deployed_agents_timer.tick(
-                                    fn=refresh_deployed_agents,
-                                    outputs=[deployed_agent_dropdown]
+                                    fn=refresh_deployed_agents, outputs=[deployed_agent_dropdown]
                                 )
-                                
+
                                 # Open agent button handler
                                 open_agent_btn.click(
                                     fn=open_agent_in_iframe,
                                     inputs=[deployed_agent_dropdown],
-                                    outputs=[agent_iframe]
+                                    outputs=[agent_iframe],
                                 )
-                                
+
                     except Exception as e:
                         gr.Markdown("### Agent Control Panel Error")
                         gr.Markdown(f"Failed to initialize control panel: {str(e)}")
@@ -1393,37 +1468,45 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                 # Documentation selector
                                 doc_category = gr.Radio(
                                     label="Documentation Category",
-                                    choices=["Getting Started", "Configuration", "Advanced Topics", "API Reference"],
-                                    value="Getting Started"
+                                    choices=[
+                                        "Getting Started",
+                                        "Configuration",
+                                        "Advanced Topics",
+                                        "API Reference",
+                                    ],
+                                    value="Getting Started",
                                 )
-                                
+
                                 doc_list = gr.Dataframe(
                                     headers=["Document", "Description"],
                                     label="Available Documents",
                                     interactive=False,
                                     value=[
-                                        ["Getting Started Guide", "Learn the basics of Gradio MCP Playground"],
-                                        ["User Guide", "Comprehensive guide to all features"]
-                                    ]
+                                        [
+                                            "Getting Started Guide",
+                                            "Learn the basics of Gradio MCP Playground",
+                                        ],
+                                        ["User Guide", "Comprehensive guide to all features"],
+                                    ],
                                 )
-                                
+
                                 doc_selector = gr.Dropdown(
                                     label="Select Document",
                                     choices=["getting-started.md", "user_guide.md"],
                                     value="getting-started.md",
-                                    interactive=True
+                                    interactive=True,
                                 )
-                                
+
                                 load_doc_btn = gr.Button("📄 Load Document", variant="primary")
-                            
+
                             with gr.Column(scale=2):
                                 # Document viewer
                                 doc_viewer = gr.Markdown(
                                     value="# Welcome to Gradio MCP Playground\n\nSelect a document from the left to view its contents.",
                                     label="Document Viewer",
-                                    elem_id="doc-viewer"
+                                    elem_id="doc-viewer",
                                 )
-                    
+
                     # Configuration Guide
                     with gr.Tab("⚙️ Configuration"):
                         with gr.Row():
@@ -1434,25 +1517,25 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                         "Basic Configuration",
                                         "API Keys & Security",
                                         "Model Configuration",
-                                        "Server Configuration"
+                                        "Server Configuration",
                                     ],
-                                    value="Basic Configuration"
+                                    value="Basic Configuration",
                                 )
-                                
+
                                 config_doc_selector = gr.Dropdown(
                                     label="Select Guide",
                                     choices=["configuration.md", "api_key_handling.md"],
                                     value="configuration.md",
-                                    interactive=True
+                                    interactive=True,
                                 )
-                                
+
                                 load_config_doc_btn = gr.Button("📄 Load Guide")
-                            
+
                             with gr.Column(scale=2):
                                 config_doc_viewer = gr.Markdown(
                                     value="# Configuration Guide\n\nSelect a configuration topic to learn more."
                                 )
-                    
+
                     # Quick Start
                     with gr.Tab("🚀 Quick Start"):
                         gr.Markdown(
@@ -1521,7 +1604,7 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                             - Report issues on [GitHub](https://github.com/seanpoyner/gradio-mcp-playground/issues)
                             """
                         )
-                    
+
                     # Tutorials & Examples
                     with gr.Tab("💡 Tutorials"):
                         with gr.Row():
@@ -1533,34 +1616,43 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                         "Server Creation",
                                         "MCP Connections",
                                         "Agent Development",
-                                        "Advanced Topics"
+                                        "Advanced Topics",
                                     ],
-                                    value="Quick Start"
+                                    value="Quick Start",
                                 )
-                                
+
                                 # Tutorial list that updates based on category
                                 tutorial_list = gr.Dataframe(
                                     headers=["Tutorial", "Description"],
                                     interactive=True,
                                     value=[
-                                        ["Getting Started", "Learn the basics of Gradio MCP Playground"],
-                                        ["Your First Server", "Create and run your first MCP server"],
-                                        ["Using AI Assistant", "How to use the AI assistant effectively"]
-                                    ]
+                                        [
+                                            "Getting Started",
+                                            "Learn the basics of Gradio MCP Playground",
+                                        ],
+                                        [
+                                            "Your First Server",
+                                            "Create and run your first MCP server",
+                                        ],
+                                        [
+                                            "Using AI Assistant",
+                                            "How to use the AI assistant effectively",
+                                        ],
+                                    ],
                                 )
-                                
+
                                 # Hidden dropdown for tutorial selection
                                 tutorial_dropdown = gr.Dropdown(
                                     visible=False,
                                     choices=["getting-started.md"],
-                                    value="getting-started.md"
+                                    value="getting-started.md",
                                 )
-                            
+
                             with gr.Column(scale=2):
                                 tutorial_content = gr.Markdown(
                                     value="# Getting Started\n\nSelect a tutorial from the list to begin."
                                 )
-                    
+
                     # API Reference
                     with gr.Tab("🔧 API Reference"):
                         with gr.Row():
@@ -1572,11 +1664,11 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                         "Server API",
                                         "Client API",
                                         "Tool Development",
-                                        "Agent API"
+                                        "Agent API",
                                     ],
-                                    value="MCP Protocol"
+                                    value="MCP Protocol",
                                 )
-                                
+
                                 api_method_list = gr.Markdown(
                                     """
                                     ### MCP Protocol Methods:
@@ -1593,7 +1685,7 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                     - `stop_server()`
                                     """
                                 )
-                            
+
                             with gr.Column(scale=2):
                                 gr.Markdown(
                                     """
@@ -1684,7 +1776,7 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                     5. **Testing**: Write tests for your servers
                                     """
                                 )
-                    
+
                     # Troubleshooting
                     with gr.Tab("🛠️ Troubleshooting"):
                         gr.Markdown(
@@ -1834,7 +1926,7 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                 label="Log Level",
                                 value=config_manager.log_level if HAS_CONFIG_MANAGER else "INFO",
                             )
-                    
+
                     # Pipeline Configuration
                     with gr.Tab("🔗 Pipeline Settings"):
                         with gr.Column():
@@ -1844,41 +1936,41 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                 minimum=5,
                                 maximum=300,
                                 precision=0,
-                                info="Maximum time to wait for each pipeline step"
+                                info="Maximum time to wait for each pipeline step",
                             )
-                            
+
                             pipeline_error_handling = gr.Dropdown(
                                 choices=["stop", "continue", "retry", "skip"],
                                 label="Error Handling Method",
                                 value="stop",
-                                info="How to handle errors in pipeline execution"
+                                info="How to handle errors in pipeline execution",
                             )
-                            
+
                             pipeline_retry_attempts = gr.Number(
                                 label="Retry Attempts",
                                 value=3,
                                 minimum=0,
                                 maximum=10,
                                 precision=0,
-                                info="Number of retry attempts for failed steps"
+                                info="Number of retry attempts for failed steps",
                             )
-                            
+
                             pipeline_data_flow = gr.Radio(
                                 choices=["sequential", "parallel", "adaptive"],
                                 label="Data Flow Mode",
                                 value="sequential",
-                                info="How data flows between pipeline servers"
+                                info="How data flows between pipeline servers",
                             )
-                            
+
                             pipeline_max_concurrent = gr.Number(
                                 label="Max Concurrent Servers",
                                 value=5,
                                 minimum=1,
                                 maximum=20,
                                 precision=0,
-                                info="Maximum number of servers to run concurrently"
+                                info="Maximum number of servers to run concurrently",
                             )
-                    
+
                     # Server Configuration
                     with gr.Tab("🖥️ Server Settings"):
                         with gr.Column():
@@ -1888,31 +1980,31 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                 minimum=5,
                                 maximum=120,
                                 precision=0,
-                                info="Time to wait for servers to start"
+                                info="Time to wait for servers to start",
                             )
-                            
+
                             server_health_check_interval = gr.Number(
                                 label="Health Check Interval (seconds)",
                                 value=10,
                                 minimum=5,
                                 maximum=60,
                                 precision=0,
-                                info="How often to check server health"
+                                info="How often to check server health",
                             )
-                            
+
                             server_auto_restart = gr.Checkbox(
                                 label="Auto-restart Failed Servers",
                                 value=True,
-                                info="Automatically restart servers that crash"
+                                info="Automatically restart servers that crash",
                             )
-                            
+
                             server_memory_limit = gr.Number(
                                 label="Memory Limit per Server (MB)",
                                 value=512,
                                 minimum=128,
                                 maximum=4096,
                                 precision=0,
-                                info="Maximum memory usage per server"
+                                info="Maximum memory usage per server",
                             )
 
                 save_settings_btn = gr.Button("💾 Save Settings", variant="primary")
@@ -1924,45 +2016,45 @@ Ready to use this template? Click the button above or use the Quick Create tab t
             try:
                 docs_dir = Path(__file__).parent.parent / "docs"
                 doc_path = docs_dir / doc_file
-                
+
                 if not doc_path.exists():
                     return f"# Document Not Found\n\nThe document '{doc_file}' was not found in the documentation directory."
-                
-                with open(doc_path, 'r', encoding='utf-8') as f:
+
+                with open(doc_path, encoding="utf-8") as f:
                     content = f.read()
-                
+
                 # Add a header if the file doesn't start with one
                 if not content.strip().startswith("#"):
-                    title = doc_file.replace('.md', '').replace('_', ' ').title()
+                    title = doc_file.replace(".md", "").replace("_", " ").title()
                     content = f"# {title}\n\n{content}"
-                
+
                 return content
             except Exception as e:
                 return f"# Error Loading Documentation\n\nAn error occurred while loading '{doc_file}':\n\n```\n{str(e)}\n```"
-        
+
         def update_doc_list(category: str) -> Tuple[gr.Dataframe, gr.Dropdown, gr.Dropdown]:
             """Update document list based on category"""
             doc_mapping = {
                 "Getting Started": [
                     ["Getting Started Guide", "Learn the basics of Gradio MCP Playground"],
-                    ["User Guide", "Comprehensive guide to all features"]
+                    ["User Guide", "Comprehensive guide to all features"],
                 ],
                 "Configuration": [
                     ["Configuration Guide", "Complete configuration reference"],
                     ["API Key Handling", "Secure storage and management of API keys"],
-                    ["Requirements-based Installation", "Installing specific feature sets"]
+                    ["Requirements-based Installation", "Installing specific feature sets"],
                 ],
                 "Advanced Topics": [
                     ["MCP Server Types", "Understanding different server implementations"],
                     ["Performance Optimization", "Tips for optimizing your servers"],
-                    ["Obsidian WSL Guide", "Using Obsidian vault with WSL"]
+                    ["Obsidian WSL Guide", "Using Obsidian vault with WSL"],
                 ],
                 "API Reference": [
                     ["GitHub Tools Reference", "Complete GitHub MCP server reference"],
-                    ["MCP Protocol", "Model Context Protocol specification"]
-                ]
+                    ["MCP Protocol", "Model Context Protocol specification"],
+                ],
             }
-            
+
             file_mapping = {
                 "Getting Started Guide": "getting-started.md",
                 "User Guide": "user_guide.md",
@@ -1972,69 +2064,69 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                 "MCP Server Types": "mcp_server_types.md",
                 "Performance Optimization": "performance_optimization.md",
                 "Obsidian WSL Guide": "obsidian_wsl_guide.md",
-                "GitHub Tools Reference": "github_tools_reference.md"
+                "GitHub Tools Reference": "github_tools_reference.md",
             }
-            
+
             docs = doc_mapping.get(category, [])
             doc_choices = [file_mapping.get(doc[0], "") for doc in docs if doc[0] in file_mapping]
             default_doc = doc_choices[0] if doc_choices else "getting-started.md"
-            
+
             # Return proper Gradio updates
             return (
                 gr.update(value=docs),  # Update dataframe with new docs
                 gr.update(choices=doc_choices, value=default_doc),  # Update dropdown choices
-                gr.update(choices=doc_choices, value=default_doc)   # Update both dropdowns
+                gr.update(choices=doc_choices, value=default_doc),  # Update both dropdowns
             )
-        
+
         def update_config_doc_list(topic: str) -> Tuple[gr.Dropdown, str]:
             """Update configuration document based on topic"""
             topic_mapping = {
                 "Basic Configuration": ["configuration.md"],
                 "API Keys & Security": ["api_key_handling.md"],
                 "Model Configuration": ["configuration.md"],
-                "Server Configuration": ["mcp_server_types.md"]
+                "Server Configuration": ["mcp_server_types.md"],
             }
-            
+
             choices = topic_mapping.get(topic, ["configuration.md"])
             doc_file = choices[0]
             content = load_documentation(doc_file)
-            
+
             return gr.update(choices=choices, value=doc_file), content
-        
+
         def update_tutorial_list(category: str) -> Tuple[gr.Dataframe, gr.Dropdown, str]:
             """Update tutorial list based on category"""
             tutorial_mapping = {
                 "Quick Start": [
                     ["Getting Started", "Learn the basics of Gradio MCP Playground"],
                     ["Your First Server", "Create and run your first MCP server"],
-                    ["Using AI Assistant", "How to use the AI assistant effectively"]
+                    ["Using AI Assistant", "How to use the AI assistant effectively"],
                 ],
                 "Server Creation": [
                     ["Calculator Server", "Build a calculator with MCP tools"],
                     ["Text Processor", "Create text processing tools"],
                     ["Image Tools", "Build image manipulation servers"],
-                    ["Data Analyzer", "Create data analysis servers"]
+                    ["Data Analyzer", "Create data analysis servers"],
                 ],
                 "MCP Connections": [
                     ["Connecting to Servers", "How to connect to MCP servers"],
                     ["GitHub Integration", "Connect and use GitHub MCP server"],
                     ["Filesystem Access", "Use the filesystem MCP server"],
-                    ["Managing Connections", "Manage multiple MCP connections"]
+                    ["Managing Connections", "Manage multiple MCP connections"],
                 ],
                 "Agent Development": [
                     ["Agent Builder Basics", "Create agents with Agent Builder"],
                     ["Custom System Prompts", "Write effective system prompts"],
                     ["Agent Templates", "Use and customize agent templates"],
-                    ["Deploying Agents", "Deploy agents to production"]
+                    ["Deploying Agents", "Deploy agents to production"],
                 ],
                 "Advanced Topics": [
                     ["Pipeline Building", "Create complex server pipelines"],
                     ["Custom MCP Tools", "Build your own MCP tools"],
                     ["Performance Tips", "Optimize server performance"],
-                    ["Security Best Practices", "Secure your MCP servers"]
-                ]
+                    ["Security Best Practices", "Secure your MCP servers"],
+                ],
             }
-            
+
             # Map tutorial names to documentation files
             file_mapping = {
                 "Getting Started": "getting-started.md",
@@ -2044,37 +2136,37 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                 "Agent Builder Basics": "user_guide.md",
                 "Pipeline Building": "user_guide.md",
                 "Performance Tips": "performance_optimization.md",
-                "Connecting to Servers": "mcp_server_types.md"
+                "Connecting to Servers": "mcp_server_types.md",
             }
-            
+
             tutorials = tutorial_mapping.get(category, tutorial_mapping["Quick Start"])
-            
+
             # Get the first tutorial's file
             first_tutorial = tutorials[0][0] if tutorials else "Getting Started"
             doc_file = file_mapping.get(first_tutorial, "getting-started.md")
-            
+
             # Create dropdown choices
             choices = []
             for tutorial in tutorials:
                 mapped_file = file_mapping.get(tutorial[0], "getting-started.md")
                 if mapped_file not in choices:
                     choices.append(mapped_file)
-            
+
             content = load_documentation(doc_file)
-            
+
             return (
                 gr.update(value=tutorials),  # Update dataframe
                 gr.update(choices=choices, value=doc_file),  # Update dropdown
-                content  # Return content as string
+                content,  # Return content as string
             )
-        
+
         def handle_tutorial_selection(evt: gr.SelectData, tutorial_list_data) -> Tuple[str, str]:
             """Handle clicking on a tutorial in the dataframe"""
-            if evt and hasattr(evt, 'index'):
+            if evt and hasattr(evt, "index"):
                 row_idx = evt.index[0]
                 if row_idx < len(tutorial_list_data):
                     tutorial_name = tutorial_list_data[row_idx][0]
-                    
+
                     # Map tutorial name to file
                     file_mapping = {
                         "Getting Started": "getting-started.md",
@@ -2084,13 +2176,13 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                         "Agent Builder Basics": "user_guide.md",
                         "Pipeline Building": "user_guide.md",
                         "Performance Tips": "performance_optimization.md",
-                        "Connecting to Servers": "mcp_server_types.md"
+                        "Connecting to Servers": "mcp_server_types.md",
                     }
-                    
+
                     doc_file = file_mapping.get(tutorial_name, "getting-started.md")
                     content = load_documentation(doc_file)
                     return doc_file, content
-            
+
             return gr.update(), gr.update()
 
         # Event handlers
@@ -2105,12 +2197,40 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                 if not name:
                     return "Please provide a server name"
 
-                # Create server using registry
-                result = registry.create_from_template(name, template)
-                if result["success"]:
-                    return f"✅ Server '{name}' created successfully!\nPath: {result['path']}"
+                # Define the directory for the new server
+                from pathlib import Path
+
+                # Use config_manager's directory to ensure consistency
+                if HAS_CONFIG_MANAGER:
+                    servers_dir = config_manager.config_dir / "servers"
                 else:
-                    return f"❌ Failed to create server: {result.get('error', 'Unknown error')}"
+                    servers_dir = Path.home() / ".gradio-mcp" / "servers"
+                servers_dir.mkdir(parents=True, exist_ok=True)
+                server_directory = servers_dir / name
+
+                # Create server using registry with correct argument order
+                result = registry.create_from_template(template, name, server_directory, port=port)
+                # The method returns a config dict if successful, not a success flag
+                if result and "path" in result:
+                    # Register the server in servers.json so it appears in the management tab
+                    if HAS_CONFIG_MANAGER:
+                        try:
+                            server_config = {
+                                "name": name,
+                                "path": result["path"],
+                                "directory": result["directory"],
+                                "template": template,
+                                "port": port,
+                                "created": result.get("created"),
+                            }
+                            config_manager.add_server(server_config)
+                        except Exception as reg_error:
+                            # Server was created but registration failed - warn the user
+                            return f"⚠️ Server '{name}' created but registration failed: {str(reg_error)}\nPath: {result['path']}\nDirectory: {result['directory']}\n\nYou can manually register it using: gmp server add {name} {result['path']}"
+
+                    return f"✅ Server '{name}' created and registered successfully!\nPath: {result['path']}\nDirectory: {result['directory']}"
+                else:
+                    return "❌ Failed to create server: No server configuration returned"
             except Exception as e:
                 return f"❌ Error creating server: {str(e)}"
 
@@ -2228,6 +2348,7 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                 user_args = {}
                 if user_args_json:
                     import json
+
                     user_args = json.loads(user_args_json)
 
                 # Get server info from registry
@@ -2257,7 +2378,7 @@ To complete installation, run the command above or use the MCP Connections tab t
             """Start a server"""
             if not server_name:
                 return refresh_servers()[0]
-                
+
             if not HAS_SERVER_MANAGER or not server_manager:
                 return refresh_servers()[0]
 
@@ -2266,7 +2387,9 @@ To complete installation, run the command above or use the MCP Connections tab t
                 if result.get("success"):
                     print(f"Server '{server_name}' started successfully")
                 else:
-                    print(f"Failed to start server '{server_name}': {result.get('error', 'Unknown error')}")
+                    print(
+                        f"Failed to start server '{server_name}': {result.get('error', 'Unknown error')}"
+                    )
                 return refresh_servers()[0]
             except Exception as e:
                 print(f"Error starting server: {e}")
@@ -2276,7 +2399,7 @@ To complete installation, run the command above or use the MCP Connections tab t
             """Stop a server"""
             if not server_name:
                 return refresh_servers()[0]
-                
+
             if not HAS_SERVER_MANAGER or not server_manager:
                 return refresh_servers()[0]
 
@@ -2285,7 +2408,9 @@ To complete installation, run the command above or use the MCP Connections tab t
                 if result.get("success"):
                     print(f"Server '{server_name}' stopped successfully")
                 else:
-                    print(f"Failed to stop server '{server_name}': {result.get('error', 'Unknown error')}")
+                    print(
+                        f"Failed to stop server '{server_name}': {result.get('error', 'Unknown error')}"
+                    )
                 return refresh_servers()[0]
             except Exception as e:
                 print(f"Error stopping server: {e}")
@@ -2295,7 +2420,7 @@ To complete installation, run the command above or use the MCP Connections tab t
             """Delete a server"""
             if not server_name:
                 return refresh_servers()
-                
+
             if not HAS_CONFIG_MANAGER or not config_manager:
                 return refresh_servers()
 
@@ -2467,7 +2592,7 @@ To complete installation, run the command above or use the MCP Connections tab t
                 if hasattr(coding_agent, "_mcp_servers") and coding_agent._mcp_servers:
                     connected_count = len(coding_agent._mcp_servers)
 
-                greeting = f"👋 Hi! I'm Liam, your MCP development specialist.\n\n"
+                greeting = "👋 Hi! I'm Liam, your MCP development specialist.\n\n"
                 greeting += "I can help you:\n"
                 greeting += "• 🔍 Research and find MCP servers\n"
                 greeting += "• 🔧 Build custom MCP servers\n"
@@ -2498,7 +2623,7 @@ To complete installation, run the command above or use the MCP Connections tab t
                 # Show MCP agent (Liam), hide others
                 return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
             else:  # Agent Builder
-                # Show agent builder (Arthur), hide others  
+                # Show agent builder (Arthur), hide others
                 return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True)
 
         assistant_mode.change(
@@ -2510,7 +2635,8 @@ To complete installation, run the command above or use the MCP Connections tab t
         # Event handlers for all assistant modes
         if coding_agent:
             # Import additional event handler functions from web_ui
-            from .web_ui import reset_conversation, configure_model as _configure_model
+            from .web_ui import configure_model as _configure_model
+            from .web_ui import reset_conversation
 
             # Define message handling functions locally
             def handle_message_submit(message, history, show_thinking):
@@ -2860,7 +2986,7 @@ To complete installation, run the command above or use the MCP Connections tab t
                             results = registry.get_all(server_type="mcp_server")
                         else:
                             results = registry.search(query, server_type="mcp_server")
-                        
+
                         if results:
                             # Format results for dataframe
                             data = []
@@ -2891,9 +3017,21 @@ To complete installation, run the command above or use the MCP Connections tab t
             # Save settings button
             if "save_settings_btn" in locals() and HAS_CONFIG_MANAGER:
 
-                def save_settings(port, auto_reload, protocol, log_level, step_timeout, error_handling, 
-                                retry_attempts, data_flow, max_concurrent, startup_timeout, 
-                                health_check_interval, auto_restart, memory_limit):
+                def save_settings(
+                    port,
+                    auto_reload,
+                    protocol,
+                    log_level,
+                    step_timeout,
+                    error_handling,
+                    retry_attempts,
+                    data_flow,
+                    max_concurrent,
+                    startup_timeout,
+                    health_check_interval,
+                    auto_restart,
+                    memory_limit,
+                ):
                     """Save settings"""
                     try:
                         # Basic settings
@@ -2901,20 +3039,20 @@ To complete installation, run the command above or use the MCP Connections tab t
                         config_manager.auto_reload = auto_reload
                         config_manager.mcp_protocol = protocol
                         config_manager.log_level = log_level
-                        
+
                         # Pipeline settings
                         config_manager.pipeline_step_timeout = step_timeout
                         config_manager.pipeline_error_handling = error_handling
                         config_manager.pipeline_retry_attempts = retry_attempts
                         config_manager.pipeline_data_flow = data_flow
                         config_manager.pipeline_max_concurrent = max_concurrent
-                        
+
                         # Server settings
                         config_manager.server_startup_timeout = startup_timeout
                         config_manager.server_health_check_interval = health_check_interval
                         config_manager.server_auto_restart = auto_restart
                         config_manager.server_memory_limit = memory_limit
-                        
+
                         config_manager.save_config()
                         return gr.update(value="✅ All settings saved successfully!", visible=True)
                     except Exception as e:
@@ -2939,65 +3077,53 @@ To complete installation, run the command above or use the MCP Connections tab t
                     ],
                     outputs=[settings_output],
                 )
-            
+
             # Documentation event handlers
             if "doc_category" in locals():
                 # Update document list when category changes
                 doc_category.change(
                     update_doc_list,
                     inputs=[doc_category],
-                    outputs=[doc_list, doc_selector, doc_selector]
+                    outputs=[doc_list, doc_selector, doc_selector],
                 )
-                
+
                 # Load document when button is clicked
-                load_doc_btn.click(
-                    load_documentation,
-                    inputs=[doc_selector],
-                    outputs=[doc_viewer]
-                )
-                
+                load_doc_btn.click(load_documentation, inputs=[doc_selector], outputs=[doc_viewer])
+
                 # Also load document when selection changes
-                doc_selector.change(
-                    load_documentation,
-                    inputs=[doc_selector],
-                    outputs=[doc_viewer]
-                )
-            
+                doc_selector.change(load_documentation, inputs=[doc_selector], outputs=[doc_viewer])
+
             if "config_topic" in locals():
                 # Update config document when topic changes
                 config_topic.change(
                     update_config_doc_list,
                     inputs=[config_topic],
-                    outputs=[config_doc_selector, config_doc_viewer]
+                    outputs=[config_doc_selector, config_doc_viewer],
                 )
-                
+
                 # Load config document when button is clicked
                 load_config_doc_btn.click(
-                    load_documentation,
-                    inputs=[config_doc_selector],
-                    outputs=[config_doc_viewer]
+                    load_documentation, inputs=[config_doc_selector], outputs=[config_doc_viewer]
                 )
-            
+
             if "tutorial_category" in locals():
                 # Update tutorial list when category changes
                 tutorial_category.change(
                     update_tutorial_list,
                     inputs=[tutorial_category],
-                    outputs=[tutorial_list, tutorial_dropdown, tutorial_content]
+                    outputs=[tutorial_list, tutorial_dropdown, tutorial_content],
                 )
-                
+
                 # Handle clicking on a tutorial in the list
                 tutorial_list.select(
                     handle_tutorial_selection,
                     inputs=[tutorial_list],
-                    outputs=[tutorial_dropdown, tutorial_content]
+                    outputs=[tutorial_dropdown, tutorial_content],
                 )
-                
+
                 # Also update content when dropdown changes
                 tutorial_dropdown.change(
-                    load_documentation,
-                    inputs=[tutorial_dropdown],
-                    outputs=[tutorial_content]
+                    load_documentation, inputs=[tutorial_dropdown], outputs=[tutorial_content]
                 )
 
             # Connection management buttons
@@ -3013,25 +3139,25 @@ To complete installation, run the command above or use the MCP Connections tab t
                 use_template_btn.click(
                     use_template_handler,
                     inputs=[selected_template_dropdown],
-                    outputs=[template_dropdown]
+                    outputs=[template_dropdown],
                 )
 
         # Initialize on load
         if "connections_list" in locals():
             # Add load event to refresh connections
             dashboard.load(refresh_connections, outputs=[connections_list, connection_dropdown])
-        
+
         # Also initialize servers list on load
         if "servers_list" in locals() and HAS_CONFIG_MANAGER:
             # Add another load event to refresh servers
             dashboard.load(refresh_servers, outputs=[servers_list, server_dropdown])
-        
+
         # Initialize registry with all servers on load
         if "registry_results_df" in locals() and HAS_REGISTRY:
             # Show all servers when the page loads
             dashboard.load(
                 lambda: search_registry(""),  # Empty query to show all
-                outputs=[registry_results_df, registry_server_selector]
+                outputs=[registry_results_df, registry_server_selector],
             )
 
     return dashboard

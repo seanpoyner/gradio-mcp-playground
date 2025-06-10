@@ -21,7 +21,8 @@ class ConfigManager:
     """Manages Gradio MCP Playground configuration"""
 
     def __init__(self):
-        self.config_dir = Path.home() / ".gradio-mcp"
+        # Determine the correct config directory, handling WSL path differences
+        self.config_dir = self._find_config_dir()
         self.config_path = self.config_dir / "config.json"
         self.servers_path = self.config_dir / "servers.json"
         self.connections_path = self.config_dir / "connections.json"
@@ -37,6 +38,55 @@ class ConfigManager:
                 self.secure_storage = None
         else:
             self.secure_storage = None
+
+    def _find_config_dir(self) -> Path:
+        """Find the appropriate config directory, handling WSL environments"""
+        import os
+        import platform
+
+        # Check if we're in WSL
+        is_wsl = "microsoft" in platform.uname().release.lower()
+
+        if is_wsl:
+            # In WSL, try to find the Windows user directory
+            # First check if we can determine it from the current working directory
+            cwd = os.getcwd()
+            if cwd.startswith("/mnt/c/Users/"):
+                # Extract Windows username from path
+                parts = cwd.split("/")
+                if len(parts) > 4:
+                    windows_user = parts[4]
+                else:
+                    windows_user = None
+            else:
+                # Try environment variables
+                windows_user = os.environ.get("USER", os.environ.get("USERNAME", ""))
+
+            # Also check common variations
+            possible_users = []
+            if windows_user:
+                possible_users = [windows_user, "seanp", "sean"]  # Include known usernames
+            else:
+                possible_users = ["seanp", "sean"]  # Fallback to known usernames
+
+            # Try to find existing .gradio-mcp directory
+            for user in possible_users:
+                windows_path = Path(f"/mnt/c/Users/{user}/.gradio-mcp")
+                if windows_path.exists():
+                    return windows_path
+
+            # If none exist, check for servers directory
+            for user in possible_users:
+                windows_path = Path(f"/mnt/c/Users/{user}/.gradio-mcp")
+                servers_dir = windows_path / "servers"
+                if servers_dir.exists():
+                    return windows_path
+
+            # Default to first possible user
+            return Path(f"/mnt/c/Users/{possible_users[0]}/.gradio-mcp")
+
+        # Default to home directory
+        return Path.home() / ".gradio-mcp"
 
     def _ensure_config_dir(self) -> None:
         """Ensure configuration directory exists"""
@@ -88,8 +138,9 @@ class ConfigManager:
     # Server management
 
     def list_servers(self) -> List[Dict[str, Any]]:
-        """List all registered servers including Claude Desktop servers"""
+        """List all registered servers including Claude Desktop servers and auto-discovered servers"""
         servers = []
+        registered_names = set()
 
         # Get locally registered servers
         if self.servers_path.exists():
@@ -105,6 +156,7 @@ class ConfigManager:
             for server in servers_data.get("servers", []):
                 server_info = server.copy()
                 server_info["source"] = "local"
+                registered_names.add(server_info.get("name", ""))
 
                 # Check if running
                 if server_info.get("path") in running_map:
@@ -115,6 +167,49 @@ class ConfigManager:
                     server_info["running"] = False
 
                 servers.append(server_info)
+
+        # Auto-discover servers from .gradio-mcp/servers/ directory
+        servers_dir = self.config_dir / "servers"
+        if servers_dir.exists() and servers_dir.is_dir():
+            for server_path in servers_dir.iterdir():
+                if server_path.is_dir():
+                    server_name = server_path.name
+                    # Skip if already registered
+                    if server_name in registered_names:
+                        continue
+
+                    # Check if it has an app.py file (indicating it's a valid server)
+                    app_file = server_path / "app.py"
+                    if app_file.exists():
+                        # Create server info for unregistered server
+                        server_info = {
+                            "name": server_name,
+                            "path": str(app_file),
+                            "directory": str(server_path),
+                            "source": "local",
+                            "auto_discovered": True,
+                            "running": False,
+                            "registered": False,
+                            "discovered": datetime.now().isoformat(),
+                        }
+
+                        # Check if it has a config file
+                        config_file = server_path / "mcp_config.json"
+                        if config_file.exists():
+                            try:
+                                with open(config_file) as f:
+                                    config_data = json.load(f)
+                                    server_info.update(
+                                        {
+                                            "template": config_data.get("template"),
+                                            "created": config_data.get("created"),
+                                            "port": config_data.get("port", 7860),
+                                        }
+                                    )
+                            except Exception:
+                                pass
+
+                        servers.append(server_info)
 
         # Add Claude Desktop servers
         try:

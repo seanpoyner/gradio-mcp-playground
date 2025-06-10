@@ -141,6 +141,58 @@ This wizard configures:
 - Development environment options
 - Logging preferences
 
+## Claude Desktop Integration
+
+One of the most powerful features of Gradio MCP Playground is its **automatic integration with Claude Desktop**. The playground seamlessly detects and imports your existing Claude Desktop MCP servers without any manual configuration.
+
+### How It Works
+
+When you launch the Gradio MCP Playground dashboard, it automatically:
+
+1. **Detects Claude Desktop Configuration**
+   - Windows: `%APPDATA%/Roaming/Claude/claude_desktop_config.json`
+   - WSL/Linux: `/mnt/c/Users/{username}/AppData/Roaming/Claude/claude_desktop_config.json`
+   - Handles cross-platform paths automatically
+
+2. **Imports Server Configurations**
+   - Reads all MCP server definitions
+   - Preserves commands, arguments, and environment variables
+   - Maintains API keys and sensitive data securely
+
+3. **Monitors Server Status**
+   - Parses Claude Desktop log files in real-time
+   - Shows which servers are running vs stopped
+   - Tracks last activity and error messages
+   - Provides health status indicators
+
+### Benefits
+
+- **Zero Configuration**: No manual setup required
+- **Unified Dashboard**: See all your MCP servers in one place
+- **Real-time Monitoring**: Live status updates from Claude logs
+- **Cross-Platform**: Works on Windows, WSL, and Linux
+- **Secure**: API keys and credentials are handled safely
+
+### Viewing Claude Desktop Servers
+
+```bash
+# Launch the dashboard
+gmp dashboard
+
+# Your Claude Desktop servers appear automatically with:
+# - Source: "claude_desktop"
+# - Status: Running/Stopped
+# - Last Activity timestamp
+# - Error messages if any
+```
+
+### Server Status Indicators
+
+- 🟢 **Running**: Server is active and processing requests
+- 🔴 **Stopped**: Server is not currently running
+- 🟡 **Unknown**: Status cannot be determined
+- ⚠️ **Error**: Server has reported errors
+
 ---
 
 # Quick Start Guide

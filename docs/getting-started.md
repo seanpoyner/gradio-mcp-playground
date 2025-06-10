@@ -38,6 +38,7 @@ This will:
 - Check for required dependencies
 - Create configuration files
 - Set up your environment
+- **Automatically detect and import Claude Desktop MCP servers** (if installed)
 
 ### 2. Create Your First Server
 
@@ -100,11 +101,43 @@ if __name__ == "__main__":
     demo.launch(mcp_server=True)
 ```
 
+## Claude Desktop Integration
+
+Gradio MCP Playground automatically integrates with your Claude Desktop installation:
+
+### Automatic Server Import
+
+When you run `gmp setup` or `gmp dashboard`, the playground:
+
+1. **Detects Claude Desktop** configuration files
+2. **Imports all MCP servers** automatically
+3. **Shows real-time status** from Claude logs
+4. **Provides unified management** for all servers
+
+### Viewing Claude Desktop Servers
+
+```bash
+# List all servers including Claude Desktop
+gmp server list
+
+# Output shows:
+# - Gradio servers (source: local)
+# - Claude Desktop servers (source: claude_desktop)
+# - Running/stopped status for each
+```
+
+### Benefits
+
+- **No manual configuration** - Just works out of the box
+- **Cross-platform support** - Windows, WSL, Linux
+- **Real-time monitoring** - Live status updates
+- **Unified dashboard** - Manage everything in one place
+
 ## Basic Server Management
 
 ### Listing Servers
 
-See all your registered servers:
+See all your registered servers (including Claude Desktop):
 
 ```bash
 gmp server list

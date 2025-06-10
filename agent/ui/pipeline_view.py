@@ -172,14 +172,12 @@ class PipelineView:
                         value="All"
                     )
                 
-                # Template grid
-                self.template_gallery = gr.Gallery(
+                # Template grid - using Dataframe instead of Gallery to avoid image issues
+                self.template_gallery = gr.Dataframe(
+                    headers=["Name", "Category", "Description"],
                     label="Available Templates",
-                    show_label=True,
-                    elem_id="template-gallery",
-                    columns=3,
-                    rows=2,
-                    height="auto"
+                    interactive=False,
+                    value=[]
                 )
                 
                 # Template details
@@ -720,18 +718,20 @@ class PipelineView:
         if category != "All":
             templates = [t for t in templates if t["category"] == category]
         
-        # Convert to gallery format
-        gallery_items = []
+        # Convert to dataframe format
+        dataframe_items = []
         for template in templates:
-            # Create a simple text representation for the gallery
-            # Don't use None, use a placeholder image path or empty string
-            gallery_items.append(("", f"{template['name']}\n{template['description'][:50]}..."))
+            dataframe_items.append([
+                template['name'],
+                template['category'],
+                template['description'][:100] + "..." if len(template['description']) > 100 else template['description']
+            ])
         
         info_text = f"Found {len(templates)} template(s)"
         if templates:
             info_text += f"\n\n**{templates[0]['name']}**\n{templates[0]['description']}\nComplexity: {templates[0]['complexity']}"
         
-        return gallery_items, info_text
+        return dataframe_items, info_text
     
     def _filter_templates(self, category: str = "All") -> List[Any]:
         """Filter templates by category"""
