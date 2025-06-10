@@ -21,10 +21,7 @@ google-generativeai>=0.3.1
 watchdog>=3.0.0
 
 # Hugging Face Model Integration
-transformers>=4.36.0
-torch>=2.1.0
-tokenizers>=0.15.0
-accelerate>=0.25.0
+huggingface_hub>=0.20.0  # For Inference API
 hf_xet  # For better performance with Xet Storage repos
 
 # Optional MCP dependencies

@@ -816,9 +816,9 @@ Could you rephrase your request or let me know what you'd like to accomplish?"""
         return self.available_models.copy()
     
     async def load_hf_model(self, model_name: str) -> bool:
-        """Load a Hugging Face model for AI-powered responses"""
-        if not HAS_TRANSFORMERS:
-            print("Transformers library not available. Install with: pip install transformers torch")
+        """Initialize Hugging Face Inference API client"""
+        if not HAS_HF_INFERENCE:
+            print("huggingface_hub library not available. Install with: pip install huggingface_hub")
             return False
         
         if model_name not in self.available_models:
@@ -832,110 +832,63 @@ Could you rephrase your request or let me know what you'd like to accomplish?"""
             return False
         
         try:
-            print(f"Loading model {model_name}...")
+            print(f"Initializing inference client for {model_name}...")
             
-            # Load tokenizer
-            self.hf_tokenizer = AutoTokenizer.from_pretrained(
-                model_name,
-                token=hf_token,
-                trust_remote_code=True
-            )
-            
-            # Load model (use smaller precision for memory efficiency)
-            self.hf_model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                token=hf_token,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                device_map="auto" if torch.cuda.is_available() else None,
-                trust_remote_code=True
+            # Create inference client
+            self.hf_client = InferenceClient(
+                model=model_name,
+                token=hf_token
             )
             
             self.current_model_name = model_name
-            print(f"Successfully loaded {model_name}")
+            print(f"Successfully connected to {model_name} via Inference API")
             return True
             
         except Exception as e:
-            print(f"Error loading model {model_name}: {e}")
-            self.hf_model = None
-            self.hf_tokenizer = None
+            print(f"Error connecting to model {model_name}: {e}")
+            self.hf_client = None
             self.current_model_name = None
             return False
     
     def unload_hf_model(self) -> None:
-        """Unload the current HF model to free memory"""
-        if self.hf_model is not None:
-            del self.hf_model
-            self.hf_model = None
-        
-        if self.hf_tokenizer is not None:
-            del self.hf_tokenizer
-            self.hf_tokenizer = None
+        """Disconnect from HF Inference API"""
+        if self.hf_client is not None:
+            self.hf_client = None
         
         self.current_model_name = None
-        
-        # Clear GPU cache if available
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        
-        print("HF model unloaded")
+        print("Disconnected from HF Inference API")
     
     def get_current_model(self) -> Optional[str]:
         """Get the currently loaded model name"""
         return self.current_model_name
     
     async def generate_hf_response(self, prompt: str, max_length: int = 512) -> Optional[str]:
-        """Generate a response using the loaded HF model"""
-        if not self.hf_model or not self.hf_tokenizer:
+        """Generate a response using the HF Inference API"""
+        if not self.hf_client:
             return None
         
         try:
-            # Prepare the prompt for the model
-            if "Qwen" in self.current_model_name:
-                # Qwen format
-                messages = [
-                    {"role": "system", "content": "You are a helpful AI assistant specialized in building MCP servers and helping with code generation."},
-                    {"role": "user", "content": prompt}
-                ]
-                formatted_prompt = self.hf_tokenizer.apply_chat_template(messages, tokenize=False)
-            elif "zephyr" in self.current_model_name:
-                # Zephyr format
-                messages = [
-                    {"role": "system", "content": "You are a helpful AI assistant specialized in building MCP servers and helping with code generation."},
-                    {"role": "user", "content": prompt}
-                ]
-                formatted_prompt = self.hf_tokenizer.apply_chat_template(messages, tokenize=False)
-            else:
-                # Default format for Mixtral and others
-                formatted_prompt = f"<s>[INST] You are a helpful AI assistant specialized in building MCP servers and helping with code generation.\n\n{prompt} [/INST]"
+            # Prepare the messages for the model
+            messages = [
+                {"role": "system", "content": "You are a helpful AI assistant specialized in building MCP servers and helping with code generation."},
+                {"role": "user", "content": prompt}
+            ]
             
-            # Tokenize
-            inputs = self.hf_tokenizer(
-                formatted_prompt,
-                return_tensors="pt",
-                truncation=True,
-                max_length=2048
+            # Use the inference API
+            response = await asyncio.to_thread(
+                self.hf_client.chat_completion,
+                messages=messages,
+                max_tokens=max_length,
+                temperature=0.7,
+                top_p=0.9
             )
             
-            # Move to device if model is on GPU
-            if self.hf_model.device.type != "cpu":
-                inputs = {k: v.to(self.hf_model.device) for k, v in inputs.items()}
-            
-            # Generate
-            with torch.no_grad():
-                outputs = self.hf_model.generate(
-                    **inputs,
-                    max_new_tokens=max_length,
-                    do_sample=True,
-                    temperature=0.7,
-                    top_p=0.9,
-                    pad_token_id=self.hf_tokenizer.eos_token_id
-                )
-            
-            # Decode response
-            generated_tokens = outputs[0][inputs['input_ids'].shape[1]:]
-            response = self.hf_tokenizer.decode(generated_tokens, skip_special_tokens=True)
-            
-            return response.strip()
+            # Extract the response text
+            if hasattr(response, 'choices') and len(response.choices) > 0:
+                return response.choices[0].message.content.strip()
+            else:
+                # Fallback for different response formats
+                return str(response).strip()
             
         except Exception as e:
             print(f"Error generating HF response: {e}")
@@ -944,11 +897,11 @@ Could you rephrase your request or let me know what you'd like to accomplish?"""
     def get_model_status(self) -> Dict[str, Any]:
         """Get current model loading status"""
         return {
-            "has_transformers": HAS_TRANSFORMERS,
+            "has_hf_inference": HAS_HF_INFERENCE,
             "has_secure_storage": self.secure_storage is not None,
             "has_token": self.get_hf_token() is not None,
             "current_model": self.current_model_name,
-            "model_loaded": self.hf_model is not None,
+            "model_connected": self.hf_client is not None,
             "available_models": self.available_models
         }
     

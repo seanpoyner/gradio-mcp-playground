@@ -270,6 +270,13 @@ def create_unified_dashboard():
                             )
                             general_send_btn = gr.Button("Send", variant="primary", scale=1)
 
+                        with gr.Row():
+                            general_show_thinking = gr.Checkbox(
+                                label="🧠 Show Thinking Process",
+                                value=False,
+                                info="See how I use MCP tools to complete tasks",
+                            )
+
                     else:
                         gr.Markdown("### General Assistant Unavailable")
                         gr.Markdown("Please install AI dependencies to use the assistant.")
