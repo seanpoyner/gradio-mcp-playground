@@ -115,7 +115,7 @@ class AgentRunner:
         
         # Use the original code directly without wrapping
         # This allows the agent to run as originally designed
-        agent_file.write_text(code)
+        agent_file.write_text(code, encoding='utf-8')
         agent_file.chmod(0o755)  # Make executable
         return agent_file
     
@@ -148,23 +148,48 @@ class AgentRunner:
                     # Clean up dead process
                     self._cleanup_agent(name)
             
+            logger.info(f"Starting agent '{name}'...")
+            
             # Validate agent name
             if not name or not name.replace('_', '').replace('-', '').isalnum():
-                return False, "Agent name must contain only letters, numbers, hyphens, and underscores", {
-                    "status": "invalid_name"
-                }
+                error_msg = "Agent name must contain only letters, numbers, hyphens, and underscores"
+                logger.error(f"Invalid agent name '{name}': {error_msg}")
+                return False, error_msg, {"status": "invalid_name"}
             
             # Create agent file
+            logger.info(f"Creating agent file for '{name}'")
             agent_file = self._create_agent_file(name, code)
+            logger.info(f"Agent file created at: {agent_file}")
+            
+            # Validate the Python syntax before trying to run
+            logger.info(f"Validating Python syntax for '{name}'")
+            try:
+                with open(agent_file, 'r', encoding='utf-8') as f:
+                    code_content = f.read()
+                compile(code_content, str(agent_file), 'exec')
+                logger.info(f"Python syntax validation passed for '{name}'")
+            except SyntaxError as e:
+                error_msg = f"Syntax error in agent code at line {e.lineno}: {e.msg}"
+                logger.error(f"Syntax validation failed for '{name}': {error_msg}")
+                # Clean up the file
+                agent_file.unlink(missing_ok=True)
+                return False, f"Agent has syntax error: {error_msg}", {
+                    "status": "syntax_error",
+                    "error": error_msg,
+                    "line": e.lineno
+                }
             
             # Get port for web interface (if the code uses Gradio)
             port = self._get_next_port()
+            logger.info(f"Assigned port {port} to agent '{name}'")
             
             # Set up environment
             env = os.environ.copy()
             env['PYTHONPATH'] = str(Path(__file__).parent.parent.parent)
             env['AGENT_NAME'] = name
             env['AGENT_PORT'] = str(port)
+            
+            logger.info(f"Starting process for agent '{name}' on port {port}")
             
             # Start the process
             process = subprocess.Popen(
@@ -173,7 +198,9 @@ class AgentRunner:
                 stderr=subprocess.PIPE,
                 env=env,
                 cwd=self.workspace_dir,  # Use agents directory as working directory
-                preexec_fn=os.setsid if os.name != 'nt' else None
+                preexec_fn=os.setsid if os.name != 'nt' else None,
+                encoding='utf-8',  # Handle Unicode characters
+                errors='replace'  # Replace any problematic characters
             )
             
             # Create agent process object
@@ -185,9 +212,16 @@ class AgentRunner:
             
             # Check if it started successfully
             if not agent_process.is_running:
+                logger.error(f"Process for agent '{name}' died immediately")
                 # Process died immediately, get error info
-                stdout, stderr = process.communicate(timeout=1)
-                error_msg = stderr.decode() if stderr else "Process died immediately"
+                try:
+                    stdout, stderr = process.communicate(timeout=1)
+                    error_msg = stderr if stderr else "Process died immediately"
+                    logger.error(f"Agent '{name}' stderr: {stderr}")
+                    logger.error(f"Agent '{name}' stdout: {stdout}")
+                except Exception as e:
+                    error_msg = f"Failed to get process output: {str(e)}"
+                    logger.error(f"Exception getting output for '{name}': {e}")
                 self._cleanup_agent(name)
                 return False, f"Agent failed to start: {error_msg}", {
                     "status": "startup_failed",
@@ -195,7 +229,7 @@ class AgentRunner:
                 }
             
             agent_process.status = "running"
-            logger.info(f"Started agent '{name}' with PID {process.pid}")
+            logger.info(f"✅ Successfully started agent '{name}' with PID {process.pid} on port {port}")
             
             return True, f"Agent '{name}' started successfully", {
                 "status": "running",
@@ -206,7 +240,7 @@ class AgentRunner:
             }
             
         except Exception as e:
-            logger.error(f"Error starting agent '{name}': {e}")
+            logger.error(f"Error starting agent '{name}': {e}", exc_info=True)
             return False, f"Failed to start agent: {str(e)}", {
                 "status": "error",
                 "error": str(e)

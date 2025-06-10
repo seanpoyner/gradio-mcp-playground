@@ -13,6 +13,8 @@ import psutil
 import subprocess
 import re
 import ast
+import os
+import platform
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
@@ -65,11 +67,10 @@ class ControlPanelUI:
         """Get comprehensive system metrics for monitoring"""
         try:
             # Get disk usage for the appropriate root path
-            import platform
-            import os
             if platform.system() == 'Windows':
                 # Get the drive of the current working directory
-                disk_path = os.path.splitdrive(os.getcwd())[0] + '\\'
+                drive = os.path.splitdrive(os.getcwd())[0]
+                disk_path = drive + os.sep if drive else 'C:' + os.sep
             else:
                 disk_path = '/'
             
@@ -316,7 +317,14 @@ class ControlPanelUI:
                 result += f"📋 Agent: {agent_name}\n"
                 result += f"🔧 Status: {metadata.get('status', 'Unknown')}"
             else:
-                result = f"❌ Failed to deploy agent: {message}"
+                result = f"❌ Failed to deploy agent: {message}\n"
+                if metadata:
+                    if metadata.get('status') == 'syntax_error':
+                        result += f"📍 Syntax error at line {metadata.get('line', 'unknown')}\n"
+                        result += f"❗ Error: {metadata.get('error', 'Unknown syntax error')}\n"
+                    result += f"🔍 Status: {metadata.get('status', 'unknown')}\n"
+                    if 'error' in metadata:
+                        result += f"🐛 Details: {metadata['error']}"
             
             return result, self._update_dashboard()
         except Exception as e:

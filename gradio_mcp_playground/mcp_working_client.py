@@ -5,6 +5,7 @@ This module provides a working MCP client that handles server startup correctly.
 
 import json
 import logging
+import os
 import subprocess
 import time
 from queue import Queue

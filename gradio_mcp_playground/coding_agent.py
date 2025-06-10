@@ -6,6 +6,7 @@ code analysis, and general programming tasks.
 
 from typing import Any, Dict
 import logging
+import os
 
 # Configure logging to reduce verbosity
 logging.getLogger("llama_index").setLevel(logging.WARNING)

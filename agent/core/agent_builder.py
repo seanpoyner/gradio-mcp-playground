@@ -6,6 +6,8 @@ and the existing agent infrastructure.
 import asyncio
 import json
 import re
+import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Union
@@ -161,7 +163,24 @@ import gradio as gr
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+import asyncio
 {additional_imports}
+
+# Hugging Face integration
+try:
+    from huggingface_hub import InferenceClient
+    HAS_HF_INFERENCE = True
+except ImportError:
+    HAS_HF_INFERENCE = False
+    print("Warning: huggingface_hub not installed. Install with: pip install huggingface_hub")
+
+# Import secure storage for HF tokens
+try:
+    import sys
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+    from gradio_mcp_playground.secure_storage import get_secure_storage
+except ImportError:
+    get_secure_storage = lambda: None
 
 class {class_name}:
     """Main agent class implementing the core functionality"""
@@ -175,6 +194,11 @@ class {class_name}:
             "user_preferences": {{}},
             "session_data": {{}}
         }}
+        
+        # Initialize HF client
+        self.hf_client = None
+        self.model_name = "Qwen/Qwen2.5-Coder-32B-Instruct"  # Default model
+        self._initialize_llm()
         
     def process_request(self, user_input: str, *args) -> Tuple[str, Any]:
         """Process user request and generate response"""
@@ -202,37 +226,91 @@ class {class_name}:
             error_msg = f"Error processing request: {{str(e)}}"
             return error_msg, self.agent_state
     
+    def _initialize_llm(self):
+        """Initialize the LLM client with HF token"""
+        if not HAS_HF_INFERENCE:
+            print("HF Inference not available - responses will be static")
+            return
+            
+        try:
+            # Get secure storage
+            secure_storage = get_secure_storage()
+            if not secure_storage:
+                print("Secure storage not available - using static responses")
+                return
+                
+            # Get HF token
+            hf_token = secure_storage.retrieve_key("huggingface", "token")
+            if not hf_token:
+                print("No HF token found - using static responses")
+                return
+                
+            # Initialize inference client
+            self.hf_client = InferenceClient(
+                model=self.model_name,
+                token=hf_token
+            )
+            print(f"Connected to {{self.model_name}} via Inference API")
+            
+        except Exception as e:
+            print(f"Failed to initialize LLM: {{e}}")
+            self.hf_client = None
+    
     def _generate_response(self, user_input: str, *args) -> str:
         """Generate response using the agent's system prompt"""
-        # This is where the actual AI/LLM integration would happen
-        # For now, provide a structured response based on the system prompt
-        
-        context = f"""
-System: {{self.system_prompt}}
-
-User: {{user_input}}
-
-Based on the system prompt and user input, provide a helpful response.
-"""
-        
-        # Simple response generation - in a real implementation this would
-        # integrate with HuggingFace models or other AI services
-        response = self._create_contextual_response(user_input)
-        
-        return response
+        if self.hf_client:
+            # Use LLM for response
+            return self._generate_llm_response(user_input)
+        else:
+            # Fallback to static response
+            return self._create_contextual_response(user_input)
+    
+    def _generate_llm_response(self, user_input: str) -> str:
+        """Generate response using HF Inference API"""
+        try:
+            # Build conversation context
+            messages = [
+                {{"role": "system", "content": self.system_prompt}}
+            ]
+            
+            # Add recent conversation history
+            for msg in self.conversation_history[-4:]:  # Last 4 messages
+                messages.append({{
+                    "role": msg["role"],
+                    "content": msg["content"]
+                }})
+            
+            # Add current user message
+            messages.append({{"role": "user", "content": user_input}})
+            
+            # Generate response
+            response = self.hf_client.chat_completion(
+                messages=messages,
+                max_tokens=512,
+                temperature=0.7,
+                top_p=0.9
+            )
+            
+            # Extract response text
+            if hasattr(response, 'choices') and len(response.choices) > 0:
+                return response.choices[0].message.content.strip()
+            else:
+                return str(response).strip()
+                
+        except Exception as e:
+            print(f"LLM generation error: {{e}}")
+            # Fallback to static response
+            return self._create_contextual_response(user_input)
     
     def _create_contextual_response(self, user_input: str) -> str:
         """Create a contextual response based on the agent's specialization"""
-        # Analyze user input and generate appropriate response
-        user_lower = user_input.lower()
-        
-        # Default helpful response
+        # Fallback response when LLM is not available
         response = f"""I understand you're asking about: {{user_input}}
 
 As a {category} specialist, I can help you with:
 {help_features}
 
-What specific aspect would you like me to focus on?"""
+(Note: Running in static mode. For AI-powered responses, ensure HF token is configured)"""
         
         return response
     
@@ -250,7 +328,7 @@ What specific aspect would you like me to focus on?"""
         self.agent_state["user_preferences"].update(preferences)
 
 # Create agent instance
-{instance_name} = {class_name}()
+agent_instance = {class_name}()
 
 # Enhanced Gradio interface
 {gradio_interface}
@@ -294,7 +372,6 @@ if __name__ == "__main__":
                 height=400,
                 show_label=True,
                 container=True,
-                type="messages"
             )
             
             with gr.Row():
@@ -319,8 +396,8 @@ if __name__ == "__main__":
         
         response, state = agent_instance.process_request(message)
         
-        history.append({{"role": "user", "content": message}})
-        history.append({{"role": "assistant", "content": response}})
+        # Append as tuple for Gradio chatbot
+        history.append([message, response])
         
         return history, "", state
     
@@ -505,7 +582,7 @@ if __name__ == "__main__":
         if not class_name.endswith("Agent"):
             class_name += "Agent"
             
-        instance_name = f"{class_name.lower().replace('agent', '')}_agent"
+        instance_name = "agent_instance"  # Use consistent naming
         
         # Generate additional imports based on category
         additional_imports = self._generate_imports(blueprint)
@@ -518,9 +595,9 @@ if __name__ == "__main__":
         
         # Format the template
         code = self.base_template.format(
-            agent_name=f'# {blueprint.name}\n"""{blueprint.description}"""',
+            agent_name=blueprint.name,
             display_name=blueprint.name,
-            description=blueprint.description,
+            description=blueprint.description.replace('"', '\\"'),
             category=blueprint.category,
             difficulty=blueprint.difficulty,
             features=json.dumps(blueprint.features, indent=4),
@@ -843,15 +920,30 @@ The agent is now available in the agents directory and can be accessed through t
 📁 **Location**: `{agent_file}`
 
 **To use your new agent:**
-1. Restart the app or reload the agent list
-2. Select your agent from the Enhanced Agents dropdown
-3. Start interacting with your custom agent!
+
+### Option 1: Restart the App
+1. Stop the app (Ctrl+C in terminal)
+2. Run `python app.py` again
+3. Your agent will appear in the agent selection
+
+### Option 2: Test Immediately
+You can test your agent right now! Just run:
+```bash
+python {agent_file}
+```
+
+### Option 3: Use in Control Panel
+After restarting, your agent will be available in:
+- The Agent Control Panel tab
+- Any agent selection dropdowns
 
 **Agent Details:**
 - Name: {requirements['agent_name']}
 - Category: {requirements['category']}
 - Features: {', '.join(requirements['features'])}
 - System Prompt: {system_prompt}
+
+**Test your agent's Gradio interface directly** by running the Python file above!
 
 Would you like to create another agent?"""
                 
