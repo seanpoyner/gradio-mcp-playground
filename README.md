@@ -331,12 +331,13 @@ Configure the playground using the CLI or by editing `~/.gradio-mcp/config.json`
 
 ## 📚 Documentation
 
-- [Getting Started Guide](docs/getting-started.md) - Quick start with the unified dashboard
+- [Getting Started Guide](docs/getting-started.md) - Quick start with the dashboard
 - [User Guide](docs/user_guide.md) - Comprehensive guide to all features
+- [Dashboard Architecture](docs/dashboard_architecture.md) - Technical details of the dashboard
 - [Configuration Guide](docs/configuration.md) - Configure prompts, models, and settings
 - [MCP Server Types](docs/mcp_server_types.md) - Understanding different server implementations
 - [API Key Handling](docs/api_key_handling.md) - Secure API key management
-- [Unified Dashboard Guide](UNIFIED_DASHBOARD.md) - Complete guide to the unified interface
+- [Performance Optimization](docs/performance_optimization.md) - Speed up your dashboard
 
 ## 💻 Development
 

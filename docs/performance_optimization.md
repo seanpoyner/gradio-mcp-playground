@@ -20,7 +20,7 @@ The quickest way to speed up startup is to skip loading MCP servers:
 
 ```bash
 export GMP_SKIP_MCP_LOAD=1
-gmp dashboard --unified
+gmp dashboard
 ```
 
 This will start the dashboard immediately without loading any MCP servers. You can then manually connect to specific servers as needed.
@@ -36,7 +36,7 @@ cp ~/.gmp/mcp_servers.json ~/.gmp/mcp_servers_minimal.json
 
 # Use the minimal config
 export GMP_MCP_CONFIG=~/.gmp/mcp_servers_minimal.json
-gmp dashboard --unified
+gmp dashboard
 ```
 
 ### 3. Use Server Groups
@@ -57,7 +57,7 @@ Instead of loading all servers at once, organize them into groups:
 Then load only specific groups:
 ```bash
 export GMP_SERVER_GROUPS=essential,development
-gmp dashboard --unified
+gmp dashboard
 ```
 
 ### 4. Parallel Server Loading
@@ -67,7 +67,7 @@ For systems with multiple CPU cores, enable parallel loading:
 ```bash
 export GMP_PARALLEL_LOAD=1
 export GMP_MAX_WORKERS=8  # Adjust based on your CPU
-gmp dashboard --unified
+gmp dashboard
 ```
 
 ### 5. Cache Optimization
@@ -79,10 +79,10 @@ The caching system stores server tool definitions. To maximize cache benefits:
 gmp cache status
 
 # Pre-warm cache by loading all servers once
-gmp dashboard --unified --exit-after-load
+gmp dashboard --exit-after-load
 
 # Subsequent runs will use cache
-gmp dashboard --unified
+gmp dashboard
 ```
 
 ### 6. Lazy Loading
@@ -91,7 +91,7 @@ Enable lazy loading to defer server initialization:
 
 ```bash
 export GMP_LAZY_LOAD=1
-gmp dashboard --unified
+gmp dashboard
 ```
 
 Servers will only be started when their tools are first used.
@@ -119,7 +119,7 @@ cat > ~/gmp-fast.sh << 'EOF'
 export GMP_PARALLEL_LOAD=1
 export GMP_MAX_WORKERS=8
 export GMP_SERVER_GROUPS=essential,development
-gmp dashboard --unified "$@"
+gmp dashboard "$@"
 EOF
 
 chmod +x ~/gmp-fast.sh

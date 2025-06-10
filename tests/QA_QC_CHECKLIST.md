@@ -68,9 +68,10 @@ This checklist ensures all functionality described in the README is working corr
 - [ ] Search results include complete server information
 
 ### Other Commands
-- [ ] `gmp dashboard` launches web dashboard
+- [ ] `gmp dashboard` launches unified dashboard by default
 - [ ] `gmp dashboard --port <port>` uses custom port
 - [ ] `gmp dashboard --public` creates public URL
+- [ ] `gmp dashboard --legacy` launches legacy dashboard
 - [ ] `gmp examples` lists available examples
 - [ ] `gmp deploy <server>` initiates deployment process
 - [ ] `gmp deploy <server> --public` makes deployment public
@@ -128,41 +129,70 @@ This checklist ensures all functionality described in the README is working corr
 
 ---
 
-## 🌐 Web Dashboard
+## 🌐 Web Dashboard (Unified)
 
 ### Dashboard Launch
-- [ ] Dashboard launches on specified port
+- [ ] Unified dashboard launches by default on `gmp dashboard`
 - [ ] Dashboard interface loads completely
-- [ ] All tabs are accessible (Servers, Connections, Registry, Tools, Settings)
+- [ ] All tabs are accessible:
+  - [ ] AI Assistant (with three modes)
+  - [ ] Server Builder (Quick Create, Pipeline Builder, Template Browser)
+  - [ ] Server Management (Active Servers, Registry Browser)
+  - [ ] MCP Connections (Quick Connect, Custom Connections)
+  - [ ] Tool Testing
+  - [ ] Agent Control Panel
+  - [ ] Help & Resources
+  - [ ] Settings
+
+### AI Assistant Tab
+- [ ] Three modes available (Assistant, MCP Agent, Agent Builder)
+- [ ] Mode switching works correctly
+- [ ] Chat interface functions properly
+- [ ] Model configuration persists across modes
+- [ ] Token saving and loading works
+- [ ] Tool usage displays correctly
+- [ ] Response streaming works
+
+### Server Builder Tab
+- [ ] Quick Create form works
+- [ ] Pipeline Builder visual interface loads
+- [ ] Template Browser displays available templates
+- [ ] Server creation from templates works
+- [ ] Generated servers are functional
 
 ### Server Management Tab
-- [ ] Server list displays correctly
+- [ ] Active servers list displays correctly
 - [ ] Server status shows accurately (running/stopped)
-- [ ] Server creation wizard works
-- [ ] Template selection dropdown populated
-- [ ] Start/stop buttons function
-- [ ] Server info displays detailed information
-- [ ] Server deletion works
-
-### Connections Tab
-- [ ] Connection list displays saved connections
-- [ ] Connection status shows accurately
-- [ ] New connection creation works
-- [ ] Connection testing functions
-- [ ] Connection removal works
-
-### Registry Tab
-- [ ] Registry search functions
-- [ ] Category filtering works
-- [ ] Search results display properly
+- [ ] Start/stop/delete buttons function
+- [ ] Registry Browser searches work
 - [ ] Server installation from registry works
 
-### Tools Testing Tab
-- [ ] Server connection for testing works
-- [ ] Available tools are listed
-- [ ] Tool calling interface functions
-- [ ] Tool results display correctly
-- [ ] Error handling for failed tool calls
+### MCP Connections Tab
+- [ ] Quick Connect buttons work for popular servers
+- [ ] Custom connection form functions
+- [ ] Connection status updates correctly
+- [ ] Disconnect functionality works
+- [ ] Connected tools appear in AI Assistant
+
+### Tool Testing Tab
+- [ ] Server selection dropdown populated
+- [ ] Tool list updates based on selected server
+- [ ] Tool parameter forms generate correctly
+- [ ] Tool execution works
+- [ ] Results display properly
+- [ ] Error handling shows useful messages
+
+### Agent Control Panel Tab
+- [ ] Deploy agent functionality works
+- [ ] Agent status monitoring functions
+- [ ] Configuration updates apply correctly
+- [ ] Stop/restart controls work
+
+### Help & Resources Tab
+- [ ] Documentation tabs display correctly
+- [ ] All documentation files load
+- [ ] Examples are accessible
+- [ ] Configuration docs are accurate
 
 ### Settings Tab
 - [ ] Current settings display correctly
