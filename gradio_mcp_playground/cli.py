@@ -536,9 +536,9 @@ def categories():
 @main.command()
 @click.option("--port", "-p", type=int, default=8080, help="Port for dashboard")
 @click.option("--public", is_flag=True, help="Create public URL")
-@click.option("--unified", "-u", is_flag=True, help="Launch unified dashboard with agent features")
+@click.option("--legacy", is_flag=True, help="Use legacy dashboard instead of unified dashboard")
 @click.option("--log-level", type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]), default="WARNING", help="Set logging level")
-def dashboard(port: int, public: bool, unified: bool, log_level: str):
+def dashboard(port: int, public: bool, legacy: bool, log_level: str):
     """Launch the web dashboard"""
     # Set logging level
     import logging
@@ -550,29 +550,35 @@ def dashboard(port: int, public: bool, unified: bool, log_level: str):
         console.print("Install Gradio: [cyan]pip install --user gradio>=4.44.0[/cyan]")
         return
 
-    if unified:
-        try:
-            from .unified_web_ui import launch_unified_dashboard
-            console.print(f"[blue]Starting Unified Gradio MCP Dashboard on port {port}...[/blue]")
-            console.print("[green]✨ Agent Builder and enhanced features enabled![/green]")
-            launch_unified_dashboard(port=port, share=public)
-        except ImportError as e:
-            console.print(f"[yellow]Warning: Could not load unified dashboard: {e}[/yellow]")
-            console.print("[blue]Falling back to standard dashboard...[/blue]")
-            launch_dashboard(port=port, share=public)
-        except KeyboardInterrupt:
-            console.print("\n[yellow]Dashboard stopped.[/yellow]")
-        except Exception as e:
-            console.print(f"[red]Error starting unified dashboard: {e}[/red]")
-    else:
-        console.print(f"[blue]Starting Gradio MCP Dashboard on port {port}...[/blue]")
-
+    if legacy:
+        # Use the old dashboard if specifically requested
+        console.print(f"[blue]Starting Legacy Gradio MCP Dashboard on port {port}...[/blue]")
         try:
             launch_dashboard(port=port, share=public)
         except KeyboardInterrupt:
             console.print("\n[yellow]Dashboard stopped.[/yellow]")
         except Exception as e:
             console.print(f"[red]Error starting dashboard: {e}[/red]")
+    else:
+        # Default to unified dashboard
+        try:
+            from .unified_web_ui import launch_unified_dashboard
+            console.print(f"[blue]Starting Gradio MCP Playground Dashboard on port {port}...[/blue]")
+            console.print("[green]✨ Agent Builder and enhanced features enabled![/green]")
+            launch_unified_dashboard(port=port, share=public)
+        except ImportError as e:
+            console.print(f"[yellow]Warning: Could not load unified dashboard: {e}[/yellow]")
+            console.print("[blue]Falling back to legacy dashboard...[/blue]")
+            launch_dashboard(port=port, share=public)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Dashboard stopped.[/yellow]")
+        except Exception as e:
+            console.print(f"[red]Error starting unified dashboard: {e}[/red]")
+            console.print("[blue]Falling back to legacy dashboard...[/blue]")
+            try:
+                launch_dashboard(port=port, share=public)
+            except Exception as fallback_e:
+                console.print(f"[red]Error starting legacy dashboard: {fallback_e}[/red]")
 
 
 @main.group()
@@ -702,12 +708,6 @@ def setup_path():
     from .setup_path import main as setup_path_main
 
     setup_path_main()
-
-
-@main.group()
-def cache():
-    """Manage application cache"""
-    pass
 
 
 @cache.command("status")
