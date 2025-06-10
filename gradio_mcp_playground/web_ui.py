@@ -45,6 +45,219 @@ except ImportError:
     HAS_CODING_AGENT = False
 
 
+# Module-level functions for unified dashboard
+def handle_message_submit(message, history, show_thinking):
+    """Handle message submission with immediate display"""
+    if not message.strip():
+        return history, ""
+    
+    # Clear input immediately and show user message
+    history_with_user = history + [{"role": "user", "content": message}]
+    
+    # Return cleared input and updated history, then process
+    return history_with_user, ""
+
+
+def process_message(history, show_thinking, coding_agent):
+    """Process the last user message and generate response"""
+    if not history or history[-1]["role"] != "user":
+        return history
+    
+    message = history[-1]["content"]
+    
+    # Add thinking indicator
+    history.append({"role": "assistant", "content": "🤔 Thinking..."})
+    yield history
+    
+    # Now process the actual message
+    try:
+        # Remove the thinking message
+        history = history[:-1]
+        
+        # Call the original send_message logic
+        if not coding_agent.is_configured():
+            bot_response = (
+                "Please configure a model first by providing your HuggingFace token."
+            )
+            history.append({"role": "assistant", "content": bot_response})
+            yield history
+            return
+        
+        # Your existing message processing logic here...
+        # Check if user is providing an API key in a natural way
+        import re
+        
+        # Pattern 1: "install brave search with key YOUR_KEY"
+        brave_key_match = re.search(
+            r"install brave search with (?:key|token) ([\w-]+)", message, re.IGNORECASE
+        )
+        if brave_key_match:
+            api_key = brave_key_match.group(1)
+            message = f"install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
+        
+        # Pattern 2: "install github with token YOUR_TOKEN"
+        github_key_match = re.search(
+            r"install github with (?:key|token) ([\w-]+)", message, re.IGNORECASE
+        )
+        if github_key_match:
+            api_key = github_key_match.group(1)
+            message = f"install_mcp_server_from_registry(server_id='github', token='{api_key}')"
+        
+        # Pattern 3: "my brave api key is YOUR_KEY"
+        brave_key_statement = re.search(
+            r"(?:my )?brave (?:api )?key (?:is |= ?)([\w-]+)", message, re.IGNORECASE
+        )
+        if brave_key_statement:
+            api_key = brave_key_statement.group(1)
+            message = f"I have your Brave API key. Let me install the brave search server: install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
+        
+        # Pattern 4: "use path /home/user/workspace" (for filesystem server)
+        path_statement = re.search(
+            r"(?:use |provide )?path (?:is |= ?)?([/\\][^\s]+)", message, re.IGNORECASE
+        )
+        if path_statement:
+            path = path_statement.group(1)
+            message = f"I'll use path '{path}' for the filesystem server: install_mcp_server_from_registry(server_id='filesystem', path='{path}')"
+        
+        # Pattern 5: "my obsidian vault is at /path/to/vault"
+        vault_statement = re.search(
+            r"(?:my )?obsidian vault (?:is )?(?:at |in )?([/\\][^\s]+)",
+            message,
+            re.IGNORECASE,
+        )
+        if vault_statement:
+            vault_path = vault_statement.group(1)
+            message = f"I'll use your Obsidian vault at '{vault_path}': install_mcp_server_from_registry(server_id='obsidian', vault_path1='{vault_path}')"
+        
+        # Pattern 6: "my github token is YOUR_TOKEN"
+        github_token_statement = re.search(
+            r"(?:my )?github (?:token|pat|personal access token) (?:is |= ?)([\w-]+)",
+            message,
+            re.IGNORECASE,
+        )
+        if github_token_statement:
+            token = github_token_statement.group(1)
+            message = f"I have your GitHub token. Let me install the GitHub server: install_mcp_server_from_registry(server_id='github', token='{token}')"
+        
+        # Process with agent
+        if show_thinking:
+            steps, bot_response = coding_agent.chat_with_steps(message)
+            
+            # Show thinking steps progressively
+            thinking_content = "## 🧠 AI Thinking Process\n\n"
+            for step in steps:
+                thinking_content += f"{step}\n\n"
+                history[-1] = {"role": "assistant", "content": thinking_content}
+                yield history
+            
+            # Add final response
+            full_response = thinking_content + "---\n\n## 💬 Final Response\n\n" + bot_response
+            history[-1] = {"role": "assistant", "content": full_response}
+        else:
+            # Regular chat without steps
+            full_response = coding_agent.chat(message)
+            history.append({"role": "assistant", "content": full_response})
+        
+        # Check and enhance response with helpful prompts
+        if "Missing required arguments:" in full_response and "Example for" in full_response:
+            # Extract server ID and missing arguments
+            server_match = re.search(r"Example for ([\w-]+):", full_response)
+            args_match = re.search(r"Missing required arguments: \[([^\]]+)\]", full_response)
+            
+            if server_match and args_match:
+                server_id = server_match.group(1)
+                missing_args = [arg.strip().strip("'") for arg in args_match.group(1).split(",")]
+                
+                # Create a helpful prompt for the user
+                api_key_prompt = "\n\n🔑 **API Key Required**\n\n"
+                api_key_prompt += f"The {server_id} server requires the following:"
+                
+                for arg in missing_args:
+                    if "token" in arg.lower() or "key" in arg.lower():
+                        api_key_prompt += f"\n- **{arg}**: Please provide your API key"
+                    else:
+                        api_key_prompt += f"\n- **{arg}**: Please provide the required value"
+                
+                api_key_prompt += "\n\nPlease provide the required information in your next message."
+                api_key_prompt += "\n\nExample: `install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
+                
+                full_response += api_key_prompt
+                history[-1]["content"] = full_response
+        
+        # Check if Brave Search API key is needed
+        elif "BRAVE_API_KEY not set" in full_response:
+            api_key_prompt = "\n\n🔑 **Brave Search API Key Required**\n\n"
+            api_key_prompt += "To use Brave Search, you need to provide an API key.\n\n"
+            api_key_prompt += "🌐 **Get your API key:**\n"
+            api_key_prompt += "1. Visit https://brave.com/search/api/\n"
+            api_key_prompt += "2. Sign up for a free account\n"
+            api_key_prompt += "3. Copy your API key\n\n"
+            api_key_prompt += "🔧 **To install with your key:**\n"
+            api_key_prompt += "Please type: `install brave search with key YOUR_API_KEY_HERE`\n\n"
+            api_key_prompt += "Or use the exact command:\n"
+            api_key_prompt += "`install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
+            
+            # Replace the error message with the helpful prompt
+            if "Error: BRAVE_API_KEY not set" in full_response:
+                full_response = full_response.split("Error: BRAVE_API_KEY not set")[0] + api_key_prompt
+            else:
+                full_response += api_key_prompt
+            
+            history[-1]["content"] = full_response
+        
+        yield history
+        
+    except Exception as e:
+        error_msg = f"❌ Error: {str(e)}"
+        history.append({"role": "assistant", "content": error_msg})
+        yield history
+
+
+def reset_conversation():
+    """Reset the conversation and provide a fresh greeting"""
+    # Count connected servers
+    initial_greeting = "👋 Hi! I'm Liam, your MCP coding assistant.\n\n"
+    initial_greeting += "I can help you:\n"
+    initial_greeting += "• 🔍 Research and find MCP servers\n"
+    initial_greeting += "• 🔧 Build custom MCP servers\n"
+    initial_greeting += "• 🧪 Test server functionality\n"
+    initial_greeting += "• 📦 Install servers from the registry\n"
+    initial_greeting += "• 🔌 Connect and configure servers\n\n"
+    initial_greeting += "💡 **Quick commands:** `install memory` • `find database servers` • `what's MCP?`\n\n"
+    initial_greeting += "What can I help you with today?"
+    
+    return [{"role": "assistant", "content": initial_greeting}]
+
+
+def configure_model(hf_token, model_name, coding_agent):
+    """Configure the AI model"""
+    if not hf_token:
+        return (
+            "❌ Please provide a HuggingFace API token",
+            {},
+            gr.update(visible=False),
+        )
+
+    try:
+        # Configure the agent
+        coding_agent.configure(hf_token, model_name)
+
+        # Get model info
+        model_info = coding_agent.get_model_info()
+
+        return (
+            f"✅ Successfully configured {model_name}",
+            model_info,
+            gr.update(visible=True),
+        )
+    except Exception as e:
+        return (
+            f"❌ Configuration failed: {str(e)}",
+            {},
+            gr.update(visible=False),
+        )
+
+
 def create_dashboard():
     """Create the Gradio MCP Playground dashboard"""
     if not HAS_GRADIO:
@@ -180,7 +393,7 @@ def create_dashboard():
                             model_dropdown = gr.Dropdown(
                                 label="Select Model",
                                 choices=list(coding_agent.get_available_models().keys()),
-                                value="microsoft/Phi-3.5-mini-instruct",  # Default to a model with larger context
+                                value="Qwen/Qwen2.5-Coder-32B-Instruct",  # Default to coding specialist model
                                 info="Choose a model for the AI assistant",
                             )
 
@@ -2523,8 +2736,33 @@ For others, please install manually using the command above."""
             """Get MCP connections data for the table"""
             data = []
 
-            # Check if we have any connections stored
-            if hasattr(quick_connect_mcp, "connections"):
+            # Check coding agent's MCP connections first (these are the actual loaded servers)
+            if coding_agent and hasattr(coding_agent, '_mcp_servers') and coding_agent._mcp_servers:
+                for server_id, server in coding_agent._mcp_servers.items():
+                    # Get server info from predefined or create basic info
+                    server_info = predefined_servers.get(server_id, {
+                        'name': server_id,
+                        'icon': '🔌',
+                        'url': f"{server_id} server"
+                    })
+                    
+                    # Get tool count
+                    tool_count = 0
+                    if hasattr(coding_agent, 'mcp_tools') and server_id in coding_agent.mcp_tools:
+                        tool_count = len(coding_agent.mcp_tools[server_id])
+                    
+                    data.append(
+                        [
+                            f"{server_info.get('icon', '🔌')} {server_info.get('name', server_id)}",
+                            "MCP Server",
+                            f"🟢 Connected",
+                            tool_count,
+                            server_info.get('url', f"{server_id} server"),
+                        ]
+                    )
+
+            # Also check if we have any connections stored in quick_connect_mcp
+            elif hasattr(quick_connect_mcp, "connections"):
                 for server_id, conn_info in quick_connect_mcp.connections.items():
                     server_info = predefined_servers.get(server_id, {})
                     status_icon = "🟢" if conn_info["status"] == "connected" else "🟡"
@@ -2546,8 +2784,12 @@ For others, please install manually using the command above."""
             """Get list of MCP connection names for dropdown"""
             choices = []
 
-            # Check if we have any connections stored
-            if hasattr(quick_connect_mcp, "connections"):
+            # Check coding agent's MCP connections first
+            if coding_agent and hasattr(coding_agent, '_mcp_servers') and coding_agent._mcp_servers:
+                for server_id in coding_agent._mcp_servers.keys():
+                    choices.append(server_id)
+            # Also check if we have any connections stored in quick_connect_mcp
+            elif hasattr(quick_connect_mcp, "connections"):
                 for server_id, conn_info in quick_connect_mcp.connections.items():
                     choices.append(server_id)
 
@@ -2565,8 +2807,62 @@ For others, please install manually using the command above."""
                     return {}, [], []
 
             try:
-                # Check if we have this connection stored
+                # First check coding agent's connections
                 if (
+                    coding_agent and 
+                    hasattr(coding_agent, '_mcp_servers') and 
+                    connection_name in coding_agent._mcp_servers
+                ):
+                    # Get server info
+                    server_info = predefined_servers.get(connection_name, {
+                        'name': connection_name,
+                        'url': f"{connection_name} server",
+                        'protocol': 'stdio'
+                    })
+                    
+                    details = {
+                        "name": connection_name,
+                        "url": server_info.get('url', f"{connection_name} server"),
+                        "protocol": server_info.get('protocol', 'stdio'),
+                        "status": "connected",
+                        "connected": True,
+                    }
+                    
+                    # Get tools data from coding agent
+                    tools_data = []
+                    tool_names = []
+                    
+                    if hasattr(coding_agent, 'mcp_tools') and connection_name in coding_agent.mcp_tools:
+                        for tool in coding_agent.mcp_tools[connection_name]:
+                            tool_name = tool.metadata.name if hasattr(tool, 'metadata') else str(tool)
+                            # Remove server prefix from tool name for display
+                            display_name = tool_name.replace(f"{connection_name}_", "")
+                            # Get clean description
+                            if hasattr(tool, 'metadata') and hasattr(tool.metadata, 'description'):
+                                description = tool.metadata.description
+                                # Remove function signature if present
+                                if "(**kwargs)" in description:
+                                    parts = description.split("(**kwargs)")
+                                    if len(parts) > 1:
+                                        description = parts[1].strip()
+                                    else:
+                                        description = parts[0].strip()
+                            else:
+                                description = f"Tool from {connection_name}"
+                            
+                            tools_data.append(
+                                [
+                                    display_name,
+                                    description,
+                                    "{}",  # Parameters would need more work to extract
+                                ]
+                            )
+                            tool_names.append(display_name)
+                    
+                    return details, tools_data, tool_names
+                    
+                # Otherwise check quick_connect_mcp connections
+                elif (
                     hasattr(quick_connect_mcp, "connections")
                     and connection_name in quick_connect_mcp.connections
                 ):
@@ -2629,7 +2925,7 @@ For others, please install manually using the command above."""
         def disconnect_mcp_connection(connection_name):
             """Disconnect a specific MCP connection"""
             if not connection_name:
-                return get_mcp_connections_data(), get_mcp_connection_choices()
+                return get_mcp_connections_data()
 
             try:
                 # Remove from our stored connections
@@ -2641,7 +2937,7 @@ For others, please install manually using the command above."""
             except Exception:
                 pass
 
-            return get_mcp_connections_data(), get_mcp_connection_choices()
+            return get_mcp_connections_data()
 
         def call_mcp_tool(connection_name, tool_name, tool_args):
             """Call a tool on an MCP connection"""
@@ -3131,7 +3427,7 @@ For others, please install manually using the command above."""
                     fn=lambda sid=server_id: quick_connect_mcp(sid),
                     outputs=[server_statuses[server_id]],
                 ).then(fn=get_mcp_connections_data, outputs=[mcp_connections_table]).then(
-                    fn=get_mcp_connection_choices, outputs=[selected_mcp_connection]
+                    fn=load_mcp_connection_dropdown, outputs=[selected_mcp_connection]
                 )
 
             # Auto-install buttons
@@ -3164,7 +3460,7 @@ For others, please install manually using the command above."""
                 ).then(
                     fn=get_mcp_connections_data, outputs=[mcp_connections_table]
                 ).then(
-                    fn=get_mcp_connection_choices, outputs=[selected_mcp_connection]
+                    fn=load_mcp_connection_dropdown, outputs=[selected_mcp_connection]
                 )
 
         # Bulk MCP actions
@@ -3175,8 +3471,14 @@ For others, please install manually using the command above."""
         refresh_mcp_status_btn.click(refresh_mcp_status, outputs=[mcp_bulk_status])
 
         # Active MCP connections management
+        def update_mcp_connection_ui(connection_name):
+            """Update UI when MCP connection is selected"""
+            details, tools_data, tool_names = load_mcp_connection_details(connection_name)
+            # Return the tool dropdown update with choices
+            return details, tools_data, gr.update(choices=tool_names, value=None)
+        
         selected_mcp_connection.change(
-            load_mcp_connection_details,
+            update_mcp_connection_ui,
             inputs=[selected_mcp_connection],
             outputs=[mcp_connection_details, mcp_available_tools, mcp_tool_name],
         )
@@ -3185,8 +3487,14 @@ For others, please install manually using the command above."""
             test_mcp_connection, inputs=[selected_mcp_connection], outputs=[mcp_connection_details]
         )
 
+        def handle_mcp_disconnect(connection_name):
+            """Handle MCP disconnection and update UI"""
+            table_data = disconnect_mcp_connection(connection_name)
+            choices = get_mcp_connection_choices()
+            return table_data, gr.update(choices=choices, value=choices[0] if choices else None)
+        
         disconnect_mcp_btn.click(
-            disconnect_mcp_connection,
+            handle_mcp_disconnect,
             inputs=[selected_mcp_connection],
             outputs=[mcp_connections_table, selected_mcp_connection],
         )
@@ -3213,7 +3521,14 @@ For others, please install manually using the command above."""
 
         # Load initial MCP connections data
         dashboard.load(get_mcp_connections_data, outputs=mcp_connections_table)
-        dashboard.load(get_mcp_connection_choices, outputs=selected_mcp_connection)
+        
+        # Load MCP connection choices properly
+        def load_mcp_connection_dropdown():
+            """Load MCP connection choices for dropdown"""
+            choices = get_mcp_connection_choices()
+            return gr.update(choices=choices, value=choices[0] if choices else None)
+        
+        dashboard.load(load_mcp_connection_dropdown, outputs=selected_mcp_connection)
 
         # Load initial registry data
         dashboard.load(show_popular_servers, outputs=registry_results_df)

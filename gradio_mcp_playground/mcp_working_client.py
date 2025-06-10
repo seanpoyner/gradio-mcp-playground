@@ -277,6 +277,22 @@ def create_mcp_tools_for_server(server: MCPServerProcess) -> List[Any]:
         def make_wrapper(srv, name, info):
             def wrapper(**kwargs):
                 """MCP tool wrapper"""
+                # Special handling for puppeteer_screenshot to ensure path is correct
+                if name == "puppeteer_screenshot" and "name" in kwargs:
+                    # Ensure the screenshot name/path uses Windows paths in WSL
+                    from .environment_config import get_environment_info
+                    env_info = get_environment_info()
+                    
+                    screenshot_name = kwargs["name"]
+                    # If no path is specified, save to home directory
+                    if not any(sep in screenshot_name for sep in ['/', '\\']):
+                        if 'wsl' in env_info and 'windows_user_home' in env_info['wsl']:
+                            # Use Windows home directory for screenshots
+                            windows_home = env_info['wsl']['windows_user_home']
+                            screenshot_name = f"{windows_home}\\{screenshot_name}"
+                            kwargs["name"] = screenshot_name
+                            logger.info(f"Puppeteer screenshot will be saved to: {screenshot_name}")
+                
                 # Translate paths in arguments if needed
                 translated_kwargs = {}
                 for key, value in kwargs.items():
@@ -340,14 +356,31 @@ def create_mcp_tools_for_server(server: MCPServerProcess) -> List[Any]:
 
                 # Extract content from result
                 output = ""
+                is_screenshot = name == "puppeteer_screenshot" or "screenshot" in name.lower()
+                
                 if isinstance(result, dict):
                     if "content" in result:
                         if isinstance(result["content"], list):
                             # Multiple content items
                             outputs = []
                             for item in result["content"]:
-                                if isinstance(item, dict) and "text" in item:
-                                    outputs.append(item["text"])
+                                if isinstance(item, dict):
+                                    # Check if this item contains image data
+                                    if "data" in item and isinstance(item.get("data"), str) and len(item["data"]) > 1000:
+                                        # This is likely base64 image data
+                                        mime_type = item.get("mimeType", "image/png")
+                                        data_len = len(item["data"])
+                                        logger.info(f"Replacing image data for {srv.server_id}.{name}: {data_len} chars of type {mime_type}")
+                                        # Replace the actual data with a placeholder
+                                        item_copy = item.copy()
+                                        item_copy["data"] = f"[Image data - {data_len} chars, type: {mime_type}]"
+                                        outputs.append(str(item_copy))
+                                        if is_screenshot:
+                                            outputs.append("[Screenshot captured successfully]")
+                                    elif "text" in item:
+                                        outputs.append(item["text"])
+                                    else:
+                                        outputs.append(str(item))
                                 else:
                                     outputs.append(str(item))
                             output = "\n".join(outputs)
@@ -360,7 +393,31 @@ def create_mcp_tools_for_server(server: MCPServerProcess) -> List[Any]:
                 else:
                     output = str(result)
 
-                # Truncate if output is too large
+                # Additional image data processing for string representations
+                if "data': '" in output and len(output) > 5000:
+                    # Likely contains base64 image data in string format
+                    # Replace with a placeholder
+                    import re
+                    image_pattern = r"'data': '([A-Za-z0-9+/=]{1000,})'"
+                    
+                    def replace_image_data(match):
+                        data_len = len(match.group(1))
+                        return f"'data': '[Image data - {data_len} chars]'"
+                    
+                    output = re.sub(image_pattern, replace_image_data, output)
+                    
+                # Also handle data": " format (with double quotes)
+                if 'data": "' in output and len(output) > 5000:
+                    import re
+                    image_pattern = r'"data": "([A-Za-z0-9+/=]{1000,})"'
+                    
+                    def replace_image_data(match):
+                        data_len = len(match.group(1))
+                        return f'"data": "[Image data - {data_len} chars]"'
+                    
+                    output = re.sub(image_pattern, replace_image_data, output)
+                
+                # Truncate if output is still too large
                 if len(output) > MAX_OUTPUT_LENGTH:
                     logger.warning(
                         f"Truncating output from {srv.server_id}.{name}: {len(output)} chars -> {MAX_OUTPUT_LENGTH} chars"

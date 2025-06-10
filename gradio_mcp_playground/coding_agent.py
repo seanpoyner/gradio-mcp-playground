@@ -5,6 +5,13 @@ code analysis, and general programming tasks.
 """
 
 from typing import Any, Dict
+import logging
+
+# Configure logging to reduce verbosity
+logging.getLogger("llama_index").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("transformers").setLevel(logging.WARNING)
 
 # Optional imports
 try:
@@ -27,6 +34,7 @@ except ImportError:
     HAS_REQUESTS = False
 
 from .prompt_manager import get_prompt_manager
+from .conversation_manager import ConversationManager
 
 if HAS_LLAMAINDEX:
 
@@ -38,6 +46,7 @@ if HAS_LLAMAINDEX:
             self.llm = None
             self.current_model = None
             self.hf_token = None
+            self.conversation_manager = ConversationManager(max_context_length=30000)
             self.memory = ChatMemoryBuffer.from_defaults(token_limit=3000)
             self.mcp_connections = {}  # Store MCP connections
             self.mcp_client_manager = None  # MCP client manager for external servers
@@ -758,7 +767,7 @@ if HAS_LLAMAINDEX:
                     ("my home directory", home_dir),
                     ("my home folder", home_dir),
                     ("my home", home_dir),
-                    ("~/", home_dir + "\\"),  # For Windows paths
+                    ("~/", home_dir + r"\\"),  # For Windows paths (raw string)
                     ("~", home_dir),
                 ]
 
@@ -807,6 +816,18 @@ if HAS_LLAMAINDEX:
                         except Exception:
                             pass  # Silently fail if memory storage doesn't work
 
+                # Check current context size and compact if needed
+                try:
+                    # Get current conversation from memory
+                    chat_history = self.memory.get()
+                    if chat_history and len(str(chat_history)) > 25000:
+                        # Context is getting large, reset memory with summary
+                        print("DEBUG: Compacting conversation history due to context size")
+                        self.memory.reset()
+                        self.memory.put({"role": "system", "content": "Previous conversation context was compacted. Continue helping the user."})
+                except Exception as e:
+                    print(f"DEBUG: Error checking context size: {e}")
+                
                 response = self.agent.chat(processed_message)
                 response_str = str(response)
 
@@ -894,9 +915,13 @@ if HAS_LLAMAINDEX:
                                         f"📝 **{current_section}**: {' '.join(section_content)}"
                                     )
                                 current_section = "Observation"
-                                section_content = [
-                                    line[12:].strip()
-                                ]  # Remove "Observation:" prefix
+                                obs_content = line[12:].strip()  # Remove "Observation:" prefix
+                                
+                                # Process observation to handle images
+                                if self.conversation_manager and len(obs_content) > 1000:
+                                    obs_content = self.conversation_manager.process_tool_observation(obs_content)
+                                
+                                section_content = [obs_content]
                             elif line and current_section:
                                 section_content.append(line)
 
