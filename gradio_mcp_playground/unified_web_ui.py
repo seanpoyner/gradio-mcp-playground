@@ -1088,7 +1088,7 @@ def create_unified_dashboard():
                     server_manager.stop_server(server_name)
 
                 # Delete from config
-                success = config_manager.delete_server(server_name)
+                success = config_manager.remove_server(server_name)
                 if success:
                     print(f"Server '{server_name}' deleted successfully")
                 else:
@@ -1116,48 +1116,100 @@ def create_unified_dashboard():
 
         def disconnect_mcp(connection_name):
             """Disconnect from an MCP server"""
-            if not HAS_CLIENT_MANAGER or not connection_manager:
-                return "Connection manager not available"
+            # Try coding agent first (where connections are actually stored)
+            if coding_agent and hasattr(coding_agent, "_mcp_servers"):
+                try:
+                    if connection_name in coding_agent._mcp_servers:
+                        server = coding_agent._mcp_servers[connection_name]
+                        # Stop the server process
+                        if hasattr(server, "stop"):
+                            server.stop()
+                        # Remove from coding agent
+                        del coding_agent._mcp_servers[connection_name]
+                        # Also remove tools if present
+                        if (
+                            hasattr(coding_agent, "mcp_tools")
+                            and connection_name in coding_agent.mcp_tools
+                        ):
+                            del coding_agent.mcp_tools[connection_name]
+                        return f"✅ Disconnected from {connection_name}"
+                except Exception as e:
+                    print(f"Error disconnecting from coding agent: {e}")
 
-            try:
-                # MCPConnectionManager stores connections by server_id
-                if connection_name in connection_manager.connections:
-                    connection = connection_manager.connections[connection_name]
-                    connection.stop()
-                    del connection_manager.connections[connection_name]
-                    return f"✅ Disconnected from {connection_name}"
-                else:
-                    return f"❌ Connection {connection_name} not found"
-            except Exception as e:
-                return f"❌ Error disconnecting: {str(e)}"
+            # Fallback to connection manager
+            if HAS_CLIENT_MANAGER and connection_manager:
+                try:
+                    # MCPConnectionManager stores connections by server_id
+                    if connection_name in connection_manager.connections:
+                        connection = connection_manager.connections[connection_name]
+                        connection.stop()
+                        del connection_manager.connections[connection_name]
+                        return f"✅ Disconnected from {connection_name}"
+                except Exception as e:
+                    print(f"Error disconnecting from connection manager: {e}")
+
+            return f"❌ Connection {connection_name} not found"
 
         def refresh_connections():
             """Refresh connections list"""
-            if not HAS_CLIENT_MANAGER or not connection_manager:
-                return [], []
+            # Try to get connections from coding agent first (where they're actually stored)
+            if coding_agent and hasattr(coding_agent, "_mcp_servers"):
+                try:
+                    data = []
+                    choices = []
 
-            try:
-                # Get connections from the connection manager
-                data = []
-                choices = []
-
-                # The MCPConnectionManager stores connections in a dict
-                for server_id, connection in connection_manager.connections.items():
-                    data.append(
-                        [
-                            server_id,
-                            connection.command + " " + " ".join(connection.args),
-                            "stdio",  # MCPConnectionManager only supports stdio
-                            "Connected" if connection._connected else "Disconnected",
-                            "Active" if connection._connected else "Inactive",
-                        ]
+                    print(
+                        f"DEBUG: Found {len(coding_agent._mcp_servers)} MCP servers in coding agent"
                     )
-                    choices.append(server_id)
 
-                return data, gr.update(choices=choices)
-            except Exception as e:
-                print(f"Error refreshing connections: {e}")
-                return [], gr.update(choices=[])
+                    # Get connections from coding agent's _mcp_servers
+                    for server_name, server in coding_agent._mcp_servers.items():
+                        # server is an MCPServerProcess object
+                        connected = server.process is not None and server.process.poll() is None
+                        data.append(
+                            [
+                                server_name,
+                                f"{server.command} {' '.join(server.args)}",
+                                "stdio",
+                                "Connected" if connected else "Disconnected",
+                                "Active" if connected else "Inactive",
+                            ]
+                        )
+                        choices.append(server_name)
+                        print(f"DEBUG: Added {server_name} - Connected: {connected}")
+
+                    return data, gr.update(choices=choices)
+                except Exception as e:
+                    print(f"Error refreshing connections from coding agent: {e}")
+                    import traceback
+
+                    traceback.print_exc()
+
+            # Fallback to connection manager if available
+            if HAS_CLIENT_MANAGER and connection_manager:
+                try:
+                    # Get connections from the connection manager
+                    data = []
+                    choices = []
+
+                    # The MCPConnectionManager stores connections in a dict
+                    for server_id, connection in connection_manager.connections.items():
+                        data.append(
+                            [
+                                server_id,
+                                connection.command + " " + " ".join(connection.args),
+                                "stdio",  # MCPConnectionManager only supports stdio
+                                "Connected" if connection._connected else "Disconnected",
+                                "Active" if connection._connected else "Inactive",
+                            ]
+                        )
+                        choices.append(server_id)
+
+                    return data, gr.update(choices=choices)
+                except Exception as e:
+                    print(f"Error refreshing connections: {e}")
+
+            return [], gr.update(choices=[])
 
         # Initialize greeting functions first if available
         if coding_agent:
@@ -1699,7 +1751,7 @@ def create_unified_dashboard():
                 )
 
         # Initialize on load
-        if "connections_list" in locals() and HAS_CLIENT_MANAGER:
+        if "connections_list" in locals():
             # Add load event to refresh connections
             dashboard.load(refresh_connections, outputs=[connections_list, connection_dropdown])
 
