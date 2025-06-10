@@ -138,19 +138,49 @@ gmp server delete hello-world
 gmp server delete hello-world --files
 ```
 
-## Using the Dashboard
+## Using the Unified Dashboard
 
-Launch the web dashboard to manage your servers visually:
+Launch the unified web dashboard that combines server management with AI agent capabilities:
 
 ```bash
+# Start the unified dashboard (default)
 gmp dashboard
+
+# Or specify a custom port
+gmp dashboard --port 8081
 ```
 
-The dashboard provides:
-- Server management (create, start, stop, delete)
-- Connection management
-- Registry browsing
-- Configuration editing
+### Dashboard Features:
+
+**AI Assistant Tab** - Three powerful modes:
+1. **Assistant Mode**: General conversational AI with access to all connected MCP tools
+   - Use for any task: "Take a screenshot", "Search the web", "Create a file"
+   - Shows thinking process when using tools
+   
+2. **MCP Agent Mode** (Liam): Specialized for MCP development
+   - "How do I create an MCP server?"
+   - "Find database-related MCP servers"
+   - "Help me troubleshoot connection issues"
+   
+3. **Agent Builder Mode**: Create custom Gradio agents
+   - Uses system prompts from Claude, GPT, and other top AI assistants
+   - Generates complete agent implementations
+
+**Server Management Tab**:
+- Quick server creation from templates
+- Visual pipeline builder for workflows
+- Active server monitoring
+- Registry browser for discovering servers
+
+**MCP Connections Tab**:
+- One-click connections to popular servers
+- Manage active connections
+- Add custom server connections
+
+**Tool Testing Tab**:
+- Interactive testing of MCP tools
+- JSON input/output support
+- Real-time results
 
 ## Next Steps
 
@@ -169,9 +199,15 @@ The dashboard provides:
 Explore the `examples/` directory for more complex examples:
 
 - `weather_server.py` - Weather information service
-- `calculator_server.py` - Mathematical operations
+- `calculator_server.py` - Mathematical operations  
 - `image_generator.py` - AI image generation
 - `data_analyzer.py` - CSV data analysis
+- `multi_tool_server.py` - Server with multiple tools
+- `text_processor.py` - Text processing utilities
+
+The unified dashboard also includes:
+- Agent templates in `agent/agents/` directory
+- Pipeline examples in `agent/examples/pipelines/`
 
 ## Tips
 

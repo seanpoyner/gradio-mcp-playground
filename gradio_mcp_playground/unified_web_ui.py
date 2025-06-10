@@ -439,15 +439,13 @@ def create_unified_dashboard():
     ) as dashboard:
         gr.Markdown(
             """
-            # 🚀 Gradio MCP Playground - Unified Dashboard
-            
-            Build, manage, and deploy applications as Model Context Protocol (MCP) servers.
+            # 🛝 Gradio MCP Playground
             """
         )
 
         with gr.Tabs():
             # Tab 1: AI Assistant (Enhanced with Agent Builder)
-            with gr.Tab("🤖 AI Assistant"):
+            with gr.Tab("🛝 AI Assistant"):
                 # Model configuration section (available for all modes)
                 if coding_agent:
                     with gr.Group():

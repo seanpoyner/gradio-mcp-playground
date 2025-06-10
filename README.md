@@ -91,8 +91,11 @@ gmp server create --template calculator
 # List all running servers
 gmp server list
 
-# Start the web dashboard
+# Start the unified dashboard (default)
 gmp dashboard
+
+# Or explicitly start unified dashboard
+gmp dashboard --unified
 
 # Deploy to Hugging Face Spaces
 gmp deploy my-mcp-server
@@ -250,21 +253,45 @@ Create a server from a template:
 gmp server create my-calculator --template calculator
 ```
 
-## 🌐 Web Dashboard
+## 🌐 Unified Web Dashboard
 
-The Gradio MCP Playground includes a web-based dashboard for visual management:
+The Gradio MCP Playground features a comprehensive unified dashboard that combines server management with AI agent capabilities:
 
 ```bash
+# Start the unified dashboard (default)
 gmp dashboard
+
+# Or start on a custom port
+gmp dashboard --port 8081
 ```
 
-Features:
+### Dashboard Features:
+
+**🤖 AI Assistant (Three Modes)**
+- **Assistant Mode**: General conversational assistant with full MCP tool access
+- **MCP Agent Mode**: Specialized agent (Liam) for MCP development and troubleshooting
+- **Agent Builder Mode**: Create custom Gradio agents using system prompts from top AI assistants
+
+**🔧 Server Management**
 - Real-time server status monitoring
 - Visual server creation wizard
-- Tool testing interface
-- Configuration editor
-- Connection logs viewer
+- Pipeline builder for complex workflows
+- Template gallery with pre-built servers
+
+**🔌 MCP Connections**
+- Quick connect to popular servers
+- Active connection management
+- Custom server connections
+
+**🧪 Tool Testing**
+- Interactive tool testing interface
+- Real-time results
+- JSON input/output support
+
+**📊 Monitoring & Deployment**
+- Performance metrics
 - One-click deployment
+- Agent monitoring dashboard
 
 ## 🚀 Deployment
 
@@ -304,12 +331,12 @@ Configure the playground using the CLI or by editing `~/.gradio-mcp/config.json`
 
 ## 📚 Documentation
 
-- [Getting Started Guide](docs/getting-started.md)
-- [Creating MCP Servers](docs/creating-servers.md)
-- [Client Integration](docs/client-integration.md)
-- [Deployment Guide](docs/deployment.md)
-- [API Reference](docs/api-reference.md)
-- [Troubleshooting](docs/troubleshooting.md)
+- [Getting Started Guide](docs/getting-started.md) - Quick start with the unified dashboard
+- [User Guide](docs/user_guide.md) - Comprehensive guide to all features
+- [Configuration Guide](docs/configuration.md) - Configure prompts, models, and settings
+- [MCP Server Types](docs/mcp_server_types.md) - Understanding different server implementations
+- [API Key Handling](docs/api_key_handling.md) - Secure API key management
+- [Unified Dashboard Guide](UNIFIED_DASHBOARD.md) - Complete guide to the unified interface
 
 ## 💻 Development
 
