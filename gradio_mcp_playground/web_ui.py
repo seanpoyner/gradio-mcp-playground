@@ -1280,12 +1280,12 @@ def create_dashboard():
             def configure_model(hf_token, model_name):
                 """Configure the AI model"""
                 if not hf_token.strip():
-                    return "Please enter a valid HuggingFace API token", gr.update(visible=False)
+                    return "Please enter a valid HuggingFace API token", gr.update(visible=False), gr.update(visible=False)
 
                 # First test the token independently
                 token_valid, token_msg = test_hf_token_only(hf_token)
                 if not token_valid:
-                    return f"❌ Token Error: {token_msg}", gr.update(visible=False)
+                    return f"❌ Token Error: {token_msg}", gr.update(visible=False), gr.update(visible=False)
 
                 result = coding_agent.configure_model(hf_token.strip(), model_name)
 
@@ -1307,25 +1307,26 @@ def create_dashboard():
                         "status": "✅ Ready for coding assistance",
                     }
 
-                    return status_msg, gr.update(visible=True, value=enhanced_details)
+                    return status_msg, gr.update(value=enhanced_details), gr.update(visible=True)
                 else:
-                    return f"❌ Error: {result['error']}", gr.update(visible=False)
+                    return f"❌ Error: {result['error']}", gr.update(visible=False), gr.update(visible=False)
 
         else:
 
             def configure_model(hf_token, model_name):
                 """Test token when LlamaIndex not available"""
                 if not hf_token.strip():
-                    return "Please enter a valid HuggingFace API token", gr.update(visible=False)
+                    return "Please enter a valid HuggingFace API token", gr.update(visible=False), gr.update(visible=False)
 
                 token_valid, token_msg = test_hf_token_only(hf_token)
                 if token_valid:
                     return (
                         f"✅ Token is valid! {token_msg}\nInstall LlamaIndex to use the AI assistant.",
                         gr.update(visible=False),
+                        gr.update(visible=False)
                     )
                 else:
-                    return f"❌ {token_msg}", gr.update(visible=False)
+                    return f"❌ {token_msg}", gr.update(visible=False), gr.update(visible=False)
 
         if coding_agent:
 
@@ -2785,7 +2786,7 @@ For others, please install manually using the command above."""
             configure_btn.click(
                 configure_model,
                 inputs=[hf_token_input, model_dropdown],
-                outputs=[config_status, model_info],
+                outputs=[config_status, model_info, model_info_accordion],
             )
 
             # Chat functionality
