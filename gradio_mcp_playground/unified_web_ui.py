@@ -651,10 +651,17 @@ def create_unified_dashboard():
                     # Quick Create (from main dashboard)
                     with gr.Tab("⚡ Quick Create"):
                         with gr.Row():
+                            # Get available templates and ensure default value is valid
+                            available_templates = registry.list_templates() if HAS_REGISTRY else ["basic"]
+                            # Ensure we have a fallback if no templates are available
+                            if not available_templates:
+                                available_templates = ["basic"]
+                            default_template = available_templates[0] if available_templates else None
+                            
                             template_dropdown = gr.Dropdown(
-                                choices=registry.list_templates() if HAS_REGISTRY else [],
+                                choices=available_templates,
                                 label="Server Template",
-                                value="basic",
+                                value=default_template,
                                 info="Choose a template for your new server",
                             )
                             template_info_btn = gr.Button("ℹ️ Template Info", variant="secondary")
@@ -822,7 +829,7 @@ def create_unified_dashboard():
                             grid_html += '</div>'
                             return grid_html
                         
-                        def show_template_details(template_name):
+                        def show_template_details(template_name=None):
                             """Show detailed information about a template"""
                             if not template_name or not HAS_REGISTRY:
                                 return "### Select a template to view details", gr.update(visible=False), gr.update(visible=False)
@@ -998,13 +1005,18 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                             
                             return details, gr.update(visible=True), gr.update(value=actions, visible=True)
                         
-                        def filter_templates(category, search):
+                        def filter_templates(category, search=None):
+                            # Handle cases where search might not be provided
+                            if search is None:
+                                search = ""
                             return create_templates_grid(category, search)
                         
-                        def use_selected_template(template_name):
+                        def use_selected_template(template_name=None):
                             # Switch to Quick Create tab and pre-select the template
                             # This would require updating the Quick Create template dropdown
-                            return gr.update(value=template_name)
+                            if template_name:
+                                return gr.update(value=template_name)
+                            return gr.update()
                         
                         # Now create the UI components
                         # Template categories
@@ -1028,8 +1040,11 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                         # Selected template details
                         with gr.Row():
                             with gr.Column(scale=1):
+                                # Get available templates and ensure safe initialization
+                                available_templates = registry.list_templates() if HAS_REGISTRY else []
+                                
                                 selected_template_dropdown = gr.Dropdown(
-                                    choices=registry.list_templates() if HAS_REGISTRY else [],
+                                    choices=available_templates,
                                     label="Select Template",
                                     value=None,
                                     interactive=True
@@ -1787,26 +1802,109 @@ Ready to use this template? Click the button above or use the Quick Create tab t
             with gr.Tab("⚙️ Settings"):
                 gr.Markdown("### Gradio MCP Playground Settings")
 
-                with gr.Column():
-                    settings_port = gr.Number(
-                        label="Default Port",
-                        value=config_manager.default_port if HAS_CONFIG_MANAGER else 8080,
-                        precision=0,
-                    )
-                    settings_auto_reload = gr.Checkbox(
-                        label="Auto-reload on file changes",
-                        value=config_manager.auto_reload if HAS_CONFIG_MANAGER else False,
-                    )
-                    settings_protocol = gr.Dropdown(
-                        choices=["auto", "stdio", "sse"],
-                        label="Default MCP Protocol",
-                        value=config_manager.mcp_protocol if HAS_CONFIG_MANAGER else "auto",
-                    )
-                    settings_log_level = gr.Dropdown(
-                        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-                        label="Log Level",
-                        value=config_manager.log_level if HAS_CONFIG_MANAGER else "INFO",
-                    )
+                with gr.Tabs():
+                    # Basic Settings
+                    with gr.Tab("🔧 Basic Settings"):
+                        with gr.Column():
+                            settings_port = gr.Number(
+                                label="Default Port",
+                                value=config_manager.default_port if HAS_CONFIG_MANAGER else 8080,
+                                precision=0,
+                            )
+                            settings_auto_reload = gr.Checkbox(
+                                label="Auto-reload on file changes",
+                                value=config_manager.auto_reload if HAS_CONFIG_MANAGER else False,
+                            )
+                            settings_protocol = gr.Dropdown(
+                                choices=["auto", "stdio", "sse"],
+                                label="Default MCP Protocol",
+                                value=config_manager.mcp_protocol if HAS_CONFIG_MANAGER else "auto",
+                            )
+                            settings_log_level = gr.Dropdown(
+                                choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                                label="Log Level",
+                                value=config_manager.log_level if HAS_CONFIG_MANAGER else "INFO",
+                            )
+                    
+                    # Pipeline Configuration
+                    with gr.Tab("🔗 Pipeline Settings"):
+                        with gr.Column():
+                            pipeline_step_timeout = gr.Number(
+                                label="Step Timeout (seconds)",
+                                value=30,
+                                minimum=5,
+                                maximum=300,
+                                precision=0,
+                                info="Maximum time to wait for each pipeline step"
+                            )
+                            
+                            pipeline_error_handling = gr.Dropdown(
+                                choices=["stop", "continue", "retry", "skip"],
+                                label="Error Handling Method",
+                                value="stop",
+                                info="How to handle errors in pipeline execution"
+                            )
+                            
+                            pipeline_retry_attempts = gr.Number(
+                                label="Retry Attempts",
+                                value=3,
+                                minimum=0,
+                                maximum=10,
+                                precision=0,
+                                info="Number of retry attempts for failed steps"
+                            )
+                            
+                            pipeline_data_flow = gr.Radio(
+                                choices=["sequential", "parallel", "adaptive"],
+                                label="Data Flow Mode",
+                                value="sequential",
+                                info="How data flows between pipeline servers"
+                            )
+                            
+                            pipeline_max_concurrent = gr.Number(
+                                label="Max Concurrent Servers",
+                                value=5,
+                                minimum=1,
+                                maximum=20,
+                                precision=0,
+                                info="Maximum number of servers to run concurrently"
+                            )
+                    
+                    # Server Configuration
+                    with gr.Tab("🖥️ Server Settings"):
+                        with gr.Column():
+                            server_startup_timeout = gr.Number(
+                                label="Server Startup Timeout (seconds)",
+                                value=30,
+                                minimum=5,
+                                maximum=120,
+                                precision=0,
+                                info="Time to wait for servers to start"
+                            )
+                            
+                            server_health_check_interval = gr.Number(
+                                label="Health Check Interval (seconds)",
+                                value=10,
+                                minimum=5,
+                                maximum=60,
+                                precision=0,
+                                info="How often to check server health"
+                            )
+                            
+                            server_auto_restart = gr.Checkbox(
+                                label="Auto-restart Failed Servers",
+                                value=True,
+                                info="Automatically restart servers that crash"
+                            )
+                            
+                            server_memory_limit = gr.Number(
+                                label="Memory Limit per Server (MB)",
+                                value=512,
+                                minimum=128,
+                                maximum=4096,
+                                precision=0,
+                                info="Maximum memory usage per server"
+                            )
 
                 save_settings_btn = gr.Button("💾 Save Settings", variant="primary")
                 settings_output = gr.Textbox(label="Settings Output", visible=False)
@@ -2010,7 +2108,7 @@ Ready to use this template? Click the button above or use the Quick Create tab t
         def refresh_servers():
             """Refresh the servers list"""
             if not HAS_CONFIG_MANAGER:
-                return [], []
+                return [], gr.update(choices=[], value=None)
 
             servers = config_manager.list_servers()
 
@@ -2030,7 +2128,7 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                 )
                 choices.append(server.get("name", ""))
 
-            return data, gr.update(choices=choices)
+            return data, gr.update(choices=choices, value=None)
 
         def show_template_info(template_name):
             """Show template information"""
@@ -2148,38 +2246,47 @@ To complete installation, run the command above or use the MCP Connections tab t
 
         def start_server(server_name):
             """Start a server"""
+            if not server_name:
+                return refresh_servers()[0]
+                
             if not HAS_SERVER_MANAGER or not server_manager:
                 return refresh_servers()[0]
 
             try:
                 result = server_manager.start_server(server_name)
                 if result.get("success"):
-                    return refresh_servers()[0]
+                    print(f"Server '{server_name}' started successfully")
                 else:
-                    # Show error in status
-                    return refresh_servers()[0]
+                    print(f"Failed to start server '{server_name}': {result.get('error', 'Unknown error')}")
+                return refresh_servers()[0]
             except Exception as e:
                 print(f"Error starting server: {e}")
                 return refresh_servers()[0]
 
         def stop_server(server_name):
             """Stop a server"""
+            if not server_name:
+                return refresh_servers()[0]
+                
             if not HAS_SERVER_MANAGER or not server_manager:
                 return refresh_servers()[0]
 
             try:
                 result = server_manager.stop_server(server_name)
                 if result.get("success"):
-                    return refresh_servers()[0]
+                    print(f"Server '{server_name}' stopped successfully")
                 else:
-                    # Show error in status
-                    return refresh_servers()[0]
+                    print(f"Failed to stop server '{server_name}': {result.get('error', 'Unknown error')}")
+                return refresh_servers()[0]
             except Exception as e:
                 print(f"Error stopping server: {e}")
                 return refresh_servers()[0]
 
         def delete_server(server_name):
             """Delete a server"""
+            if not server_name:
+                return refresh_servers()
+                
             if not HAS_CONFIG_MANAGER or not config_manager:
                 return refresh_servers()
 
@@ -2399,11 +2506,11 @@ To complete installation, run the command above or use the MCP Connections tab t
             # Define message handling functions locally
             def handle_message_submit(message, history, show_thinking):
                 """Handle message submission with immediate display"""
-                if not message.strip():
-                    return history, ""
+                if not message or not message.strip():
+                    return history or [], ""
 
                 # Clear input immediately and show user message
-                history_with_user = history + [{"role": "user", "content": message}]
+                history_with_user = (history or []) + [{"role": "user", "content": message}]
 
                 # Return cleared input and updated history, then process
                 return history_with_user, ""
@@ -2775,15 +2882,32 @@ To complete installation, run the command above or use the MCP Connections tab t
             # Save settings button
             if "save_settings_btn" in locals() and HAS_CONFIG_MANAGER:
 
-                def save_settings(port, auto_reload, protocol, log_level):
+                def save_settings(port, auto_reload, protocol, log_level, step_timeout, error_handling, 
+                                retry_attempts, data_flow, max_concurrent, startup_timeout, 
+                                health_check_interval, auto_restart, memory_limit):
                     """Save settings"""
                     try:
+                        # Basic settings
                         config_manager.default_port = port
                         config_manager.auto_reload = auto_reload
                         config_manager.mcp_protocol = protocol
                         config_manager.log_level = log_level
+                        
+                        # Pipeline settings
+                        config_manager.pipeline_step_timeout = step_timeout
+                        config_manager.pipeline_error_handling = error_handling
+                        config_manager.pipeline_retry_attempts = retry_attempts
+                        config_manager.pipeline_data_flow = data_flow
+                        config_manager.pipeline_max_concurrent = max_concurrent
+                        
+                        # Server settings
+                        config_manager.server_startup_timeout = startup_timeout
+                        config_manager.server_health_check_interval = health_check_interval
+                        config_manager.server_auto_restart = auto_restart
+                        config_manager.server_memory_limit = memory_limit
+                        
                         config_manager.save_config()
-                        return gr.update(value="✅ Settings saved successfully!", visible=True)
+                        return gr.update(value="✅ All settings saved successfully!", visible=True)
                     except Exception as e:
                         return gr.update(value=f"❌ Error saving settings: {str(e)}", visible=True)
 
@@ -2794,6 +2918,15 @@ To complete installation, run the command above or use the MCP Connections tab t
                         settings_auto_reload,
                         settings_protocol,
                         settings_log_level,
+                        pipeline_step_timeout,
+                        pipeline_error_handling,
+                        pipeline_retry_attempts,
+                        pipeline_data_flow,
+                        pipeline_max_concurrent,
+                        server_startup_timeout,
+                        server_health_check_interval,
+                        server_auto_restart,
+                        server_memory_limit,
                     ],
                     outputs=[settings_output],
                 )
@@ -2904,7 +3037,7 @@ def launch_unified_dashboard(port: int = 8080, share: bool = False):
         server_name="127.0.0.1",
         show_api=False,
         prevent_thread_lock=False,
-        favicon_path="🛝",
+        favicon_path=None,
     )
 
 

@@ -581,10 +581,9 @@ class ControlPanelUI:
             return "❌ Syntax Error", f"Line {e.lineno}: {e.msg}"
         except Exception as e:
             return "❌ Validation Failed", str(e)
-    
-    def _test_code(self, code: str) -> Tuple[str, str]:
+    def _test_code(self, code: str = "") -> Tuple[str, str]:
         """Test code execution in a safe environment"""
-        if not code.strip():
+        if not code or not code.strip():
             return "❌ Test Failed", "No code to test"
         
         try:

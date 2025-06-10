@@ -431,6 +431,27 @@ class PipelineView:
             outputs=[self.pipeline_data]
         )
         
+        # Handle error handling method changes
+        self.error_handling.change(
+            fn=self._update_error_handling,
+            inputs=[self.error_handling],
+            outputs=[self.pipeline_data]
+        )
+        
+        # Handle timeout setting changes
+        self.timeout_setting.change(
+            fn=self._update_timeout_setting,
+            inputs=[self.timeout_setting],
+            outputs=[self.pipeline_data]
+        )
+        
+        # Handle data format changes
+        self.data_format.change(
+            fn=self._update_data_format,
+            inputs=[self.data_format],
+            outputs=[self.pipeline_data]
+        )
+        
         # Save configuration
         self.save_config_btn.click(
             fn=self._save_pipeline_config,
@@ -493,7 +514,12 @@ class PipelineView:
         # Update server dropdown choices
         server_names = [s["name"] for s in self.current_pipeline["servers"]]
         
-        return self._render_pipeline_html(), self.current_pipeline, server_names, server_names
+        return (
+            self._render_pipeline_html(), 
+            self.current_pipeline, 
+            gr.update(choices=server_names, value=None),
+            gr.update(choices=server_names, value=None)
+        )
     
     def _create_server_connection(self, source: str, target: str, conn_type: str) -> Tuple[str, Dict[str, Any]]:
         """Create a connection between two servers"""
@@ -547,7 +573,12 @@ class PipelineView:
             ]
         
         server_names = [s["name"] for s in self.current_pipeline["servers"]]
-        return self._render_pipeline_html(), self.current_pipeline, server_names, server_names
+        return (
+            self._render_pipeline_html(), 
+            self.current_pipeline, 
+            gr.update(choices=server_names, value=None),
+            gr.update(choices=server_names, value=None)
+        )
     
     def _search_servers(self, query: str, category: str) -> List[List[str]]:
         """Search for available servers"""
@@ -689,8 +720,12 @@ class PipelineView:
         if category != "All":
             templates = [t for t in templates if t["category"] == category]
         
-        # Convert to gallery format (would normally include images)
+        # Convert to gallery format
         gallery_items = []
+        for template in templates:
+            # Create a simple text representation for the gallery
+            # Don't use None, use a placeholder image path or empty string
+            gallery_items.append(("", f"{template['name']}\n{template['description'][:50]}..."))
         
         info_text = f"Found {len(templates)} template(s)"
         if templates:
@@ -698,10 +733,14 @@ class PipelineView:
         
         return gallery_items, info_text
     
-    def _filter_templates(self, category: str) -> List[Any]:
+    def _filter_templates(self, category: str = "All") -> List[Any]:
         """Filter templates by category"""
-        gallery_items, _ = self._search_templates("", category)
-        return gallery_items
+        try:
+            gallery_items, _ = self._search_templates("", category)
+            return gallery_items
+        except Exception as e:
+            print(f"Error filtering templates: {e}")
+            return []
     
     def _add_template_to_pipeline(self) -> Tuple[str, Dict[str, Any]]:
         """Add selected template to pipeline"""
@@ -724,6 +763,36 @@ class PipelineView:
         
         self.current_pipeline["name"] = name
         self.current_pipeline["description"] = description
+        return self.current_pipeline
+    
+    def _update_error_handling(self, error_handling: str) -> Dict[str, Any]:
+        """Update error handling method"""
+        
+        if "configuration" not in self.current_pipeline:
+            self.current_pipeline["configuration"] = {}
+        
+        self.current_pipeline["configuration"]["error_handling"] = error_handling
+        print(f"DEBUG: Updated error handling to: {error_handling}")
+        return self.current_pipeline
+    
+    def _update_timeout_setting(self, timeout: float) -> Dict[str, Any]:
+        """Update step timeout setting"""
+        
+        if "configuration" not in self.current_pipeline:
+            self.current_pipeline["configuration"] = {}
+        
+        self.current_pipeline["configuration"]["step_timeout"] = int(timeout)
+        print(f"DEBUG: Updated step timeout to: {int(timeout)} seconds")
+        return self.current_pipeline
+    
+    def _update_data_format(self, data_format: str) -> Dict[str, Any]:
+        """Update data format setting"""
+        
+        if "configuration" not in self.current_pipeline:
+            self.current_pipeline["configuration"] = {}
+        
+        self.current_pipeline["configuration"]["data_format"] = data_format
+        print(f"DEBUG: Updated data format to: {data_format}")
         return self.current_pipeline
     
     def _save_pipeline_config(self, name: str, description: str, configs: Dict[str, Any]) -> str:
@@ -941,7 +1010,7 @@ def create_interface():
             return f"Error: {{str(e)}}"
     
     # Create interface
-    with gr.Blocks(title="{self.current_pipeline.get('name', 'Pipeline')}") as demo:
+    with gr.Blocks(title="{self.current_pipeline.get('name', 'Pipeline').replace('🛝', '').strip()}") as demo:
         gr.Markdown(f"# {self.current_pipeline.get('name', 'Generated Pipeline')}")
         gr.Markdown(f"{self.current_pipeline.get('description', '')}")
         
