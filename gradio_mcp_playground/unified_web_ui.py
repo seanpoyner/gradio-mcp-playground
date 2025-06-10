@@ -108,10 +108,19 @@ try:
 
     HAS_AGENT_COMPONENTS = True
     HAS_CONTROL_PANEL = True
-except ImportError:
+    HAS_PIPELINE_VIEW = True
+except ImportError as e:
     HAS_AGENT_COMPONENTS = False
     HAS_CONTROL_PANEL = False
-    print("Agent components not available - some features will be disabled")
+    HAS_PIPELINE_VIEW = False
+    print(f"Agent components not available - some features will be disabled: {e}")
+    
+    # Try to import individual components
+    try:
+        from ui.pipeline_view import PipelineView
+        HAS_PIPELINE_VIEW = True
+    except ImportError:
+        pass
 
 # Try to import just control panel if full agent components fail
 if not HAS_CONTROL_PANEL:
@@ -292,6 +301,32 @@ def create_unified_dashboard():
             background: #f7f8fa;
             border-radius: 8px;
             overflow: hidden;
+        }
+        
+        /* Pipeline builder styles */
+        .pipeline-node {
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+        
+        .pipeline-node:hover {
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        #pipeline-canvas {
+            background: #f8f9fa;
+            background-image: 
+                linear-gradient(rgba(0,0,0,.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        
+        #template-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 16px;
+            padding: 16px;
         }
         """,
     ) as dashboard:
@@ -559,30 +594,33 @@ def create_unified_dashboard():
 
                     # Pipeline Builder (from agent app)
                     with gr.Tab("🔗 Pipeline Builder"):
-                        if HAS_AGENT_COMPONENTS and gmp_agent:
-                            gr.Markdown("### Visual Pipeline Builder")
-                            gr.Markdown(
-                                """
-                                The pipeline builder allows you to create complex MCP server workflows visually.
-                                
-                                To access the full pipeline builder, run:
-                                ```bash
-                                cd agent && python app.py
-                                ```
-                                
-                                Features include:
-                                - Drag-and-drop server connections
-                                - Visual workflow design
-                                - Real-time testing
-                                - Export to code
-                                """
-                            )
+                        if HAS_PIPELINE_VIEW and gmp_agent:
+                            # Create pipeline view instance
+                            try:
+                                pipeline_view = PipelineView(gmp_agent)
+                                pipeline_view.create_interface()
+                            except Exception as e:
+                                gr.Markdown("### Visual Pipeline Builder")
+                                gr.Markdown(f"Error initializing pipeline builder: {str(e)}")
+                                gr.Markdown(
+                                    """
+                                    To access the pipeline builder directly, run:
+                                    ```bash
+                                    cd agent && python app.py
+                                    ```
+                                    """
+                                )
                         else:
                             gr.Markdown("### Visual Pipeline Builder")
                             gr.Markdown(
                                 """
                                 The pipeline builder allows you to create complex workflows visually.
                                 This feature requires the agent components to be installed.
+                                
+                                To enable this feature:
+                                1. Ensure the agent directory is properly set up
+                                2. Install required dependencies: `pip install -r agent/requirements.txt`
+                                3. Restart the application
                                 """
                             )
 
@@ -714,9 +752,10 @@ def create_unified_dashboard():
                                 with gr.Row():
                                     deployed_agent_dropdown = gr.Dropdown(
                                         label="Select Deployed Agent",
-                                        choices=[],
+                                        choices=["No agents deployed yet"],
                                         value=None,
-                                        interactive=True
+                                        interactive=True,
+                                        allow_custom_value=False
                                     )
                                     open_agent_btn = gr.Button("🔗 Open Agent", variant="primary")
                                 
@@ -736,13 +775,16 @@ def create_unified_dashboard():
                                         for name, info in agents.items():
                                             if info.get('status') == 'running' and info.get('port'):
                                                 choices.append(f"{name} (port {info['port']})")
-                                        return gr.update(choices=choices)
-                                    return gr.update(choices=[])
+                                        if choices:
+                                            return gr.update(choices=choices, value=None)
+                                        else:
+                                            return gr.update(choices=["No agents deployed yet"], value=None)
+                                    return gr.update(choices=["No agents deployed yet"], value=None)
                                 
                                 # Open agent in iframe
                                 def open_agent_in_iframe(agent_selection):
                                     """Open selected agent in iframe"""
-                                    if not agent_selection:
+                                    if not agent_selection or agent_selection == "No agents deployed yet":
                                         return '<div style="text-align: center; padding: 50px; color: #666;">Select a deployed agent to view it here</div>'
                                     
                                     # Extract port from selection
