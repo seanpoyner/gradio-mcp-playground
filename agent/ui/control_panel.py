@@ -63,7 +63,8 @@ class ControlPanelUI:
         
     def _get_system_metrics(self) -> Dict[str, Any]:
         """Get comprehensive system metrics for monitoring"""
-        try:            return {
+        try:
+            return {
                 "cpu_percent": psutil.cpu_percent(interval=1),
                 "memory_percent": psutil.virtual_memory().percent,
                 "disk_percent": psutil.disk_usage('/').percent,
@@ -1083,7 +1084,7 @@ class ControlPanelUI:
             )
             
             interface.load(
-                fn=lambda: self._get_agent_logs("All Agents"),
+                fn=lambda: self._get_agent_logs(),
                 outputs=[logs_display]
             )
         

@@ -113,6 +113,18 @@ def create_unified_dashboard():
     if HAS_CODING_AGENT:
         try:
             coding_agent = CodingAgent()
+            # Try to configure with stored HF token if available
+            if hasattr(config_manager, 'hf_token') and config_manager.hf_token:
+                try:
+                    # Get available models
+                    models = coding_agent.get_available_models()
+                    if models:
+                        # Use first available model
+                        model_name = list(models.keys())[0]
+                        coding_agent.configure(config_manager.hf_token, model_name)
+                        print(f"Configured coding agent with {model_name}")
+                except Exception as e:
+                    print(f"Could not auto-configure coding agent: {e}")
         except ImportError as e:
             coding_agent_error = str(e)
 
@@ -229,9 +241,9 @@ def create_unified_dashboard():
                 # General Assistant Mode (conversational with MCP agency)
                 with gr.Group(visible=True) as general_assistant_group:
                     if coding_agent:
-                        gr.Markdown("### General Assistant with MCP Tools")
+                        gr.Markdown("### Claude - General Assistant with MCP Tools")
                         gr.Markdown(
-                            "I'm your general-purpose assistant with access to all connected MCP tools. I can help with any task using the available servers."
+                            "I'm Claude, your general-purpose assistant with access to all connected MCP tools. I can help with any task using the available servers."
                         )
 
                         # Show connected MCP servers
@@ -243,8 +255,8 @@ def create_unified_dashboard():
 
                         # General chat interface
                         general_chatbot = gr.Chatbot(
-                            label="General Assistant",
-                            height=500,
+                            label="Chat with Claude",
+                            height=600,
                             show_copy_button=True,
                             type="messages",
                             bubble_full_width=True,
@@ -257,13 +269,6 @@ def create_unified_dashboard():
                                 scale=4,
                             )
                             general_send_btn = gr.Button("Send", variant="primary", scale=1)
-
-                        with gr.Row():
-                            general_show_thinking = gr.Checkbox(
-                                label="🧠 Show Thinking Process",
-                                value=False,
-                                info="See how I use MCP tools to complete tasks",
-                            )
 
                     else:
                         gr.Markdown("### General Assistant Unavailable")
@@ -290,10 +295,14 @@ def create_unified_dashboard():
                                 )
 
                             with gr.Column(scale=1):
+                                # Get available models and set a valid default
+                                available_models = list(coding_agent.get_available_models().keys()) if coding_agent else []
+                                default_model = available_models[0] if available_models else None
+                                
                                 model_dropdown = gr.Dropdown(
                                     label="Select Model",
-                                    choices=list(coding_agent.get_available_models().keys()) if coding_agent else [],
-                                    value="microsoft/Phi-3.5-mini-instruct",
+                                    choices=available_models,
+                                    value=default_model,
                                     info="Choose a model for the AI assistant",
                                 )
 
@@ -352,9 +361,9 @@ def create_unified_dashboard():
                 # Agent Builder Mode (from agent app)
                 with gr.Group(visible=False) as agent_builder_group:
                     if HAS_AGENT_COMPONENTS and gmp_agent:
-                        gr.Markdown("### Agent Builder")
+                        gr.Markdown("### Architect - Agent Builder")
                         gr.Markdown(
-                            "Create custom Gradio agents using system prompts from top AI assistants."
+                            "I'm Architect, your agent creation specialist. I can help you create custom Gradio agents using system prompts from top AI assistants."
                         )
                         
                         # Agent builder chat interface
@@ -864,11 +873,11 @@ def create_unified_dashboard():
         if coding_agent:
             def initialize_general_greeting():
                 """General assistant greeting"""
-                greeting = "👋 Hello! I'm your general assistant with access to MCP tools.\n\n"
+                greeting = "👋 Hello! I'm Claude, your general assistant with access to MCP tools.\n\n"
                 
                 # Show available tools
                 if hasattr(coding_agent, '_mcp_servers') and coding_agent._mcp_servers:
-                    greeting += "I can help you with:\n"
+                    greeting += "I have access to these capabilities:\n"
                     for server_name in coding_agent._mcp_servers.keys():
                         if server_name == "filesystem":
                             greeting += "• 📁 File operations (read, write, create)\n"
@@ -880,6 +889,10 @@ def create_unified_dashboard():
                             greeting += "• 📸 Screenshots of websites\n"
                         elif server_name == "memory":
                             greeting += "• 🧠 Remember information across conversations\n"
+                        elif server_name == "azure":
+                            greeting += "• ☁️ Azure cloud operations\n"
+                        elif server_name == "obsidian":
+                            greeting += "• 📝 Obsidian vault management\n"
                     greeting += "\n"
                 
                 greeting += "What would you like me to help you with today?"

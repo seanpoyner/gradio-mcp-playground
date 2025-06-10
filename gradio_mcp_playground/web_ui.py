@@ -76,12 +76,17 @@ def process_message(history, show_thinking, coding_agent):
         
         # Call the original send_message logic
         if not coding_agent.is_configured():
-            bot_response = (
-                "Please configure a model first by providing your HuggingFace token."
-            )
-            history.append({"role": "assistant", "content": bot_response})
-            yield history
-            return
+            # Try to configure with default model without requiring token
+            try:
+                # Use a free model that doesn't require API key
+                coding_agent.configure("", "microsoft/Phi-3.5-mini-instruct")
+            except:
+                bot_response = (
+                    "I'm having trouble initializing. Please try switching to MCP Agent mode to configure a model with your HuggingFace token."
+                )
+                history.append({"role": "assistant", "content": bot_response})
+                yield history
+                return
         
         # Your existing message processing logic here...
         # Check if user is providing an API key in a natural way
@@ -3060,6 +3065,12 @@ For others, please install manually using the command above."""
             except Exception as e:
                 return f"❌ Error: {str(e)}"
 
+        # Helper function for MCP connection dropdown
+        def load_mcp_connection_dropdown():
+            """Load MCP connection choices for dropdown"""
+            choices = get_mcp_connection_choices()
+            return gr.update(choices=choices, value=choices[0] if choices else None)
+
         # Connect event handlers
 
         # AI Assistant event connections
@@ -3521,13 +3532,6 @@ For others, please install manually using the command above."""
 
         # Load initial MCP connections data
         dashboard.load(get_mcp_connections_data, outputs=mcp_connections_table)
-        
-        # Load MCP connection choices properly
-        def load_mcp_connection_dropdown():
-            """Load MCP connection choices for dropdown"""
-            choices = get_mcp_connection_choices()
-            return gr.update(choices=choices, value=choices[0] if choices else None)
-        
         dashboard.load(load_mcp_connection_dropdown, outputs=selected_mcp_connection)
 
         # Load initial registry data

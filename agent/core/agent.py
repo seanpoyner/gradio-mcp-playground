@@ -15,11 +15,10 @@ from enum import Enum
 
 # Hugging Face integration
 try:
-    from transformers import AutoTokenizer, AutoModelForCausalLM
-    import torch
-    HAS_TRANSFORMERS = True
+    from huggingface_hub import InferenceClient
+    HAS_HF_INFERENCE = True
 except ImportError:
-    HAS_TRANSFORMERS = False
+    HAS_HF_INFERENCE = False
 
 from .server_builder import ServerBuilder
 from .registry import EnhancedRegistry
@@ -114,8 +113,7 @@ class GMPAgent:
             self.secure_storage = None
         
         # HF model configuration
-        self.hf_model = None
-        self.hf_tokenizer = None
+        self.hf_client = None
         self.current_model_name = None
         self.available_models = [
             "Qwen/Qwen2.5-Coder-32B-Instruct",
