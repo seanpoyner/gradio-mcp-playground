@@ -1,8 +1,21 @@
 # 🛝 Gradio MCP Playground
 
-A comprehensive platform for building, managing, and deploying Model Context Protocol (MCP) servers using Gradio. Create AI-powered tools and services through an intuitive unified dashboard or powerful CLI tools.
+**Open-source access to MCP tools without expensive LLM subscriptions**
+
+A comprehensive platform for building, managing, and deploying Model Context Protocol (MCP) servers using Gradio. This playground is designed to democratize access to MCP technology, allowing developers and enthusiasts to experiment with MCP servers, agents, and LLM-tool integrations while showcasing the powerful features of Gradio.
 
 ## 🌟 Overview
+
+### Why Gradio MCP Playground?
+
+This project was created to solve a critical problem: **Most MCP tools require expensive LLM API subscriptions**, limiting access for developers, students, and enthusiasts. Our mission is to:
+
+- **🎆 Democratize MCP Technology** - Free, open-source access to MCP tools
+- **👩‍💻 Enable Learning & Experimentation** - "Play" with MCP servers without financial barriers
+- **🌈 Showcase Gradio's Power** - Demonstrate how Gradio simplifies complex AI interfaces
+- **🤝 Build Community** - Foster collaboration in the MCP ecosystem
+
+### Features
 
 Gradio MCP Playground provides a complete ecosystem for working with MCP servers:
 
@@ -309,12 +322,17 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## 🙏 Project Team & Acknowledgments
 
+### Core Team
+- **Sean Poyner** - Project Lead & Creator
+- **Ranadeep Laskar ([@flickinshots](https://github.com/flickinshots))** - Project Member & Collaborator
+
+### Special Thanks
 - Built with [Gradio](https://gradio.app) by Hugging Face
 - Implements the [Model Context Protocol](https://github.com/anthropics/mcp) by Anthropic
-- Inspired by the AI agent ecosystem
+- Inspired by the open-source AI community
 
 ---
 
-**Made with ❤️ by the Gradio MCP Playground team**
+**Made with ❤️ by the Gradio MCP Playground team to bring MCP tools to everyone**
