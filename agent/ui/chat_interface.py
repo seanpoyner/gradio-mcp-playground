@@ -299,13 +299,10 @@ class ChatInterface:
         chat_history.append({"role": "user", "content": message})
         
         try:
-            # Update agent with current MCP connections if available
-            if self.mcp_connections_panel:
+            # Update agent with current MCP connections if available (only for MCP Agent)
+            if self.mcp_connections_panel and self.current_agent_mode == "MCP Agent":
                 active_connections = self.mcp_connections_panel.get_active_connections()
-                if self.current_agent_mode == "Agent Builder":
-                    self.agent_builder.set_mcp_connections(active_connections)
-                else:
-                    self.mcp_agent.set_mcp_connections(active_connections)
+                self.mcp_agent.set_mcp_connections(active_connections)
             
             # Process message with the current agent
             if self.current_agent_mode == "Agent Builder":
@@ -661,15 +658,11 @@ Great work! 🚀
         if selected_mode == "Agent Builder" and self.agent_builder is not None:
             # Switch to Agent Builder
             self.agent = self.agent_builder
-            # Set up MCP connections for Agent Builder (for GitHub prompts)
-            if self.mcp_connections_panel:
-                active_connections = self.mcp_connections_panel.get_active_connections()
-                self.agent_builder.set_mcp_connections(active_connections)
             
             initial_message = [
-                {"role": "assistant", "content": "🤖 Switched to Agent Builder mode! I can help you create custom Gradio agents using system prompts from top AI assistants like Claude, GPT, and Cursor IDE. What kind of agent would you like to build?"}
+                {"role": "assistant", "content": "🤖 Switched to Agent Builder mode! I can help you create custom Gradio agents with AI capabilities. Each agent I create will have its own HuggingFace model configuration. What kind of agent would you like to build?"}
             ]
-            agent_info = "**Agent Builder**: Create custom Gradio agents using AI and system prompts"
+            agent_info = "**Agent Builder**: Create custom Gradio agents with AI capabilities"
             
         else:
             # Switch back to MCP Agent (or fallback if Agent Builder not available)
