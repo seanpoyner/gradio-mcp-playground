@@ -1044,15 +1044,28 @@ def create_unified_dashboard():
                 user_args = {}
                 if user_args_json:
                     import json
-
                     user_args = json.loads(user_args_json)
 
-                # Install the server
-                result = registry.install_server(server_name, user_args)
-                if result.get("success"):
-                    return f"✅ {server_name} installed successfully!"
-                else:
-                    return f"❌ Failed to install: {result.get('error', 'Unknown error')}"
+                # Get server info from registry
+                server_info = registry.get_mcp_server(server_name)
+                if not server_info:
+                    return f"❌ Server '{server_name}' not found in registry"
+
+                # Generate install command
+                install_info = registry.generate_install_command(server_name, user_args)
+                if not install_info:
+                    return f"❌ Failed to generate install command for {server_name}"
+
+                # For now, just return the install info
+                # In a full implementation, this would execute the install command
+                return f"""✅ Installation info for {server_name}:
+                
+**Command**: {install_info.get('command', 'N/A')}
+**Args**: {' '.join(install_info.get('args', []))}
+**Required Args**: {', '.join(server_info.get('required_args', []))}
+**Environment Variables**: {', '.join(server_info.get('env_vars', {}).keys())}
+
+To complete installation, run the command above or use the MCP Connections tab to connect."""
             except Exception as e:
                 return f"❌ Error installing: {str(e)}"
 
@@ -1649,21 +1662,28 @@ def create_unified_dashboard():
                 def search_registry(query):
                     """Search the registry for servers"""
                     if HAS_REGISTRY:
-                        results = registry.search_servers(query)
+                        # If query is empty, show all servers
+                        if not query or query.strip() == "":
+                            results = registry.get_all(server_type="mcp_server")
+                        else:
+                            results = registry.search(query, server_type="mcp_server")
+                        
                         if results:
                             # Format results for dataframe
                             data = []
                             choices = []
                             for server in results:
+                                # Handle both direct server data and search results
+                                server_data = server if isinstance(server, dict) else server
                                 data.append(
                                     [
-                                        server.get("name", ""),
-                                        server.get("category", ""),
-                                        server.get("description", ""),
-                                        server.get("install_method", ""),
+                                        server_data.get("name", server_data.get("id", "")),
+                                        server_data.get("category", ""),
+                                        server_data.get("description", ""),
+                                        server_data.get("install_method", ""),
                                     ]
                                 )
-                                choices.append(server.get("name", ""))
+                                choices.append(server_data.get("id", server_data.get("name", "")))
                             return gr.update(value=data), gr.update(choices=choices)
                         else:
                             return gr.update(value=[]), gr.update(choices=[])
@@ -1720,6 +1740,14 @@ def create_unified_dashboard():
         if "servers_list" in locals() and HAS_CONFIG_MANAGER:
             # Add another load event to refresh servers
             dashboard.load(refresh_servers, outputs=[servers_list, server_dropdown])
+        
+        # Initialize registry with all servers on load
+        if "registry_results_df" in locals() and HAS_REGISTRY:
+            # Show all servers when the page loads
+            dashboard.load(
+                lambda: search_registry(""),  # Empty query to show all
+                outputs=[registry_results_df, registry_server_selector]
+            )
 
     return dashboard
 
