@@ -4,8 +4,12 @@ Visual pipeline builder interface for connecting multiple MCP servers.
 """
 
 import json
-from typing import List, Dict, Any, Tuple, Optional
+import os
+import asyncio
+from typing import List, Dict, Any, Tuple, Optional, Set
 import gradio as gr
+from datetime import datetime
+import yaml
 
 
 class PipelineView:
@@ -20,6 +24,11 @@ class PipelineView:
             "connections": [],
             "configuration": {}
         }
+        self.selected_server = None
+        self.selected_template = None
+        self.available_servers_list = []
+        self.drag_state = None
+        self.test_results = {}
         
     def create_interface(self) -> None:
         """Create the pipeline builder interface"""
@@ -54,9 +63,15 @@ class PipelineView:
                 gr.Markdown("### Pipeline Canvas")
                 
                 # Pipeline visualization area
-                self.pipeline_display = gr.JSON(
-                    label="Current Pipeline",
-                    value=self.current_pipeline
+                self.pipeline_canvas = gr.HTML(
+                    label="Pipeline Canvas",
+                    value=self._render_pipeline_html()
+                )
+                
+                # Hidden JSON for pipeline data
+                self.pipeline_data = gr.JSON(
+                    value=self.current_pipeline,
+                    visible=False
                 )
                 
                 # Pipeline actions
@@ -223,6 +238,26 @@ class PipelineView:
                 self.save_config_btn = gr.Button("💾 Save Configuration")
                 self.load_config_btn = gr.Button("📁 Load Configuration")
                 self.export_config_btn = gr.Button("📤 Export")
+            
+            # Pipeline Testing
+            with gr.Group():
+                gr.Markdown("#### Test Pipeline")
+                
+                self.test_input = gr.Textbox(
+                    label="Test Input",
+                    placeholder="Enter test data for your pipeline...",
+                    lines=3
+                )
+                
+                with gr.Row():
+                    self.test_pipeline_btn = gr.Button("🧪 Test Pipeline", variant="primary")
+                    self.validate_pipeline_btn = gr.Button("✓ Validate Configuration")
+                
+                self.test_output = gr.Textbox(
+                    label="Test Results",
+                    lines=10,
+                    interactive=False
+                )
         
         # Set up config handlers
         self._setup_config_handlers()
@@ -295,20 +330,20 @@ class PipelineView:
         # Add server to pipeline
         self.add_server_btn.click(
             fn=self._add_server_to_pipeline,
-            outputs=[self.pipeline_display, self.source_server, self.target_server]
+            outputs=[self.pipeline_canvas, self.pipeline_data, self.source_server, self.target_server]
         )
         
         # Create connection between servers
         self.create_connection_btn.click(
             fn=self._create_server_connection,
             inputs=[self.source_server, self.target_server, self.connection_type],
-            outputs=[self.pipeline_display]
+            outputs=[self.pipeline_canvas, self.pipeline_data]
         )
         
         # Remove server from pipeline
         self.remove_server_btn.click(
             fn=self._remove_server_from_pipeline,
-            outputs=[self.pipeline_display, self.source_server, self.target_server]
+            outputs=[self.pipeline_canvas, self.pipeline_data, self.source_server, self.target_server]
         )
         
         # Search servers
@@ -322,6 +357,13 @@ class PipelineView:
             fn=self._filter_servers,
             inputs=[self.server_categories],
             outputs=[self.available_servers]
+        )
+        
+        # Server selection from available list
+        self.available_servers.select(
+            fn=self._select_server,
+            inputs=[self.available_servers],
+            outputs=[self.server_details]
         )
     
     def _setup_library_handlers(self) -> None:
@@ -344,7 +386,7 @@ class PipelineView:
         # Add template to pipeline
         self.add_to_pipeline_btn.click(
             fn=self._add_template_to_pipeline,
-            outputs=[self.pipeline_display]
+            outputs=[self.pipeline_canvas, self.pipeline_data]
         )
     
     def _setup_config_handlers(self) -> None:
@@ -354,7 +396,7 @@ class PipelineView:
         self.pipeline_name.change(
             fn=self._update_pipeline_info,
             inputs=[self.pipeline_name, self.pipeline_description],
-            outputs=[self.pipeline_display]
+            outputs=[self.pipeline_data]
         )
         
         # Save configuration
@@ -362,6 +404,19 @@ class PipelineView:
             fn=self._save_pipeline_config,
             inputs=[self.pipeline_name, self.pipeline_description, self.server_configs],
             outputs=[gr.Textbox(visible=False)]  # For download
+        )
+        
+        # Test pipeline
+        self.test_pipeline_btn.click(
+            fn=self._execute_pipeline,
+            inputs=[self.test_input],
+            outputs=[self.test_output]
+        )
+        
+        # Validate pipeline
+        self.validate_pipeline_btn.click(
+            fn=lambda: asyncio.run(self._test_pipeline()),
+            outputs=[self.test_output]
         )
     
     def _setup_deploy_handlers(self) -> None:
@@ -381,17 +436,24 @@ class PipelineView:
             outputs=[self.build_progress, self.deploy_status]
         )
     
-    def _add_server_to_pipeline(self) -> Tuple[Dict[str, Any], List[str], List[str]]:
+    def _add_server_to_pipeline(self) -> Tuple[str, Dict[str, Any], List[str], List[str]]:
         """Add a server to the current pipeline"""
         
-        # This would show a dialog to select a server
-        # For now, add a sample server
+        if not self.selected_server:
+            gr.Warning("Please select a server from the library first")
+            return self._render_pipeline_html(), self.current_pipeline, [], []
+        
+        # Calculate position for new server
+        x_pos = 50 + (len(self.current_pipeline['servers']) * 200)
+        y_pos = 100
         
         new_server = {
             "id": f"server_{len(self.current_pipeline['servers']) + 1}",
-            "name": f"Server {len(self.current_pipeline['servers']) + 1}",
-            "type": "calculator",
-            "config": {}
+            "name": self.selected_server.get("name", "New Server"),
+            "type": self.selected_server.get("type", "custom"),
+            "config": self.selected_server.get("config", {}),
+            "position": {"x": x_pos, "y": y_pos},
+            "tools": self.selected_server.get("tools", [])
         }
         
         self.current_pipeline["servers"].append(new_server)
@@ -399,25 +461,46 @@ class PipelineView:
         # Update server dropdown choices
         server_names = [s["name"] for s in self.current_pipeline["servers"]]
         
-        return self.current_pipeline, server_names, server_names
+        return self._render_pipeline_html(), self.current_pipeline, server_names, server_names
     
-    def _create_server_connection(self, source: str, target: str, conn_type: str) -> Dict[str, Any]:
+    def _create_server_connection(self, source: str, target: str, conn_type: str) -> Tuple[str, Dict[str, Any]]:
         """Create a connection between two servers"""
         
-        if source and target and source != target:
-            connection = {
-                "id": f"conn_{len(self.current_pipeline['connections']) + 1}",
-                "source": source,
-                "target": target,
-                "type": conn_type.lower(),
-                "config": {}
-            }
+        if not source or not target:
+            gr.Warning("Please select both source and target servers")
+            return self._render_pipeline_html(), self.current_pipeline
             
-            self.current_pipeline["connections"].append(connection)
+        if source == target:
+            gr.Warning("Cannot connect a server to itself")
+            return self._render_pipeline_html(), self.current_pipeline
         
-        return self.current_pipeline
+        # Check if connection already exists
+        existing = any(
+            conn["source"] == source and conn["target"] == target 
+            for conn in self.current_pipeline["connections"]
+        )
+        
+        if existing:
+            gr.Warning("Connection already exists")
+            return self._render_pipeline_html(), self.current_pipeline
+        
+        connection = {
+            "id": f"conn_{len(self.current_pipeline['connections']) + 1}",
+            "source": source,
+            "target": target,
+            "type": conn_type.lower(),
+            "config": {
+                "data_transform": "passthrough",
+                "error_handling": "stop"
+            }
+        }
+        
+        self.current_pipeline["connections"].append(connection)
+        gr.Info(f"Connected {source} → {target} ({conn_type})")
+        
+        return self._render_pipeline_html(), self.current_pipeline
     
-    def _remove_server_from_pipeline(self) -> Tuple[Dict[str, Any], List[str], List[str]]:
+    def _remove_server_from_pipeline(self) -> Tuple[str, Dict[str, Any], List[str], List[str]]:
         """Remove a server from the pipeline"""
         
         if self.current_pipeline["servers"]:
@@ -432,32 +515,66 @@ class PipelineView:
             ]
         
         server_names = [s["name"] for s in self.current_pipeline["servers"]]
-        return self.current_pipeline, server_names, server_names
+        return self._render_pipeline_html(), self.current_pipeline, server_names, server_names
     
     def _search_servers(self, query: str, category: str) -> List[Dict[str, Any]]:
         """Search for available servers"""
         
-        # This would use the agent's registry to search
-        # For now, return mock data
+        # Use agent's registry if available
+        if hasattr(self.agent, 'registry'):
+            try:
+                servers = self.agent.registry.search_servers(query, category)
+                self.available_servers_list = servers
+                return servers
+            except:
+                pass
         
+        # Fallback to comprehensive mock data
         mock_servers = [
             {
                 "id": "calc-1",
                 "name": "Basic Calculator",
                 "description": "Simple arithmetic operations",
-                "category": "Tools"
+                "category": "Tools",
+                "type": "calculator",
+                "tools": ["add", "subtract", "multiply", "divide"],
+                "config": {"precision": 2}
             },
             {
                 "id": "text-1", 
                 "name": "Text Processor",
                 "description": "Text manipulation and analysis",
-                "category": "Text"
+                "category": "Text",
+                "type": "text",
+                "tools": ["uppercase", "lowercase", "word_count", "replace"],
+                "config": {"encoding": "utf-8"}
             },
             {
                 "id": "data-1",
                 "name": "CSV Analyzer",
                 "description": "Data analysis and visualization",
-                "category": "Data"
+                "category": "Data",
+                "type": "data",
+                "tools": ["load_csv", "filter", "aggregate", "visualize"],
+                "config": {"max_rows": 10000}
+            },
+            {
+                "id": "image-1",
+                "name": "Image Processor",
+                "description": "Image editing and transformation",
+                "category": "Image",
+                "type": "image",
+                "tools": ["resize", "crop", "filter", "convert"],
+                "config": {"formats": ["jpg", "png", "webp"]}
+            },
+            {
+                "id": "ai-1",
+                "name": "AI Assistant",
+                "description": "AI-powered text generation",
+                "category": "AI",
+                "type": "ai",
+                "tools": ["generate", "summarize", "translate"],
+                "config": {"model": "gpt-3.5-turbo"}
             }
         ]
         
@@ -470,6 +587,7 @@ class PipelineView:
         if category != "All":
             mock_servers = [s for s in mock_servers if s["category"] == category]
         
+        self.available_servers_list = mock_servers
         return mock_servers
     
     def _filter_servers(self, category: str) -> List[Dict[str, Any]]:
@@ -534,7 +652,7 @@ class PipelineView:
         gallery_items, _ = self._search_templates("", category)
         return gallery_items
     
-    def _add_template_to_pipeline(self) -> Dict[str, Any]:
+    def _add_template_to_pipeline(self) -> Tuple[str, Dict[str, Any]]:
         """Add selected template to pipeline"""
         
         # This would add the selected template as a server
@@ -548,7 +666,7 @@ class PipelineView:
         }
         
         self.current_pipeline["servers"].append(template_server)
-        return self.current_pipeline
+        return self._render_pipeline_html(), self.current_pipeline
     
     def _update_pipeline_info(self, name: str, description: str) -> Dict[str, Any]:
         """Update pipeline basic information"""
@@ -669,3 +787,319 @@ if __name__ == "__main__":
 '''
         
         return code
+    
+    def _render_pipeline_html(self) -> str:
+        """Render the pipeline as interactive HTML"""
+        
+        html = """
+        <div id="pipeline-canvas" style="width: 100%; height: 500px; border: 2px solid #ddd; border-radius: 8px; position: relative; overflow: auto; background: #f8f9fa;">
+        """
+        
+        # Render servers as nodes
+        for server in self.current_pipeline["servers"]:
+            x = server.get("position", {}).get("x", 50)
+            y = server.get("position", {}).get("y", 50)
+            
+            html += f"""
+            <div class="pipeline-node" id="{server['id']}" 
+                 style="position: absolute; left: {x}px; top: {y}px; 
+                        width: 150px; padding: 15px; 
+                        background: white; border: 2px solid #4CAF50; 
+                        border-radius: 8px; cursor: move;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                <h4 style="margin: 0 0 10px 0; color: #333;">{server['name']}</h4>
+                <p style="margin: 0; font-size: 12px; color: #666;">Type: {server['type']}</p>
+                <p style="margin: 0; font-size: 11px; color: #888;">Tools: {len(server.get('tools', []))}</p>
+            </div>
+            """
+        
+        # Render connections as SVG lines
+        if self.current_pipeline["connections"]:
+            html += '<svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;">'
+            
+            for conn in self.current_pipeline["connections"]:
+                # Find source and target positions
+                source_server = next((s for s in self.current_pipeline["servers"] if s["name"] == conn["source"]), None)
+                target_server = next((s for s in self.current_pipeline["servers"] if s["name"] == conn["target"]), None)
+                
+                if source_server and target_server:
+                    x1 = source_server.get("position", {}).get("x", 0) + 150  # Right edge
+                    y1 = source_server.get("position", {}).get("y", 0) + 40   # Center
+                    x2 = target_server.get("position", {}).get("x", 0)        # Left edge
+                    y2 = target_server.get("position", {}).get("y", 0) + 40   # Center
+                    
+                    color = "#4CAF50" if conn["type"] == "sequential" else "#2196F3"
+                    
+                    html += f"""
+                    <line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" 
+                          stroke="{color}" stroke-width="2" 
+                          marker-end="url(#arrowhead)"/>
+                    """
+            
+            # Add arrowhead marker
+            html += """
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" 
+                        refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#4CAF50"/>
+                </marker>
+            </defs>
+            </svg>
+            """
+        
+        html += "</div>"
+        
+        # Add JavaScript for drag and drop
+        html += """
+        <script>
+        // Drag and drop functionality would be implemented here
+        // For now, this is a visual representation
+        </script>
+        """
+        
+        return html
+    
+    async def _test_pipeline(self) -> Dict[str, Any]:
+        """Test the current pipeline configuration"""
+        
+        results = {
+            "timestamp": datetime.now().isoformat(),
+            "status": "success",
+            "servers_tested": [],
+            "connections_tested": [],
+            "errors": [],
+            "warnings": []
+        }
+        
+        # Test each server
+        for server in self.current_pipeline["servers"]:
+            server_test = {
+                "id": server["id"],
+                "name": server["name"],
+                "status": "passed",
+                "tests": []
+            }
+            
+            # Validate server configuration
+            if not server.get("type"):
+                server_test["status"] = "failed"
+                server_test["tests"].append({
+                    "test": "type_validation",
+                    "status": "failed",
+                    "message": "Server type not specified"
+                })
+            
+            # Check for required tools
+            if not server.get("tools"):
+                server_test["warnings"] = ["No tools defined for this server"]
+            
+            results["servers_tested"].append(server_test)
+        
+        # Test connections
+        for conn in self.current_pipeline["connections"]:
+            conn_test = {
+                "id": conn["id"],
+                "source": conn["source"],
+                "target": conn["target"],
+                "status": "passed",
+                "tests": []
+            }
+            
+            # Validate connection endpoints exist
+            source_exists = any(s["name"] == conn["source"] for s in self.current_pipeline["servers"])
+            target_exists = any(s["name"] == conn["target"] for s in self.current_pipeline["servers"])
+            
+            if not source_exists or not target_exists:
+                conn_test["status"] = "failed"
+                conn_test["tests"].append({
+                    "test": "endpoint_validation",
+                    "status": "failed",
+                    "message": "Connection endpoint not found"
+                })
+            
+            results["connections_tested"].append(conn_test)
+        
+        # Check for cycles in pipeline
+        if self._has_cycles():
+            results["status"] = "failed"
+            results["errors"].append("Pipeline contains cycles")
+        
+        # Check for disconnected servers
+        disconnected = self._find_disconnected_servers()
+        if disconnected:
+            results["warnings"].append(f"Disconnected servers: {', '.join(disconnected)}")
+        
+        self.test_results = results
+        return results
+    
+    def _has_cycles(self) -> bool:
+        """Check if the pipeline has cycles"""
+        
+        # Build adjacency list
+        graph = {}
+        for server in self.current_pipeline["servers"]:
+            graph[server["name"]] = []
+        
+        for conn in self.current_pipeline["connections"]:
+            if conn["source"] in graph:
+                graph[conn["source"]].append(conn["target"])
+        
+        # DFS to detect cycles
+        visited = set()
+        rec_stack = set()
+        
+        def has_cycle(node: str) -> bool:
+            visited.add(node)
+            rec_stack.add(node)
+            
+            for neighbor in graph.get(node, []):
+                if neighbor not in visited:
+                    if has_cycle(neighbor):
+                        return True
+                elif neighbor in rec_stack:
+                    return True
+            
+            rec_stack.remove(node)
+            return False
+        
+        for node in graph:
+            if node not in visited:
+                if has_cycle(node):
+                    return True
+        
+        return False
+    
+    def _find_disconnected_servers(self) -> List[str]:
+        """Find servers that are not connected to anything"""
+        
+        connected = set()
+        
+        for conn in self.current_pipeline["connections"]:
+            connected.add(conn["source"])
+            connected.add(conn["target"])
+        
+        all_servers = {s["name"] for s in self.current_pipeline["servers"]}
+        
+        return list(all_servers - connected) if len(all_servers) > 1 else []
+    
+    def _select_server(self, server_data: Dict[str, Any]) -> str:
+        """Handle server selection from available list"""
+        
+        if not server_data or not isinstance(server_data, dict):
+            return "Select a server to see details..."
+        
+        # Store selected server
+        self.selected_server = server_data
+        
+        # Generate detailed markdown description
+        details = f"""### {server_data.get('name', 'Unknown Server')}
+        
+**Description:** {server_data.get('description', 'No description available')}
+
+**Type:** {server_data.get('type', 'custom')}  
+**Category:** {server_data.get('category', 'Other')}
+
+**Available Tools:**
+"""
+        
+        tools = server_data.get('tools', [])
+        if tools:
+            for tool in tools:
+                details += f"- `{tool}`\n"
+        else:
+            details += "- No tools defined\n"
+        
+        details += "\n**Configuration:**\n```json\n"
+        config = server_data.get('config', {})
+        details += json.dumps(config, indent=2)
+        details += "\n```\n"
+        
+        details += "\n*Click 'Add Server' to add this to your pipeline*"
+        
+        return details
+    
+    async def _execute_pipeline(self, input_data: str) -> str:
+        """Execute the pipeline with test data"""
+        
+        if not self.current_pipeline["servers"]:
+            return "No servers in pipeline to execute"
+        
+        # Build execution order based on connections
+        execution_order = self._get_execution_order()
+        
+        result = input_data
+        execution_log = f"Pipeline execution started at {datetime.now().isoformat()}\n\n"
+        
+        for server_name in execution_order:
+            server = next((s for s in self.current_pipeline["servers"] if s["name"] == server_name), None)
+            if not server:
+                continue
+            
+            execution_log += f"Executing: {server_name}\n"
+            
+            # Simulate server execution based on type
+            if server["type"] == "calculator":
+                try:
+                    result = str(eval(result))
+                    execution_log += f"  Result: {result}\n"
+                except:
+                    execution_log += f"  Error: Invalid expression\n"
+                    
+            elif server["type"] == "text":
+                result = result.upper()
+                execution_log += f"  Result: {result[:50]}...\n"
+                
+            elif server["type"] == "data":
+                result = f"Processed data: {len(result)} characters"
+                execution_log += f"  Result: {result}\n"
+                
+            else:
+                result = f"Processed by {server_name}: {result}"
+                execution_log += f"  Result: {result[:50]}...\n"
+            
+            execution_log += "\n"
+        
+        execution_log += f"Pipeline execution completed at {datetime.now().isoformat()}\n"
+        execution_log += f"Final result: {result}"
+        
+        return execution_log
+    
+    def _get_execution_order(self) -> List[str]:
+        """Get the execution order of servers based on connections"""
+        
+        if not self.current_pipeline["connections"]:
+            # No connections, execute in order of addition
+            return [s["name"] for s in self.current_pipeline["servers"]]
+        
+        # Build dependency graph
+        graph = {}
+        in_degree = {}
+        
+        for server in self.current_pipeline["servers"]:
+            graph[server["name"]] = []
+            in_degree[server["name"]] = 0
+        
+        for conn in self.current_pipeline["connections"]:
+            if conn["source"] in graph and conn["target"] in graph:
+                graph[conn["source"]].append(conn["target"])
+                in_degree[conn["target"]] += 1
+        
+        # Topological sort
+        queue = [node for node in in_degree if in_degree[node] == 0]
+        execution_order = []
+        
+        while queue:
+            node = queue.pop(0)
+            execution_order.append(node)
+            
+            for neighbor in graph[node]:
+                in_degree[neighbor] -= 1
+                if in_degree[neighbor] == 0:
+                    queue.append(neighbor)
+        
+        # Add any disconnected nodes
+        for server in self.current_pipeline["servers"]:
+            if server["name"] not in execution_order:
+                execution_order.append(server["name"])
+        
+        return execution_order

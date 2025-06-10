@@ -67,17 +67,22 @@ class ControlPanelUI:
         """Get comprehensive system metrics for monitoring"""
         try:
             # Get disk usage for the appropriate root path
-            if platform.system() == 'Windows':
-                # Get the drive of the current working directory
-                drive = os.path.splitdrive(os.getcwd())[0]
-                disk_path = drive + os.sep if drive else 'C:' + os.sep
-            else:
-                disk_path = '/'
+            disk_percent = 0
+            try:
+                if platform.system() == 'Windows':
+                    # For WSL, try the current directory first
+                    disk_path = os.getcwd()
+                else:
+                    disk_path = '/'
+                disk_percent = psutil.disk_usage(disk_path).percent
+            except Exception as disk_error:
+                logger.debug(f"Could not get disk usage: {disk_error}")
+                disk_percent = 0
             
             return {
                 "cpu_percent": psutil.cpu_percent(interval=1),
                 "memory_percent": psutil.virtual_memory().percent,
-                "disk_percent": psutil.disk_usage(disk_path).percent,
+                "disk_percent": disk_percent,
                 "network_connections": len(psutil.net_connections()),
                 "process_count": len(psutil.pids()),
                 "uptime": time.time() - psutil.boot_time()

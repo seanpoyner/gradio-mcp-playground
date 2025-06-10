@@ -451,18 +451,32 @@ You are here to transform ideas into working MCP solutions through intelligent c
         matching_servers = await self.registry.find_matching_servers(intent.requirements)
         
         if not matching_servers:
-            response = """I understand you want to create a server, but I need more details about what you want to build.
+            # More conversational responses based on what was detected
+            if intent.entities.get("server_types"):
+                server_type = intent.entities["server_types"][0]
+                response = f"""I see you want to create a {server_type} server! That's a great choice.
 
-Could you provide more information about:
-- What type of functionality you need
-- What kind of data or inputs you'll work with
-- Any specific requirements or preferences
+To build exactly what you need, could you tell me more about:
+- What specific features should it have?
+- Who will be using it and for what purpose?
+- Any particular integrations or data sources?
 
-For example:
-- "Create a calculator server with basic math operations"
-- "Build an image processing tool that can resize and filter images"
-- "Make a text analyzer that counts words and sentiment"
-"""
+For instance, a {server_type} could be simple with just basic functions, or more advanced with additional capabilities. What fits your needs best?"""
+            else:
+                response = """I'd love to help you create a server! To get started, let me understand what you're trying to build.
+
+Think about:
+• **Purpose**: What problem will this solve?
+• **Users**: Who will use this tool?
+• **Features**: What functionality is essential?
+
+Some popular servers people create:
+- 🧮 **Calculators**: From simple math to complex engineering calculations
+- 📊 **Data Tools**: Process CSV files, generate reports, create visualizations
+- 🖼️ **Image Tools**: Resize, filter, convert, or analyze images
+- 🤖 **AI Assistants**: Integrate language models for smart interactions
+
+What type of tool would be most useful for you?"""
             metadata = {"action": "request_clarification", "servers": []}
             return response, metadata
         
@@ -476,25 +490,45 @@ For example:
                 "confidence": server.get("confidence", 0.5)
             })
         
-        response = f"""Great! I found some relevant servers for your request. Here are my recommendations:
+        # Create a more conversational response based on the number of matches
+        if len(recommendations) == 1:
+            rec = recommendations[0]
+            response = f"""Perfect! I found exactly what you're looking for:
+
+**{rec['name']}** - {rec['description']}
+
+This seems like a great match for your needs (confidence: {rec['confidence']:.0%}). 
+
+Should I go ahead and create this server for you? I can also customize it if you have specific requirements in mind."""
+        
+        elif len(recommendations) == 2:
+            response = f"""I found a couple of options that could work well for you:
+
+**Option 1: {recommendations[0]['name']}**
+{recommendations[0]['description']}
+
+**Option 2: {recommendations[1]['name']}**  
+{recommendations[1]['description']}
+
+Both look promising! Which one aligns better with what you have in mind? Or would you like me to create a custom solution that combines elements from both?"""
+        
+        else:
+            response = f"""Excellent! I found several servers that match what you're looking for:
 
 """
-        
-        for i, rec in enumerate(recommendations, 1):
-            response += f"""**{i}. {rec['name']}**
-- {rec['description']}
-- Template: {rec['template']}
-- Match confidence: {rec['confidence']:.1%}
-
+            
+            for i, rec in enumerate(recommendations, 1):
+                response += f"""**{i}. {rec['name']}**
+   {rec['description']}
+   
 """
-        
-        response += """Would you like me to:
-1. Create one of these servers
-2. Customize a server based on your specific needs
-3. Show you more options
-4. Explain how any of these work
+            
+            response += """Each of these could work well for your project. Would you like to:
+- Pick one to start with (just tell me the number)
+- Hear more details about any of them
+- Create a custom server that combines the best features
 
-Just let me know which option interests you or provide more details about your requirements!"""
+What sounds good to you?"""
         
         metadata = {
             "action": "show_recommendations",
@@ -570,34 +604,76 @@ Which server would you like to modify, and what changes do you have in mind?"""
         
         help_content = self.knowledge.get_help_content(user_message)
         
-        response = f"""I'm here to help! Here's what I can assist you with:
+        # Check for specific help topics in the message
+        message_lower = user_message.lower()
+        
+        if "gradio" in message_lower:
+            response = """Ah, you want to learn about Gradio! It's the foundation for creating amazing user interfaces.
 
-## 🚀 Getting Started
-- **Create servers**: "Build a calculator server"
-- **Build pipelines**: "Connect multiple tools together"
-- **Deploy applications**: "Put my server online"
+**Gradio Basics:**
+• **Components**: Input/output elements like textboxes, images, sliders
+• **Interfaces**: Combine components into functional apps
+• **Blocks**: Advanced layouts with custom styling and logic
+• **Events**: Handle user interactions and updates
 
-## 🛠️ What I Can Build
-- **Simple Tools**: Calculators, text processors, file converters
-- **Data Tools**: CSV analyzers, chart generators, statistics calculators
-- **AI Tools**: Text summarizers, image classifiers, sentiment analyzers
-- **Complex Pipelines**: Multi-step workflows with multiple servers
+I can help you:
+- Design intuitive interfaces for your servers
+- Use advanced Gradio features like tabs and accordions
+- Create interactive dashboards with real-time updates
+- Style your apps with themes and custom CSS
 
-## 📝 How to Talk to Me
-- Be specific about what you want to build
-- Mention any requirements or constraints
-- Ask for examples or clarifications anytime
-- I understand both technical and plain language
+What aspect of Gradio would you like to explore?"""
+        
+        elif "mcp" in message_lower or "protocol" in message_lower:
+            response = """Great question about MCP (Model Context Protocol)! It's what makes our servers so powerful.
 
-## 🔧 Technical Capabilities
-- **Frameworks**: Gradio, FastAPI, MCP protocol
-- **Data Processing**: Pandas, NumPy, image processing
-- **AI/ML**: Hugging Face models, OpenAI integration
-- **Deployment**: Local, cloud, Hugging Face Spaces
+**MCP Essentials:**
+• **Tools**: Define specific functions your server can perform
+• **Resources**: Share data and files between servers
+• **Communication**: Standard protocol for AI model integration
+• **Extensibility**: Easy to add new capabilities
+
+I can show you how to:
+- Create MCP-compliant servers from scratch
+- Define tools with proper schemas
+- Handle errors gracefully
+- Integrate with AI models and other services
+
+What part of MCP interests you most?"""
+        
+        elif "example" in message_lower or "how" in message_lower:
+            response = """Let me share some practical examples to get you started!
+
+**Quick Examples:**
+
+🧮 **Simple Calculator**:
+"Create a calculator that can do basic math and square roots"
+
+📊 **Data Analyzer**:
+"Build a CSV processor that can filter data and create charts"
+
+🖼️ **Image Tool**:
+"Make an image resizer that supports multiple formats"
+
+**How to be specific:**
+- Include the main functionality you need
+- Mention any special requirements
+- Describe your target users
+
+Would you like me to walk through creating any of these examples?"""
+        
+        else:
+            response = f"""I'm here to help you succeed! Whether you're new to MCP servers or an experienced developer, I can guide you.
+
+**Quick Start Options:**
+• 🎯 **Tell me your goal** - "I need to process customer data"
+• 🛠️ **Pick a template** - "Show me data processing templates"
+• 📚 **Learn concepts** - "Explain how pipelines work"
+• 🚀 **Jump right in** - "Create a text analysis server"
 
 {help_content}
 
-What specific topic would you like help with?"""
+What would you like to explore first? Feel free to ask questions in whatever way feels natural to you!"""
         
         metadata = {"action": "provide_help", "help_type": "general"}
         return response, metadata
@@ -723,29 +799,119 @@ Just let me know what interests you!"""
     async def _handle_unknown_intent(self, intent: Intent, user_message: str) -> Tuple[str, Dict[str, Any]]:
         """Handle messages with unknown intent"""
         
-        response = """I'm not quite sure what you'd like me to help you with. Here are some things I can do:
+        message_lower = user_message.lower().strip()
+        
+        # Handle greetings more naturally
+        greetings = ["hello", "hi", "hey", "howdy", "greetings", "good morning", "good afternoon", "good evening"]
+        if any(greeting in message_lower for greeting in greetings):
+            # Check conversation history to see if this is the first greeting
+            user_messages = [msg for msg in self.context.messages if msg.role == MessageRole.USER]
+            
+            if len(user_messages) <= 1:
+                # First interaction
+                response = """Hey there! 👋 I'm your MCP Agent, ready to help you build amazing servers and tools.
 
-## 🎯 What I Can Help With
+Whether you're looking to create a simple calculator, build a complex data processing pipeline, or deploy a full-featured application, I'm here to guide you through it.
 
-- **🔨 Build Servers**: Create new MCP servers from scratch
-- **🔧 Build Pipelines**: Connect multiple servers together
-- **⚙️ Manage Servers**: Start, stop, configure, and monitor
-- **🚀 Deploy**: Put your servers online
-- **🔍 Search**: Find existing servers and templates
-- **❓ Get Help**: Learn about Gradio, MCP, and GMP tools
+What kind of project do you have in mind today?"""
+            else:
+                # Return greeting
+                response = """Hello again! What can I help you with now? 
 
-## 💡 Try These Examples
+Feel free to ask me about building new servers, modifying existing ones, or anything else MCP-related."""
+            
+            metadata = {"action": "greeting", "conversation_length": len(user_messages)}
+            return response, metadata
+        
+        # Handle "thanks" and appreciation
+        if any(word in message_lower for word in ["thanks", "thank you", "appreciate", "helpful", "great"]):
+            response = """You're welcome! I'm glad I could help. 
 
-- "Create a calculator server"
-- "Build an image processing pipeline"
-- "Show me available text processing tools"
-- "Help me deploy my server"
-- "How do I use Gradio components?"
+Is there anything else you'd like to work on? I'm here whenever you need assistance with MCP servers, pipelines, or any other development tasks."""
+            
+            metadata = {"action": "acknowledgment"}
+            return response, metadata
+        
+        # Handle very short or unclear messages
+        if len(message_lower.split()) <= 2:
+            # Try to be more conversational based on context
+            recent_topics = self._get_recent_topics()
+            
+            if recent_topics:
+                response = f"""I see you've been working on {recent_topics[0]}. 
 
-Could you rephrase your request or let me know what you'd like to accomplish?"""
+Would you like to continue with that, or is there something else I can help you with?"""
+            else:
+                response = """I'm here to help, but I need a bit more context. 
+
+Are you looking to:
+- Build something new?
+- Work on an existing project?
+- Learn about MCP servers?
+- Get help with a specific problem?
+
+Just let me know what's on your mind!"""
+            
+            metadata = {"action": "clarification_needed", "message_length": len(message_lower.split())}
+            return response, metadata
+        
+        # Default response for unclear intent, but make it more conversational
+        responses = [
+            """Hmm, I'm not entirely sure what you're looking for, but I'd love to help! 
+
+Could you tell me more about what you're trying to accomplish? For example:
+- Are you building a new tool or application?
+- Do you need help with an existing server?
+- Looking for specific functionality?
+
+The more details you share, the better I can assist you!""",
+            
+            """I want to make sure I understand exactly what you need. 
+
+Could you elaborate on your request? Whether it's creating a new server, connecting multiple tools, or solving a specific problem, I'm here to help make it happen.""",
+            
+            """Let me help you get started! I can assist with various tasks:
+
+• **Building**: Create custom MCP servers tailored to your needs
+• **Connecting**: Link multiple tools into powerful pipelines
+• **Deploying**: Get your servers online and accessible
+• **Learning**: Understand MCP, Gradio, and best practices
+
+What sounds most relevant to your current project?"""
+        ]
+        
+        # Select response based on conversation context
+        import random
+        response = random.choice(responses)
         
         metadata = {"action": "request_clarification", "original_message": user_message}
         return response, metadata
+    
+    def _get_recent_topics(self) -> List[str]:
+        """Extract recent topics from conversation history"""
+        topics = []
+        
+        # Look at recent assistant messages for context
+        recent_messages = [msg for msg in self.context.messages[-6:] if msg.role == MessageRole.ASSISTANT]
+        
+        for msg in recent_messages:
+            if msg.metadata:
+                # Extract topics from metadata
+                if "recommendations" in msg.metadata:
+                    for rec in msg.metadata["recommendations"]:
+                        topics.append(rec["name"])
+                elif "action" in msg.metadata:
+                    action_topics = {
+                        "show_recommendations": "server creation",
+                        "show_deployment_options": "deployment",
+                        "show_management_options": "server management",
+                        "show_search_results": "server search",
+                        "provide_help": "learning about MCP"
+                    }
+                    if msg.metadata["action"] in action_topics:
+                        topics.append(action_topics[msg.metadata["action"]])
+        
+        return topics[:3]  # Return top 3 recent topics
     
     def get_conversation_history(self) -> List[Dict[str, Any]]:
         """Get conversation history as a list of dictionaries"""
@@ -953,10 +1119,26 @@ Could you rephrase your request or let me know what you'd like to accomplish?"""
         
         # Get comprehensive conversation context
         recent_messages = []
+        user_project_mentions = []
+        previous_intents = []
+        
         for msg in self.context.messages[-8:]:  # Expanded context window
             if msg.role != MessageRole.SYSTEM:
                 role_icon = "👤" if msg.role == MessageRole.USER else "🤖"
                 recent_messages.append(f"{role_icon} {msg.role.value.title()}: {msg.content}")
+                
+                # Track what the user has mentioned
+                if msg.role == MessageRole.USER:
+                    user_project_mentions.append(msg.content)
+                
+                # Track previous intents for continuity
+                if msg.role == MessageRole.ASSISTANT and msg.metadata:
+                    if "intent" in msg.metadata:
+                        previous_intents.append(msg.metadata["intent"])
+        
+        # Analyze conversation flow
+        is_continuation = len(previous_intents) > 0 and previous_intents[-1] == intent.type.value
+        is_first_interaction = len([m for m in self.context.messages if m.role == MessageRole.USER]) <= 1
         
         # Build sophisticated context based on intent type
         intent_contexts = {
@@ -1063,12 +1245,25 @@ For pipeline development:
         # Build conversation context
         conversation_context = "\n".join(recent_messages) if recent_messages else "🆕 This is the start of our conversation"
         
+        # Add conversation flow context
+        conversation_flow_context = ""
+        if is_first_interaction:
+            conversation_flow_context = "This is the user's first interaction. Be welcoming and help them get oriented."
+        elif is_continuation:
+            conversation_flow_context = "This continues the previous topic. Build on what was discussed."
+        else:
+            conversation_flow_context = "The user is shifting to a new topic. Acknowledge the transition naturally."
+        
         # Construct the comprehensive context prompt
         prompt = f"""{intent_data['context']}
 
 <current_conversation_context>
 {conversation_context}
 </current_conversation_context>
+
+<conversation_flow>
+{conversation_flow_context}
+</conversation_flow>
 
 <user_request_analysis>
 **Current Message**: {user_message}
@@ -1081,15 +1276,17 @@ For pipeline development:
 {intent_data['task_focus']}
 
 **Response Guidelines**:
-- Be conversational yet professional, adapting your tone to the user's expertise level
-- Provide specific, actionable advice rather than generic recommendations
-- Ask clarifying questions when requirements are ambiguous or incomplete
-- Include relevant code examples, configuration snippets, or architectural diagrams when helpful
-- Suggest next steps and alternative approaches where appropriate
-- Format your response with clear structure using markdown for enhanced readability
+- Be conversational and friendly, using natural language that flows well
+- Match the user's tone and energy level
+- Use "I" statements to sound more personable ("I can help", "I found", etc.)
+- Acknowledge what the user said before providing new information  
+- Include specific examples relevant to their context
+- Ask one clear follow-up question when appropriate
+- Keep paragraphs short and scannable
+- Use occasional enthusiasm when something is exciting or interesting
 </task_instructions>
 
-Generate a comprehensive, helpful response that addresses the user's specific needs while maintaining the high standards of technical excellence and user experience that define exceptional MCP server development."""
+Generate a helpful, conversational response that feels like talking with a knowledgeable friend who happens to be an expert in MCP server development."""
 
         return prompt
     
