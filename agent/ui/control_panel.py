@@ -86,30 +86,30 @@ class ControlPanelUI:
         return self._load_agents_from_files()
 
     def _load_agents_from_files(self) -> Dict[str, Dict[str, str]]:
-        """Load agent files directly from temp_agents directory"""
+        """Load agent files directly from agents directory"""
         agents = {}
         
-        # Get the temp_agents directory path
+        # Get the agents directory path
         current_file = Path(__file__)
         project_root = current_file.parent.parent.parent
-        temp_agents_dir = project_root / "temp_agents"
+        agents_dir = project_root / "agent/agents"
         
-        # Ensure temp_agents directory exists
-        if not temp_agents_dir.exists():
-            logger.warning(f"temp_agents directory not found at: {temp_agents_dir}")
+        # Ensure agents directory exists
+        if not agents_dir.exists():
+            logger.warning(f"agents directory not found at: {agents_dir}")
             # Try alternative path resolution
-            alternative_path = Path.cwd() / "temp_agents"
+            alternative_path = Path.cwd() / "agents"
             if alternative_path.exists():
-                temp_agents_dir = alternative_path
-                logger.info(f"Using alternative path: {temp_agents_dir}")
+                agents_dir = alternative_path
+                logger.info(f"Using alternative path: {agents_dir}")
             else:
-                logger.error(f"Could not find temp_agents directory")
+                logger.error(f"Could not find agents directory")
                 return agents
         
-        logger.info(f"Loading agents from: {temp_agents_dir}")
+        logger.info(f"Loading agents from: {agents_dir}")
         
-        # Load all .py files from temp_agents directory
-        for agent_file in temp_agents_dir.glob("*.py"):
+        # Load all .py files from agents directory
+        for agent_file in agents_dir.glob("*.py"):
             if agent_file.name.startswith("__"):  # Skip __pycache__ etc
                 continue
             try:
@@ -870,8 +870,7 @@ class ControlPanelUI:
         
         with gr.Blocks(
             title="Agent Management Control Panel",
-            theme=gr.themes.Default(primary_hue="blue", secondary_hue="gray"),
-            css=CUSTOM_CSS
+            theme=gr.themes.Default(primary_hue="blue", secondary_hue="gray")
         ) as interface:
             
             # Header
