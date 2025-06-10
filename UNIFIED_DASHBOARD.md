@@ -1,6 +1,6 @@
-# Unified Gradio MCP Playground Dashboard
+# Gradio MCP Playground Dashboard Architecture
 
-The unified dashboard combines the original MCP Playground with RanL703's Agent Builder system into a single, coherent interface.
+This document describes the architecture and features of the Gradio MCP Playground Dashboard, which combines the original MCP Playground with an advanced Agent Builder system.
 
 ## Features
 
@@ -69,17 +69,20 @@ cd ..
 
 ## Usage
 
-### Launch the Unified Dashboard
+### Launch the Dashboard
 
 ```bash
-# Using the CLI with unified flag
-gmp dashboard --unified
+# Default command now launches the unified dashboard
+gmp dashboard
 
 # Or with custom port
-gmp dashboard --unified --port 8081
+gmp dashboard --port 8081
 
 # Create public share link
-gmp dashboard --unified --public
+gmp dashboard --public
+
+# Use legacy dashboard if needed
+gmp dashboard --legacy
 ```
 
 ### Running Directly
@@ -120,17 +123,18 @@ User: "Build a creative writing agent with GPT's personality"
 User: "Generate an agent for customer support"
 ```
 
-## Key Differences from Original Dashboard
+## Key Features
 
 1. **Three Assistant Modes**: 
    - General Assistant with MCP tools for any task
    - MCP Agent (Liam) specialized for MCP development
    - Agent Builder for creating custom Gradio agents
-2. **Agent Builder Integration**: Full agent creation system from RanL703's work
-3. **Pipeline Builder**: Visual workflow creation from the agent app
-4. **Agent Monitor**: Control panel for managing deployed agents
+2. **Agent Builder Integration**: Full agent creation system with advanced capabilities
+3. **Pipeline Builder**: Visual workflow creation for complex server connections
+4. **Agent Control Panel**: Deploy and manage agents with integrated monitoring
 5. **Unified State Management**: Single registry and connection manager
 6. **Enhanced UI**: Consistent styling and improved layout
+7. **Comprehensive Help System**: Organized documentation and tutorials
 
 ## Architecture
 
@@ -164,7 +168,7 @@ gmp dashboard --unified --log-level debug
 
 ### Agent components not loading
 - Ensure the agent directory is in the Python path
-- Check that agent dependencies are installed
+- Check that agent dependencies are installed: `pip install -e ".[all]"`
 - Look for import errors in the console
 
 ### Pipeline Builder errors
@@ -172,10 +176,15 @@ gmp dashboard --unified --log-level debug
 - Check that the agent initialized correctly
 - Verify Hugging Face token if using AI features
 
+### Dashboard not starting
+- Check if another process is using the port: `lsof -i :8080` (Unix) or `netstat -ano | findstr :8080` (Windows)
+- Try a different port: `gmp dashboard --port 8081`
+- Use debug logging: `gmp dashboard --log-level DEBUG`
+
 ### Fallback behavior
-- If unified components fail to load, the dashboard falls back to standard features
+- If components fail to load, the dashboard provides graceful degradation
+- The legacy dashboard can be accessed with: `gmp dashboard --legacy`
 - Check console output for specific error messages
-- Use `--log-level debug` for detailed information
 
 ## Future Enhancements
 

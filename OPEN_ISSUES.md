@@ -78,6 +78,11 @@ This document tracks known issues, bugs, and planned improvements for the Gradio
    - Troubleshooting guide in UI
    - Automatic error recovery suggestions
 
+5. **Unified Dashboard Improvements**
+   - Better integration between Agent Builder and MCP Agent modes
+   - Shared tool registry between all modes
+   - Enhanced pipeline visualization
+
 ### Medium Term
 
 5. **MCP Server Templates**
@@ -154,12 +159,35 @@ If you'd like to help with any of these issues:
 - `help wanted`: Extra attention is needed
 - `security`: Security-related issues
 
+## 📝 Recent Updates
+
+### January 2025
+
+1. **Unified Dashboard Released**
+   - Combined MCP Playground with Agent Builder system
+   - Three AI assistant modes (Assistant, MCP Agent, Agent Builder)
+   - Integrated pipeline builder and agent monitoring
+   - Status: ✅ Completed and set as default interface
+
+2. **Documentation Updated**
+   - Updated README.md to reflect unified dashboard as default
+   - Enhanced getting-started guide with unified dashboard instructions
+   - Removed outdated travel agent documentation
+   - Status: ✅ Completed
+
+3. **Output Truncation for Large MCP Responses**
+   - Fixed token limit issues with large MCP tool outputs
+   - Implemented 15,000 character truncation for tool responses
+   - Status: ✅ Completed
+
 ## 🔄 Last Updated
 
-- Date: June 9, 2025
-- Version: After implementing output truncation for MCP tools
-- Next Review: June 16, 2025
+- Date: January 10, 2025
+- Version: After unified dashboard release and documentation updates
+- Next Review: January 17, 2025
 - Recent changes: 
+  - Released unified dashboard as default interface
+  - Updated all documentation to reflect new unified dashboard
   - Added issue #2 about agent stopping tool use after first MCP call
   - Added issue #3 about token limit exceeded with large outputs (now fixed)
   - Implemented 15,000 character truncation for MCP tool outputs

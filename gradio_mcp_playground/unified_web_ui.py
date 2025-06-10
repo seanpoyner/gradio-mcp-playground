@@ -2877,6 +2877,7 @@ def launch_unified_dashboard(port: int = 8080, share: bool = False):
         server_name="127.0.0.1",
         show_api=False,
         prevent_thread_lock=False,
+        favicon_path="🛝",
     )
 
 
