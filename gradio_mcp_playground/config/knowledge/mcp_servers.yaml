@@ -1,0 +1,44 @@
+# MCP Server Knowledge Base
+# This file contains descriptions and information about various MCP servers
+
+general:
+  what_is_mcp: "MCP (Model Context Protocol) is a protocol that enables AI models to securely connect to external data sources and tools. It provides a standardized way to expose capabilities to AI applications."
+  mcp_server: "An MCP server exposes tools and resources that AI models can use. Servers implement specific capabilities like file operations, API access, or data processing."
+  mcp_tools: "MCP tools are functions that AI models can call to perform actions. Each tool has a schema defining its inputs and outputs."
+  gradio_integration: "Gradio MCP Playground helps you build Gradio apps that function as MCP servers, making it easy to create interactive UIs for your MCP tools."
+
+servers:
+  memory:
+    description: "The Memory MCP server provides a knowledge graph-based persistent memory system. It allows storing and retrieving information across conversations with tools like store_memory(), retrieve_memory(), and search_memories(). It's designed for external MCP clients like Claude Desktop."
+    category: "Knowledge Management"
+    
+  filesystem:
+    description: "The Filesystem MCP server provides secure file operations with configurable access controls. It includes tools for reading, writing, listing directories, and managing files. It requires a path parameter to specify which directory to provide access to."
+    category: "File Operations"
+    
+  sequential_thinking:
+    description: "The Sequential Thinking server enables dynamic and reflective problem-solving through thought sequences. It provides advanced reasoning capabilities for breaking down complex problems into steps."
+    category: "Reasoning"
+    
+  brave_search:
+    description: "The Brave Search server provides web search capabilities using the Brave Search API. It requires a BRAVE_API_KEY environment variable. Tools include web_search() and get_search_results()."
+    category: "Web Search"
+    
+  github:
+    description: "The GitHub server provides access to GitHub repositories, issues, PRs, and code. It requires a GITHUB_TOKEN environment variable. Tools include list_repos(), get_issues(), create_pr(), and more."
+    category: "Development"
+    
+  time:
+    description: "The Time server provides time and timezone utilities. It requires a timezone parameter (e.g., 'UTC', 'America/New_York'). Tools include get_current_time(), convert_timezone(), and format_date()."
+    category: "Utilities"
+    
+  obsidian:
+    description: "The Obsidian server provides tools for working with Obsidian vaults. It allows reading, creating, and searching notes in your knowledge base."
+    category: "Knowledge Management"
+
+best_practices:
+  - "Always validate inputs in your MCP tools"
+  - "Provide clear descriptions for tools and parameters"
+  - "Handle errors gracefully and return meaningful messages"
+  - "Use appropriate data types in tool schemas"
+  - "Test your MCP servers thoroughly before deployment"

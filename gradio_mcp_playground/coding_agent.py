@@ -10,10 +10,10 @@ from typing import Any, Dict
 
 # Optional imports
 try:
-    from llama_index.core import Document, Settings, VectorStoreIndex
+    from llama_index.core import Settings
     from llama_index.core.agent import ReActAgent
     from llama_index.core.memory import ChatMemoryBuffer
-    from llama_index.core.tools import FunctionTool, QueryEngineTool
+    from llama_index.core.tools import FunctionTool
     from llama_index.embeddings.huggingface import HuggingFaceEmbedding
     from llama_index.llms.huggingface_api import HuggingFaceInferenceAPI
 
@@ -28,6 +28,7 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
+from .prompt_manager import get_prompt_manager
 
 if HAS_LLAMAINDEX:
 
@@ -43,52 +44,14 @@ if HAS_LLAMAINDEX:
             self.mcp_connections = {}  # Store MCP connections
             self.mcp_client_manager = None  # MCP client manager for external servers
 
-            # Available models - CONFIRMED working with HuggingFace Inference API
-            self.available_models = {
-                # Specialized coding model (confirmed working)
-                "Qwen/Qwen2.5-Coder-32B-Instruct": {
-                    "name": "Qwen2.5 Coder 32B (CODING SPECIALIST)",
-                    "description": "🎯 Specialized 32B coding model - excellent for programming tasks and code analysis",
-                    "context_window": 32768,
-                    "size": "32B parameters",
-                    "strengths": [
-                        "Code generation",
-                        "Code analysis",
-                        "Debugging",
-                        "Multiple languages",
-                        "Latest architecture",
-                    ],
-                },
-                # Large, powerful model (confirmed working)
-                "mistralai/Mixtral-8x7B-Instruct-v0.1": {
-                    "name": "Mixtral 8x7B Instruct (LARGE)",
-                    "description": "🚀 Massive 8x7B parameter model - excellent for complex coding tasks and reasoning",
-                    "context_window": 32768,
-                    "size": "8x7B parameters",
-                    "strengths": [
-                        "Complex reasoning",
-                        "Long context",
-                        "Code generation",
-                        "Multi-step problems",
-                    ],
-                },
-                # Reliable 7B model (confirmed working)
-                "HuggingFaceH4/zephyr-7b-beta": {
-                    "name": "Zephyr 7B Beta (FAST)",
-                    "description": "⚡ Fine-tuned 7B model - fast responses, good for most coding tasks",
-                    "context_window": 8192,
-                    "size": "7B parameters",
-                    "strengths": [
-                        "Fast responses",
-                        "General coding",
-                        "Explanations",
-                        "Quick iterations",
-                    ],
-                },
-            }
+            # Get prompt manager
+            self.prompt_manager = get_prompt_manager()
+
+            # Load available models from configuration
+            self.available_models = self.prompt_manager.get_available_models()
 
             self._setup_tools()
-            
+
             # Load configured MCP servers after tools are set up
             self._load_configured_mcp_servers()
 
@@ -98,10 +61,6 @@ if HAS_LLAMAINDEX:
                 self._create_mcp_help_tool(),
                 self._create_code_analyzer_tool(),
                 self._create_gradio_helper_tool(),
-                self._create_file_reader_tool(),
-                self._create_home_directory_tool(),
-                self._create_directory_tool(),
-                self._create_brave_search_tool(),  # Add brave search tool
                 self._create_registry_search_tool(),  # Add registry search tool
                 self._create_check_server_requirements_tool(),  # Add requirements checker
             ]
@@ -118,55 +77,45 @@ if HAS_LLAMAINDEX:
                 Args:
                     query: Question about MCP development, servers, or tools
                 """
-                mcp_knowledge = {
-                    "what_is_mcp": "MCP (Model Context Protocol) is a protocol that enables AI models to securely connect to external data sources and tools. It provides a standardized way to expose capabilities to AI applications.",
-                    "mcp_server": "An MCP server exposes tools and resources that AI models can use. Servers implement specific capabilities like file operations, API access, or data processing.",
-                    "mcp_tools": "MCP tools are functions that AI models can call to perform actions. Each tool has a schema defining its inputs and outputs.",
-                    "gradio_integration": "Gradio MCP Playground helps you build Gradio apps that function as MCP servers, making it easy to create interactive UIs for your MCP tools.",
-                    "memory_server": "The Memory MCP server provides a knowledge graph-based persistent memory system. It allows storing and retrieving information across conversations with tools like store_memory(), retrieve_memory(), and search_memories(). It's designed for external MCP clients like Claude Desktop.",
-                    "filesystem_server": "The Filesystem MCP server provides secure file operations with configurable access controls. It includes tools for reading, writing, listing directories, and managing files. It requires a path parameter to specify which directory to provide access to.",
-                    "sequential_thinking": "The Sequential Thinking server enables dynamic and reflective problem-solving through thought sequences. It provides advanced reasoning capabilities for breaking down complex problems into steps.",
-                    "brave_search": "The Brave Search server provides web search capabilities using the Brave Search API. It requires a BRAVE_API_KEY environment variable. Tools include web_search() and get_search_results().",
-                    "github_server": "The GitHub server provides access to GitHub repositories, issues, PRs, and code. It requires a GITHUB_TOKEN environment variable. Tools include list_repos(), get_issues(), create_pr(), and more.",
-                    "time_server": "The Time server provides time and timezone utilities. It requires a timezone parameter (e.g., 'UTC', 'America/New_York'). Tools include get_current_time(), convert_timezone(), and format_date().",
-                    "best_practices": [
-                        "Always validate inputs in your MCP tools",
-                        "Provide clear descriptions for tools and parameters",
-                        "Handle errors gracefully and return meaningful messages",
-                        "Use appropriate data types in tool schemas",
-                        "Test your MCP servers thoroughly before deployment",
-                    ],
-                }
-
                 query_lower = query.lower()
 
                 # Check for specific server queries
-                if "memory" in query_lower and ("server" in query_lower or "mcp" in query_lower):
-                    return mcp_knowledge["memory_server"]
-                elif "filesystem" in query_lower or "file system" in query_lower:
-                    return mcp_knowledge["filesystem_server"]
-                elif "sequential" in query_lower or "thinking" in query_lower:
-                    return mcp_knowledge["sequential_thinking"]
-                elif "brave" in query_lower or "search" in query_lower:
-                    return mcp_knowledge["brave_search"]
-                elif "github" in query_lower:
-                    return mcp_knowledge["github_server"]
-                elif "time" in query_lower and "server" in query_lower:
-                    return mcp_knowledge["time_server"]
-                elif "what is mcp" in query_lower or "what's mcp" in query_lower:
-                    return mcp_knowledge["what_is_mcp"]
+                servers_to_check = {
+                    "memory": ["memory", "server", "mcp"],
+                    "filesystem": ["filesystem", "file system"],
+                    "sequential_thinking": ["sequential", "thinking"],
+                    "brave_search": ["brave", "search"],
+                    "github": ["github"],
+                    "time": ["time", "server"],
+                }
+
+                for server_id, keywords in servers_to_check.items():
+                    if any(keyword in query_lower for keyword in keywords):
+                        server_info = self.prompt_manager.get_mcp_knowledge(server_id)
+                        if server_info:
+                            return server_info.get("description", f"Information about {server_id}")
+
+                # Check for general queries
+                general_knowledge = self.prompt_manager.get_mcp_knowledge()
+
+                if "what is mcp" in query_lower or "what's mcp" in query_lower:
+                    return general_knowledge.get("what_is_mcp", "MCP information not found")
                 elif "server" in query_lower:
-                    return mcp_knowledge["mcp_server"]
+                    return general_knowledge.get("mcp_server", "Server information not found")
                 elif "tool" in query_lower:
-                    return mcp_knowledge["mcp_tools"]
+                    return general_knowledge.get("mcp_tools", "Tools information not found")
                 elif "gradio" in query_lower:
-                    return mcp_knowledge["gradio_integration"]
+                    return general_knowledge.get(
+                        "gradio_integration", "Gradio integration information not found"
+                    )
                 elif "best practice" in query_lower or "practices" in query_lower:
+                    practices = self.prompt_manager.get_best_practices()
                     return "MCP Best Practices:\n" + "\n".join(
-                        [f"• {practice}" for practice in mcp_knowledge["best_practices"]]
+                        [f"• {practice}" for practice in practices]
                     )
                 else:
-                    return f"Here's general guidance about MCP development: {mcp_knowledge['what_is_mcp']} For specific help, ask about MCP servers, tools, or best practices."
+                    what_is_mcp = general_knowledge.get("what_is_mcp", "")
+                    return f"Here's general guidance about MCP development: {what_is_mcp} For specific help, ask about MCP servers, tools, or best practices."
 
             return FunctionTool.from_defaults(fn=mcp_help, name="mcp_help")
 
@@ -266,247 +215,41 @@ if HAS_LLAMAINDEX:
                 Args:
                     component_type: Specific Gradio component to get help with
                 """
-                gradio_help_data = {
-                    "textbox": "gr.Textbox() - For text input/output. Use 'lines' parameter for multiline, 'type' for password fields.",
-                    "button": "gr.Button() - For user actions. Use 'variant' parameter for styling (primary, secondary, stop).",
-                    "dropdown": "gr.Dropdown() - For selection from options. Use 'choices' parameter for options list.",
-                    "slider": "gr.Slider() - For numeric input. Set 'minimum', 'maximum', and 'step' parameters.",
-                    "file": "gr.File() - For file uploads. Use 'file_types' to restrict allowed types.",
-                    "dataframe": "gr.Dataframe() - For tabular data. Set 'headers' and use 'interactive' for editing.",
-                    "plot": "gr.Plot() - For matplotlib/plotly charts. Return plot objects from functions.",
-                    "interface": "gr.Interface() - Simple way to create UIs with inputs/outputs/function.",
-                    "blocks": "gr.Blocks() - More flexible UI builder with layout control using rows/columns.",
-                    "general": "Gradio tips: Use clear labels, provide examples, handle errors gracefully, test with different inputs.",
-                }
-
-                if component_type.lower() in gradio_help_data:
-                    return gradio_help_data[component_type.lower()]
-                elif component_type:
-                    return f"No specific help found for '{component_type}'. Available components: {', '.join(gradio_help_data.keys())}"
+                if component_type:
+                    component_help = self.prompt_manager.get_gradio_help(component_type.lower())
+                    if component_help:
+                        description = component_help.get("description", "")
+                        example = component_help.get("example", "")
+                        if example:
+                            return f"{description}\n\nExample:\n{example}"
+                        return description
+                    else:
+                        # Get list of available components
+                        all_components = [
+                            "textbox",
+                            "button",
+                            "dropdown",
+                            "slider",
+                            "file",
+                            "dataframe",
+                            "plot",
+                            "interface",
+                            "blocks",
+                        ]
+                        return f"No specific help found for '{component_type}'. Available components: {', '.join(all_components)}"
                 else:
-                    return gradio_help_data["general"]
+                    # Return general tips
+                    general_help = self.prompt_manager.get_gradio_help()
+                    tips = general_help.get("general_tips", [])
+                    if tips:
+                        return "Gradio tips:\n" + "\n".join([f"• {tip}" for tip in tips])
+                    return "Gradio tips: Use clear labels, provide examples, handle errors gracefully, test with different inputs."
 
             return FunctionTool.from_defaults(fn=gradio_help, name="gradio_help")
 
-        def _create_file_reader_tool(self) -> FunctionTool:
-            """Create tool for reading project files"""
 
-            def read_project_file(file_path: str) -> str:
-                """Read a file from the current project directory.
 
-                Args:
-                    file_path: Path to the file relative to project root
-                """
-                try:
-                    # Security: only allow reading from current directory and subdirectories
-                    full_path = Path.cwd() / file_path
 
-                    # Check if path is within current directory
-                    if not str(full_path.resolve()).startswith(str(Path.cwd().resolve())):
-                        return "Error: Can only read files within the current project directory"
-
-                    if not full_path.exists():
-                        return f"Error: File '{file_path}' not found"
-
-                    if full_path.is_dir():
-                        # List directory contents
-                        contents = list(full_path.iterdir())
-                        return f"Directory contents of '{file_path}':\n" + "\n".join(
-                            [f"• {item.name}" for item in contents]
-                        )
-
-                    # Read file content
-                    with open(full_path, encoding="utf-8") as f:
-                        content = f.read()
-
-                    # Limit content size for display
-                    if len(content) > 5000:
-                        content = (
-                            content[:5000] + "\n... (file truncated, showing first 5000 characters)"
-                        )
-
-                    return f"Content of '{file_path}':\n\n{content}"
-
-                except Exception as e:
-                    return f"Error reading file '{file_path}': {str(e)}"
-
-            return FunctionTool.from_defaults(fn=read_project_file, name="read_project_file")
-
-        def _create_home_directory_tool(self) -> FunctionTool:
-            """Create tool for listing home directory contents"""
-
-            def list_home_directory(subdirectory: str = "") -> str:
-                """List contents of the user's home directory or a subdirectory within it.
-
-                Args:
-                    subdirectory: Optional subdirectory within home to list (e.g., "Documents", "Projects")
-                """
-                try:
-                    import os
-                    from pathlib import Path
-
-                    # Get home directory
-                    home_path = Path.home()
-
-                    # If subdirectory specified, append it
-                    if subdirectory:
-                        target_path = home_path / subdirectory
-                    else:
-                        target_path = home_path
-
-                    if not target_path.exists():
-                        return f"Error: Directory '{target_path}' does not exist"
-
-                    if not target_path.is_dir():
-                        return f"Error: '{target_path}' is not a directory"
-
-                    # List all items
-                    items = list(target_path.iterdir())
-
-                    # Separate directories and files
-                    directories = []
-                    files = []
-
-                    for item in items:
-                        try:
-                            if item.is_dir():
-                                # Check if it's a git repository
-                                git_marker = " (git repo)" if (item / ".git").exists() else ""
-                                directories.append(f"📁 {item.name}{git_marker}")
-                            else:
-                                # Add file size
-                                size = item.stat().st_size
-                                if size < 1024:
-                                    size_str = f"{size}B"
-                                elif size < 1024 * 1024:
-                                    size_str = f"{size/1024:.1f}KB"
-                                else:
-                                    size_str = f"{size/(1024*1024):.1f}MB"
-                                files.append(f"📄 {item.name} ({size_str})")
-                        except (PermissionError, OSError):
-                            # Skip items we can't access
-                            continue
-
-                    # Sort alphabetically
-                    directories.sort()
-                    files.sort()
-
-                    # Build result
-                    result = f"📂 Contents of: {target_path}\n"
-                    result += f"🏠 Home Directory: {home_path}\n\n"
-
-                    if directories:
-                        result += f"**Directories ({len(directories)}):**\n"
-                        result += "\n".join(directories[:50])  # Limit to 50 to avoid huge outputs
-                        if len(directories) > 50:
-                            result += f"\n... and {len(directories) - 50} more directories"
-                        result += "\n\n"
-
-                    if files:
-                        result += f"**Files ({len(files)}):**\n"
-                        result += "\n".join(files[:30])  # Limit files to 30
-                        if len(files) > 30:
-                            result += f"\n... and {len(files) - 30} more files"
-
-                    # Look for git projects specifically
-                    git_projects = [d for d in directories if " (git repo)" in d]
-                    if git_projects:
-                        result += f"\n\n**🔧 Git Projects Found ({len(git_projects)}):**\n"
-                        result += "\n".join(
-                            [
-                                f"- {proj.replace('📁 ', '').replace(' (git repo)', '')}"
-                                for proj in git_projects[:20]
-                            ]
-                        )
-                        if len(git_projects) > 20:
-                            result += f"\n... and {len(git_projects) - 20} more git projects"
-
-                    return result
-
-                except Exception as e:
-                    return f"Error accessing home directory: {str(e)}"
-
-            return FunctionTool.from_defaults(fn=list_home_directory, name="list_home_directory")
-
-        def _create_directory_tool(self):
-            """Create a tool for creating directories"""
-
-            def create_directory(path: str) -> str:
-                """Create a directory at the specified path.
-
-                Args:
-                    path: Path where to create the directory (can be relative to home or absolute)
-                """
-                try:
-                    import os
-                    from pathlib import Path
-
-                    # If path doesn't start with /, assume it's relative to home
-                    if not path.startswith(("/", "C:\\", "C:/", "\\\\")):
-                        home_path = Path.home()
-                        full_path = home_path / path
-                    else:
-                        full_path = Path(path)
-
-                    # Create directory (including parents if needed)
-                    full_path.mkdir(parents=True, exist_ok=True)
-
-                    return f"✅ Directory created successfully: {full_path}"
-
-                except PermissionError:
-                    return f"❌ Permission denied: Cannot create directory at {full_path}"
-                except Exception as e:
-                    return f"❌ Error creating directory: {str(e)}"
-
-            return FunctionTool.from_defaults(fn=create_directory, name="create_directory")
-
-        def _create_brave_search_tool(self) -> FunctionTool:
-            """Create Brave Search tool"""
-
-            def brave_search(query: str, count: int = 10) -> str:
-                """Search the web using Brave Search API.
-
-                Args:
-                    query: Search query string
-                    count: Number of results to return (default: 10)
-
-                Returns:
-                    Search results from Brave Search API
-                """
-                try:
-                    import requests
-                    import os
-
-                    api_key = os.environ.get("BRAVE_API_KEY")
-                    if not api_key:
-                        return "Error: BRAVE_API_KEY not set. Please install the brave-search server first using install_mcp_server_from_registry()"
-
-                    url = "https://api.search.brave.com/res/v1/web/search"
-                    headers = {"X-Subscription-Token": api_key}
-                    params = {"q": query, "count": count}
-
-                    response = requests.get(url, headers=headers, params=params)
-                    if response.status_code == 200:
-                        data = response.json()
-                        results = []
-                        for idx, result in enumerate(
-                            data.get("web", {}).get("results", [])[:count], 1
-                        ):
-                            results.append(
-                                f"{idx}. {result.get('title', 'No title')}\n   URL: {result.get('url', 'No URL')}\n   {result.get('description', 'No description')}"
-                            )
-
-                        return (
-                            f"Brave Search Results for '{query}':\n\n" + "\n\n".join(results)
-                            if results
-                            else "No results found"
-                        )
-                    else:
-                        return f"Error: Brave Search API returned status {response.status_code}"
-                except Exception as e:
-                    return f"Error performing brave search: {str(e)}"
-
-            return FunctionTool.from_defaults(fn=brave_search, name="brave_search")
 
         def _create_registry_search_tool(self) -> FunctionTool:
             """Create tool to search MCP server registry"""
@@ -607,15 +350,15 @@ if HAS_LLAMAINDEX:
 
                             # Check if we already have this key stored
                             if env_var in stored_keys:
-                                output += f"  ✅ Already stored securely\n"
+                                output += "  ✅ Already stored securely\n"
                             else:
-                                output += f"  ❌ Not yet provided\n"
+                                output += "  ❌ Not yet provided\n"
 
                                 # Add instructions for getting the key
                                 if server_id == "brave-search":
-                                    output += f"  📝 Get your API key from: https://brave.com/search/api/\n"
+                                    output += "  📝 Get your API key from: https://brave.com/search/api/\n"
                                 elif server_id == "github":
-                                    output += f"  📝 Create a token at: https://github.com/settings/tokens\n"
+                                    output += "  📝 Create a token at: https://github.com/settings/tokens\n"
 
                     # Add setup help
                     if server_info.get("setup_help"):
@@ -673,53 +416,135 @@ if HAS_LLAMAINDEX:
                 print(f"DEBUG: Could not add MCP management tools: {e}")
             except Exception as e:
                 print(f"DEBUG: Error adding MCP management tools: {e}")
-        
+
         def _load_configured_mcp_servers(self):
             """Load MCP servers from configuration"""
             try:
                 from .mcp_server_config import MCPServerConfig
                 from .mcp_working_client import MCPServerProcess, create_mcp_tools_for_server
-                
+                from .secure_storage import SecureTokenStorage
+                from pathlib import Path
+                import json
+                import os
+
                 config = MCPServerConfig()
                 servers = config.list_servers()
                 
+                # Initialize secure storage for retrieving stored tokens
+                storage = SecureTokenStorage()
+
+                # Also check Claude Desktop config
+                claude_config_path = None
+                if os.name == "nt":
+                    claude_config_path = Path.home() / "AppData/Roaming/Claude/claude_desktop_config.json"
+                else:
+                    # WSL/Linux - check for Windows path
+                    possible_paths = [
+                        Path("/home/sean/.config/Claude/claude_desktop_config.json"),
+                        Path("/mnt/c/Users/seanp/AppData/Roaming/Claude/claude_desktop_config.json"),
+                        Path(f"/mnt/c/Users/{os.environ.get('USER', 'seanp')}/AppData/Roaming/Claude/claude_desktop_config.json"),
+                    ]
+                    for path in possible_paths:
+                        if path.exists():
+                            claude_config_path = path
+                            break
+
+                # Load servers from Claude Desktop if available
+                if claude_config_path and claude_config_path.exists():
+                    try:
+                        with open(claude_config_path) as f:
+                            claude_config = json.load(f)
+                            if "mcpServers" in claude_config:
+                                # Import Claude Desktop servers into our local config
+                                for server_name, server_config in claude_config["mcpServers"].items():
+                                    if server_name not in servers:
+                                        # Extract environment variables that might contain API keys
+                                        env_vars = server_config.get("env", {})
+                                        
+                                        # Store API keys securely
+                                        if env_vars:
+                                            for env_key, env_value in env_vars.items():
+                                                # Common API key patterns
+                                                if any(pattern in env_key.upper() for pattern in ["TOKEN", "KEY", "SECRET", "API"]):
+                                                    storage.store_key(server_name, env_key, env_value)
+                                                    print(f"  🔐 Encrypted {env_key} for {server_name}")
+                                        
+                                        # Add server to our local config (without sensitive env vars)
+                                        config.add_server(
+                                            name=server_name,
+                                            command=server_config.get("command"),
+                                            args=server_config.get("args"),
+                                            env={}  # Don't store env vars in plain text
+                                        )
+                                        
+                                        servers[server_name] = server_config
+                                        print(f"  📎 Imported {server_name} from Claude Desktop config")
+                    except Exception as e:
+                        print(f"Warning: Could not load Claude Desktop config: {e}")
+
                 if not servers:
                     print("No MCP servers configured")
                     return
-                
+
                 print(f"Found {len(servers)} configured MCP servers:")
                 for server_name in servers:
                     print(f"  - {server_name}")
-                
+
                 # Load MCP servers using the working approach
                 print("\n🔌 Loading MCP server tools...")
-                
-                if not hasattr(self, 'mcp_tools'):
+
+                if not hasattr(self, "mcp_tools"):
                     self.mcp_tools = {}
-                
-                if not hasattr(self, '_mcp_servers'):
+
+                if not hasattr(self, "_mcp_servers"):
                     self._mcp_servers = {}
-                
+
                 loaded_count = 0
                 for server_name, server_config in servers.items():
                     try:
-                        command = server_config.get('command', '')
-                        args = server_config.get('args', [])
-                        env = server_config.get('env', {})
+                        command = server_config.get("command", "")
+                        args = server_config.get("args", [])
+                        env = server_config.get("env", {})
+
+                        # Check for stored API keys for this server
+                        stored_keys = storage.retrieve_server_keys(server_name)
+
+                        # If no env vars in config, check stored keys
+                        if not env and stored_keys:
+                            env = stored_keys
+                            print(f"   🔑 Using stored encrypted keys for {server_name}")
+                        elif stored_keys:
+                            # Merge stored keys with config env vars (stored keys take precedence)
+                            env.update(stored_keys)
+                            print(f"   🔑 Merged encrypted keys for {server_name}")
+
+                        # Skip servers that require API keys if none found
+                        required_env_vars = {
+                            "github": ["GITHUB_TOKEN"],
+                            "brave-search": ["BRAVE_API_KEY"],
+                            "figma": ["FIGMA_TOKEN"],
+                            "openai": ["OPENAI_API_KEY"],
+                        }
                         
+                        if server_name in required_env_vars:
+                            missing_vars = [var for var in required_env_vars[server_name] if var not in env]
+                            if missing_vars:
+                                print(f"   ⚠️  Skipping {server_name} - missing required: {', '.join(missing_vars)}")
+                                continue
+
                         # Create and start server
                         server = MCPServerProcess(server_name, command, args, env)
-                        
+
                         if server.start() and server.initialize():
                             # Create tools
                             server_tools = create_mcp_tools_for_server(server)
-                            
+
                             if server_tools:
                                 # Add tools to agent
                                 self.tools.extend(server_tools)
                                 self.mcp_tools[server_name] = server_tools
                                 self._mcp_servers[server_name] = server
-                                
+
                                 loaded_count += len(server_tools)
                                 print(f"   ✅ Loaded {len(server_tools)} tools from {server_name}")
                             else:
@@ -727,22 +552,22 @@ if HAS_LLAMAINDEX:
                                 server.stop()
                         else:
                             print(f"   ❌ Failed to start/initialize {server_name}")
-                    
+
                     except Exception as e:
                         print(f"   ❌ Error loading {server_name}: {e}")
-                
+
                 if loaded_count > 0:
                     print(f"\n✅ Successfully loaded {loaded_count} MCP tools!")
                     print("   Tools are now available in the chat")
                 else:
                     print("\n⚠️  No MCP tools were loaded")
                     print("   Servers may need to be installed first")
-                    
+
             except Exception as e:
                 print(f"Error loading MCP servers: {e}")
                 import traceback
+
                 traceback.print_exc()
-        
 
         def configure_model(self, hf_token: str, model_name: str) -> Dict[str, Any]:
             """Configure the LLM model for the agent"""
@@ -788,7 +613,7 @@ if HAS_LLAMAINDEX:
                                 print(f"DEBUG: HF user info: {user_info}")
                             else:
                                 print("DEBUG: Whoami failed but model access works - continuing")
-                        except:
+                        except Exception:
                             print(
                                 "DEBUG: Whoami endpoint failed but model access works - continuing"
                             )
@@ -822,14 +647,18 @@ if HAS_LLAMAINDEX:
 
                 try:
                     print(f"DEBUG: Creating HuggingFaceInferenceAPI for {model_name}")
+
+                    # Get model defaults from configuration
+                    model_defaults = self.prompt_manager.get_model_defaults()
+
                     self.llm = HuggingFaceInferenceAPI(
                         model_name=model_name,
                         token=clean_token,
                         context_window=self.available_models[model_name]["context_window"],
-                        timeout=60.0,
-                        max_new_tokens=2048,  # Ensure complete responses
-                        temperature=0.7,
-                        top_p=0.95,
+                        timeout=model_defaults.get("timeout", 60.0),
+                        max_new_tokens=model_defaults.get("max_new_tokens", 2048),
+                        temperature=model_defaults.get("temperature", 0.7),
+                        top_p=model_defaults.get("top_p", 0.95),
                     )
                     print("DEBUG: HuggingFaceInferenceAPI created successfully")
 
@@ -869,81 +698,23 @@ if HAS_LLAMAINDEX:
                 try:
                     # Get all tools including MCP tools
                     all_tools = list(self.tools)  # Copy base tools
-                    
+
                     # Add any MCP tools that were loaded from config
-                    if hasattr(self, 'mcp_tools'):
+                    if hasattr(self, "mcp_tools"):
                         for server_tools in self.mcp_tools.values():
                             all_tools.extend(server_tools)
                             print(f"DEBUG: Added {len(server_tools)} tools from MCP servers")
-                    
+
+                    # Get system prompt from configuration
+                    system_prompt = self.prompt_manager.get_system_prompt("coding_agent.main")
+
                     self.agent = ReActAgent.from_tools(
                         tools=all_tools,
                         llm=self.llm,
                         memory=self.memory,
                         verbose=True,
                         max_iterations=100,  # Allow for complex multi-step operations
-                        system_prompt="""You are a coding assistant helping with MCP server management and development.
-
-**KEY BEHAVIORS:**
-1. When users ask for tools/servers for specific tasks, ALWAYS search the registry first using search_mcp_registry()
-2. Before installing ANY server, ALWAYS use check_server_requirements() to see what's needed
-3. If a server requires arguments or API keys, you MUST ask the user for them before attempting installation
-4. API keys are stored securely and reused automatically - no need to ask again if already stored
-5. Store important conversations in memory server for future reference
-
-**CRITICAL: CONTINUE USING TOOLS!**
-- When a user asks you to perform multiple actions (like "list my repos" after installing GitHub), you MUST continue using tools
-- DO NOT switch to just answering - keep using the actual MCP tools to fulfill the user's requests
-- After installing a server, ALWAYS demonstrate it works by using its tools when requested
-- If a tool call succeeds, continue with the next requested action using tools
-
-**MCP SERVER INSTALLATION WORKFLOW:**
-
-1. **ALWAYS CHECK REQUIREMENTS FIRST:**
-   - Use: check_server_requirements("server-id") to see what's needed
-   - This shows required arguments, environment variables, and whether keys are already stored
-   - NEVER skip this step!
-
-2. **FINDING SERVERS:**
-   - Search: search_mcp_registry("search-term") to find relevant servers
-   - Check: check_server_requirements("server-id") before installing
-
-3. **EXAMPLE: BRAVE SEARCH:**
-   - **STEP 1**: check_server_requirements("brave-search")
-   - **STEP 2**: If API key not stored, ask user for it
-   - **STEP 3**: Install: install_mcp_server_from_registry(server_id="brave-search", token="USER_PROVIDED_KEY")
-   - **STEP 4**: Use: brave_search(query="search term")
-
-4. **EXAMPLE: FILESYSTEM:**
-   - **STEP 1**: check_server_requirements("filesystem")
-   - **STEP 2**: Ask user which directory to provide access to
-   - **STEP 3**: Install: install_mcp_server_from_registry(server_id="filesystem", path="/user/provided/path")
-
-5. **EXAMPLE: MEMORY SERVER:**
-   - **STEP 1**: check_server_requirements("memory")
-   - **STEP 2**: Install directly (no requirements): install_mcp_server_from_registry(server_id="memory")
-
-6. **EXAMPLE: OBSIDIAN:**
-   - **STEP 1**: check_server_requirements("obsidian")
-   - **STEP 2**: Ask user for vault path
-   - **STEP 3**: Install: install_mcp_server_from_registry(server_id="obsidian", vault_path1="/path/to/vault")
-
-**IMPORTANT RULES:** 
-- Always search registry when users need specific functionality
-- **NEVER** try to install servers with API keys without asking the user first
-- If a server requires an API key (brave-search, github, etc.), ALWAYS ask the user to provide it
-- Store conversations about user preferences/identity in memory server
-- API keys are encrypted and stored securely after the user provides them
-- **CONTINUE USING TOOLS** - Don't switch to just answering after the first tool call
-
-**USING MCP SERVERS:**
-- When an MCP server is installed, its tools become available with the prefix: {server_id}_{tool_name}
-- For example: obsidian_read_note(), filesystem_list_directory(), github_list_repos()
-- The tools will appear after the server is successfully installed and connected
-- Use the actual MCP tools rather than generic file tools when available
-- **ALWAYS USE TOOLS** when the user asks for actions, don't just describe what you would do
-
-Be helpful and proactive about finding the right tools.""",
+                        system_prompt=system_prompt,
                     )
                     print("DEBUG: ReActAgent created successfully")
                 except Exception as e:
@@ -980,7 +751,7 @@ Be helpful and proactive about finding the right tools.""",
                             self.agent.chat(
                                 f"memory_store_conversation(topic='User Introduction', content='User message: {message} - Timestamp: {timestamp}')"
                             )
-                        except:
+                        except Exception:
                             pass  # Silently fail if memory storage doesn't work
 
                 response = self.agent.chat(message)
@@ -1013,9 +784,6 @@ Be helpful and proactive about finding the right tools.""",
             try:
                 # Create a custom handler to capture steps
                 steps = []
-
-                # Store the original verbose setting
-                original_verbose = getattr(self.agent, "_verbose", True)
 
                 # Override the agent's step method to capture thinking
                 original_step = getattr(self.agent, "_run_step", None)
@@ -1133,15 +901,15 @@ Be helpful and proactive about finding the right tools.""",
         def get_available_models(self) -> Dict[str, Dict[str, Any]]:
             """Get list of available models"""
             return self.available_models
-        
+
         def cleanup(self):
             """Clean up resources including MCP servers"""
-            if hasattr(self, '_mcp_servers'):
+            if hasattr(self, "_mcp_servers"):
                 for server_name, server in self._mcp_servers.items():
                     try:
                         server.stop()
                         print(f"Stopped MCP server: {server_name}")
-                    except:
+                    except Exception:
                         pass
                 self._mcp_servers.clear()
 
@@ -1160,33 +928,46 @@ Be helpful and proactive about finding the right tools.""",
             try:
                 self.mcp_connections[connection_id] = connection_info
 
-                # Create a tool for this MCP connection
-                if connection_info.get("tools"):
-                    self._create_mcp_tools(connection_id, connection_info)
-
                 # For external MCP servers, try to connect and get actual tools
                 # Include all known registry servers
                 external_servers = [
-                    "obsidian", "filesystem", "github", "time", "brave-search", 
-                    "memory", "sequential-thinking", "puppeteer", "everything",
-                    "azure", "office-powerpoint", "office-word", "excel",
-                    "quickchart", "screenshotone", "figma", "pg-cli-server"
+                    "obsidian",
+                    "filesystem",
+                    "github",
+                    "time",
+                    "brave-search",
+                    "memory",
+                    "sequential-thinking",
+                    "puppeteer",
+                    "everything",
+                    "azure",
+                    "office-powerpoint",
+                    "office-word",
+                    "excel",
+                    "quickchart",
+                    "screenshotone",
+                    "figma",
+                    "pg-cli-server",
                 ]
                 if connection_id in external_servers:
                     self._connect_to_external_mcp_server(connection_id, connection_info)
+                else:
+                    # Only create placeholder tools if not an external server
+                    if connection_info.get("tools"):
+                        self._create_mcp_tools(connection_id, connection_info)
 
                 # Recreate agent with new tools if already configured
                 if self.is_configured():
                     self._recreate_agent_with_mcp_tools()
 
             except Exception as e:
-                raise Exception(f"Failed to add MCP connection {connection_id}: {str(e)}")
+                raise Exception(f"Failed to add MCP connection {connection_id}: {str(e)}") from e
 
         def _connect_to_external_mcp_server(self, server_id: str, connection_info: Dict[str, Any]):
             """Connect to an external MCP server and create tools"""
             try:
                 from .mcp_working_client import MCPServerProcess, create_mcp_tools_for_server
-                
+
                 # Extract command and args from connection info
                 command_str = connection_info.get("command", "")
                 if command_str:
@@ -1196,30 +977,30 @@ Be helpful and proactive about finding the right tools.""",
                 else:
                     command = connection_info.get("command", "")
                     args = connection_info.get("args", [])
-                
+
                 # Get environment variables
                 env = connection_info.get("env", {})
-                
+
                 # Create and start server using the working client
                 server = MCPServerProcess(server_id, command, args, env)
-                
+
                 if server.start() and server.initialize():
                     # Create tools using the working implementation
                     mcp_tools = create_mcp_tools_for_server(server)
-                    
+
                     if mcp_tools:
                         # Store tools for this server
                         if not hasattr(self, "mcp_tools"):
                             self.mcp_tools = {}
                         self.mcp_tools[server_id] = mcp_tools
-                        
+
                         # Store the server process for cleanup
-                        if not hasattr(self, '_mcp_servers'):
+                        if not hasattr(self, "_mcp_servers"):
                             self._mcp_servers = {}
                         self._mcp_servers[server_id] = server
-                        
+
                         print(f"✅ Connected to {server_id} MCP server with {len(mcp_tools)} tools")
-                        
+
                         # List the tool names for debugging
                         tool_names = [tool.name for tool in mcp_tools if hasattr(tool, "name")]
                         print(f"   Available tools: {', '.join(tool_names)}")
@@ -1231,412 +1012,44 @@ Be helpful and proactive about finding the right tools.""",
                     # Fall back to direct implementation tools
                     self._create_mcp_tools(server_id, connection_info)
                     print(f"Using direct implementation for {server_id} tools")
-                    
+
             except Exception as e:
                 print(f"Failed to connect to {server_id} MCP server: {str(e)}")
                 import traceback
+
                 traceback.print_exc()
                 # Fall back to direct implementation tools
                 self._create_mcp_tools(server_id, connection_info)
                 print(f"Using direct implementation for {server_id} tools")
-
         def _create_mcp_tools(self, connection_id: str, connection_info: Dict[str, Any]):
-            """Create LlamaIndex tools for MCP connection"""
+            """Create placeholder LlamaIndex tools for MCP connections
+            
+            This method only creates placeholder tools. Actual functionality
+            should come from MCP servers via _connect_to_external_mcp_server.
+            """
             tools = []
+            
+            # Create placeholder tools for all connections
+            for tool_name in connection_info.get("tools", []):
 
-            # For obsidian connection, create direct tools
-            if connection_id == "obsidian":
-                vault_path = connection_info.get("vault_path", "C:/Users/seanp/seans-vault")
-                # Extract vault path from command if not in connection_info
-                if "command" in connection_info:
-                    parts = connection_info["command"].split()
-                    if len(parts) > 1:
-                        vault_path = parts[-1]  # Last argument is usually the vault path
+                def create_placeholder_tool(conn_id, tool_n):
+                    def placeholder_func(**kwargs) -> str:
+                        """Placeholder MCP tool"""
+                        return f"Tool {tool_n} from {conn_id} called with args: {kwargs}\n\nNote: This is a placeholder. Install the actual MCP server for full functionality."
 
-                def obsidian_list_notes() -> str:
-                    """List all notes in the Obsidian vault"""
-                    try:
-                        import os
-
-                        notes = []
-                        for root, dirs, files in os.walk(vault_path):
-                            # Skip .obsidian directory
-                            if ".obsidian" in root:
-                                continue
-                            for file in files:
-                                if file.endswith(".md"):
-                                    rel_path = os.path.relpath(os.path.join(root, file), vault_path)
-                                    notes.append(rel_path.replace("\\", "/"))
-                        if notes:
-                            return f"Found {len(notes)} notes in vault:\n" + "\n".join(
-                                f"- {note}" for note in notes
-                            )
-                        else:
-                            return "No notes found in vault"
-                    except Exception as e:
-                        return f"Error listing notes: {str(e)}"
-
-                def obsidian_read_note(path: str) -> str:
-                    """Read a note from the Obsidian vault"""
-                    try:
-                        import os
-
-                        full_path = os.path.join(vault_path, path)
-                        with open(full_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-                        return f"Content of {path}:\n\n{content}"
-                    except Exception as e:
-                        return f"Error reading note: {str(e)}"
-
-                def obsidian_create_note(path: str, content: str) -> str:
-                    """Create a new note in the Obsidian vault"""
-                    try:
-                        import os
-
-                        full_path = os.path.join(vault_path, path)
-                        # Create directory if needed
-                        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                        with open(full_path, "w", encoding="utf-8") as f:
-                            f.write(content)
-                        return f"Successfully created note: {path}"
-                    except Exception as e:
-                        return f"Error creating note: {str(e)}"
-
-                def obsidian_search_notes(query: str) -> str:
-                    """Search for notes containing a query string"""
-                    try:
-                        import os
-
-                        results = []
-                        for root, dirs, files in os.walk(vault_path):
-                            if ".obsidian" in root:
-                                continue
-                            for file in files:
-                                if file.endswith(".md"):
-                                    full_path = os.path.join(root, file)
-                                    try:
-                                        with open(full_path, "r", encoding="utf-8") as f:
-                                            content = f.read()
-                                            if query.lower() in content.lower():
-                                                rel_path = os.path.relpath(full_path, vault_path)
-                                                results.append(rel_path.replace("\\", "/"))
-                                    except:
-                                        pass
-                        if results:
-                            return (
-                                f"Found {len(results)} notes containing '{query}':\n"
-                                + "\n".join(f"- {note}" for note in results)
-                            )
-                        else:
-                            return f"No notes found containing '{query}'"
-                    except Exception as e:
-                        return f"Error searching notes: {str(e)}"
-
-                tools.extend(
-                    [
-                        FunctionTool.from_defaults(
-                            fn=obsidian_list_notes, name="obsidian_list_notes"
-                        ),
-                        FunctionTool.from_defaults(
-                            fn=obsidian_read_note, name="obsidian_read_note"
-                        ),
-                        FunctionTool.from_defaults(
-                            fn=obsidian_create_note, name="obsidian_create_note"
-                        ),
-                        FunctionTool.from_defaults(
-                            fn=obsidian_search_notes, name="obsidian_search_notes"
-                        ),
-                    ]
-                )
-
-            # For filesystem connection, create actual working tools
-            elif connection_id == "filesystem":
-
-                def read_file_tool(path: str) -> str:
-                    """Read contents of a file"""
-                    try:
-                        import os
-
-                        with open(path, encoding="utf-8") as f:
-                            content = f.read()
-                        return f"File content from {os.path.abspath(path)}:\n\n{content}"
-                    except Exception as e:
-                        return f"Error reading file: {str(e)}"
-
-                def write_file_tool(path: str, content: str) -> str:
-                    """Write content to a file"""
-                    try:
-                        import os
-
-                        with open(path, "w", encoding="utf-8") as f:
-                            f.write(content)
-                        return f"Successfully wrote {len(content)} characters to {os.path.abspath(path)}"
-                    except Exception as e:
-                        return f"Error writing file: {str(e)}"
-
-                def list_directory_tool(path: str = ".") -> str:
-                    """List contents of a directory"""
-                    try:
-                        import os
-
-                        files = os.listdir(path)
-                        abs_path = os.path.abspath(path)
-                        file_list = "\n".join([f"  - {f}" for f in files])
-                        return (
-                            f"Directory contents of {abs_path} ({len(files)} items):\n{file_list}"
-                        )
-                    except Exception as e:
-                        return f"Error listing directory: {str(e)}"
-
-                def create_directory_tool(path: str) -> str:
-                    """Create a directory"""
-                    try:
-                        import os
-
-                        os.makedirs(path, exist_ok=True)
-                        return f"Successfully created directory: {os.path.abspath(path)}"
-                    except Exception as e:
-                        return f"Error creating directory: {str(e)}"
-
-                tools.extend(
-                    [
-                        FunctionTool.from_defaults(fn=read_file_tool, name="filesystem_read_file"),
-                        FunctionTool.from_defaults(
-                            fn=write_file_tool, name="filesystem_write_file"
-                        ),
-                        FunctionTool.from_defaults(
-                            fn=list_directory_tool, name="filesystem_list_directory"
-                        ),
-                        FunctionTool.from_defaults(
-                            fn=create_directory_tool, name="filesystem_create_directory"
-                        ),
-                    ]
-                )
-
-            elif connection_id == "brave-search":
-                # Create actual brave search tool
-                def brave_search_tool(query: str, count: int = 10) -> str:
-                    """Search the web using Brave Search API"""
-                    try:
-                        import requests
-                        import os
-
-                        api_key = os.environ.get("BRAVE_API_KEY")
-                        if not api_key:
-                            return "Error: BRAVE_API_KEY environment variable not set"
-
-                        url = "https://api.search.brave.com/res/v1/web/search"
-                        headers = {"X-Subscription-Token": api_key}
-                        params = {"q": query, "count": count}
-
-                        response = requests.get(url, headers=headers, params=params)
-                        if response.status_code == 200:
-                            data = response.json()
-                            results = []
-                            for idx, result in enumerate(
-                                data.get("web", {}).get("results", [])[:count], 1
-                            ):
-                                results.append(
-                                    f"{idx}. {result.get('title', 'No title')}\n   URL: {result.get('url', 'No URL')}\n   {result.get('description', 'No description')}"
-                                )
-
-                            return (
-                                f"Brave Search Results for '{query}':\n\n" + "\n\n".join(results)
-                                if results
-                                else "No results found"
-                            )
-                        else:
-                            return f"Error: Brave Search API returned status {response.status_code}"
-                    except Exception as e:
-                        return f"Error performing brave search: {str(e)}"
-
-                tools.append(
-                    FunctionTool.from_defaults(
-                        fn=brave_search_tool,
-                        name="brave_search",
-                        description="Search the web using Brave Search",
+                    return FunctionTool.from_defaults(
+                        fn=placeholder_func,
+                        name=f"{conn_id}_{tool_n}",
+                        description=f"Call {tool_n} tool from {connection_info['name']} MCP server",
                     )
-                )
 
-            elif connection_id == "memory":
-                # Create memory server tools for conversation logging
-                def store_conversation(
-                    topic: str, content: str, metadata: Dict[str, Any] = None
-                ) -> str:
-                    """Store conversation in memory server's knowledge graph"""
-                    try:
-                        import json
-                        import os
-
-                        # Create a structured memory entry
-                        memory_entry = {
-                            "topic": topic,
-                            "content": content,
-                            "timestamp": datetime.now().isoformat(),
-                            "type": "conversation",
-                            "metadata": metadata or {},
-                        }
-
-                        # Store in the memory server's data directory
-                        memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
-                        os.makedirs(memory_dir, exist_ok=True)
-
-                        # Create a JSON file for the conversation
-                        filename = f"{topic.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                        filepath = os.path.join(memory_dir, filename)
-
-                        with open(filepath, "w", encoding="utf-8") as f:
-                            json.dump(memory_entry, f, indent=2)
-
-                        return f"✅ Stored conversation under topic '{topic}' in memory server"
-                    except Exception as e:
-                        return f"Error storing conversation: {str(e)}"
-
-                def retrieve_conversation(topic: str = None, limit: int = 10) -> str:
-                    """Retrieve conversations from memory server"""
-                    try:
-                        import os
-                        import json
-                        from pathlib import Path
-
-                        memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
-                        if not os.path.exists(memory_dir):
-                            return "No conversations found - memory server directory does not exist"
-
-                        # Get all JSON files
-                        json_files = list(Path(memory_dir).glob("*.json"))
-                        conversations = []
-
-                        for file_path in json_files:
-                            try:
-                                with open(file_path, "r", encoding="utf-8") as f:
-                                    data = json.load(f)
-                                    if (
-                                        topic is None
-                                        or data.get("topic", "").lower() == topic.lower()
-                                    ):
-                                        conversations.append(data)
-                            except:
-                                continue
-
-                        # Sort by timestamp (newest first)
-                        conversations.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-                        conversations = conversations[:limit]
-
-                        if conversations:
-                            output = f"📚 Retrieved {len(conversations)} conversations:\n\n"
-                            for conv in conversations:
-                                output += f"**Topic**: {conv.get('topic', 'Unknown')}\n"
-                                output += f"**Time**: {conv.get('timestamp', 'Unknown')}\n"
-                                output += f"**Content**: {conv.get('content', 'No content')}\n"
-                                if conv.get("metadata"):
-                                    output += f"**Metadata**: {json.dumps(conv.get('metadata'), indent=2)}\n"
-                                output += "-" * 50 + "\n\n"
-                            return output
-                        else:
-                            return "No conversations found in memory"
-                    except Exception as e:
-                        return f"Error retrieving conversations: {str(e)}"
-
-                def search_conversations(query: str) -> str:
-                    """Search conversations in memory server"""
-                    try:
-                        import os
-                        import json
-                        from pathlib import Path
-
-                        memory_dir = os.path.join(os.path.expanduser("~"), ".memory_server_bin")
-                        if not os.path.exists(memory_dir):
-                            return "No conversations found - memory server directory does not exist"
-
-                        # Get all JSON files
-                        json_files = list(Path(memory_dir).glob("*.json"))
-                        results = []
-                        query_lower = query.lower()
-
-                        for file_path in json_files:
-                            try:
-                                with open(file_path, "r", encoding="utf-8") as f:
-                                    data = json.load(f)
-                                    content = data.get("content", "").lower()
-                                    topic = data.get("topic", "").lower()
-
-                                    # Simple relevance scoring
-                                    score = 0
-                                    if query_lower in topic:
-                                        score += 2
-                                    if query_lower in content:
-                                        score += content.count(query_lower)
-
-                                    if score > 0:
-                                        data["relevance_score"] = score
-                                        results.append(data)
-                            except:
-                                continue
-
-                        # Sort by relevance score
-                        results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
-
-                        if results:
-                            output = (
-                                f"🔍 Found {len(results)} matching conversations for '{query}':\n\n"
-                            )
-                            for res in results[:10]:  # Limit to top 10 results
-                                output += f"**Topic**: {res.get('topic', 'Unknown')}\n"
-                                output += f"**Relevance**: {res.get('relevance_score', 0)}\n"
-                                output += f"**Time**: {res.get('timestamp', 'Unknown')}\n"
-                                content_preview = res.get("content", "No content")
-                                if len(content_preview) > 200:
-                                    content_preview = content_preview[:200] + "..."
-                                output += f"**Content**: {content_preview}\n"
-                                output += "-" * 50 + "\n\n"
-                            return output
-                        else:
-                            return f"No conversations found matching '{query}'"
-                    except Exception as e:
-                        return f"Error searching conversations: {str(e)}"
-
-                tools.extend(
-                    [
-                        FunctionTool.from_defaults(
-                            fn=store_conversation,
-                            name="memory_store_conversation",
-                            description="Store conversation in memory server",
-                        ),
-                        FunctionTool.from_defaults(
-                            fn=retrieve_conversation,
-                            name="memory_retrieve_conversation",
-                            description="Retrieve conversations from memory server",
-                        ),
-                        FunctionTool.from_defaults(
-                            fn=search_conversations,
-                            name="memory_search_conversations",
-                            description="Search conversations in memory server",
-                        ),
-                    ]
-                )
-
-            else:
-                # For other connections, create placeholder tools
-                for tool_name in connection_info.get("tools", []):
-
-                    def create_placeholder_tool(conn_id, tool_n):
-                        def placeholder_func(**kwargs) -> str:
-                            """Placeholder MCP tool"""
-                            return f"Tool {tool_n} from {conn_id} called with args: {kwargs}\n\nNote: This is a placeholder. Install the actual MCP server for full functionality."
-
-                        return FunctionTool.from_defaults(
-                            fn=placeholder_func,
-                            name=f"{conn_id}_{tool_n}",
-                            description=f"Call {tool_n} tool from {connection_info['name']} MCP server",
-                        )
-
-                    tools.append(create_placeholder_tool(connection_id, tool_name))
+                tools.append(create_placeholder_tool(connection_id, tool_name))
 
             # Store tools for this connection
             if not hasattr(self, "mcp_tools"):
                 self.mcp_tools = {}
             self.mcp_tools[connection_id] = tools
+
 
         def _recreate_agent_with_mcp_tools(self):
             """Recreate the agent with MCP tools included"""
@@ -1652,69 +1065,8 @@ Be helpful and proactive about finding the right tools.""",
                     for connection_tools in self.mcp_tools.values():
                         all_tools.extend(connection_tools)
 
-                # Get the system prompt (use the updated one with tool continuation emphasis)
-                system_prompt = """You are a coding assistant helping with MCP server management and development.
-
-**KEY BEHAVIORS:**
-1. When users ask for tools/servers for specific tasks, ALWAYS search the registry first using search_mcp_registry()
-2. Before installing ANY server, ALWAYS use check_server_requirements() to see what's needed
-3. If a server requires arguments or API keys, you MUST ask the user for them before attempting installation
-4. API keys are stored securely and reused automatically - no need to ask again if already stored
-5. Store important conversations in memory server for future reference
-
-**CRITICAL: CONTINUE USING TOOLS!**
-- When a user asks you to perform multiple actions (like "list my repos" after installing GitHub), you MUST continue using tools
-- DO NOT switch to just answering - keep using the actual MCP tools to fulfill the user's requests
-- After installing a server, ALWAYS demonstrate it works by using its tools when requested
-- If a tool call succeeds, continue with the next requested action using tools
-
-**MCP SERVER INSTALLATION WORKFLOW:**
-
-1. **ALWAYS CHECK REQUIREMENTS FIRST:**
-   - Use: check_server_requirements("server-id") to see what's needed
-   - This shows required arguments, environment variables, and whether keys are already stored
-   - NEVER skip this step!
-
-2. **FINDING SERVERS:**
-   - Search: search_mcp_registry("search-term") to find relevant servers
-   - Check: check_server_requirements("server-id") before installing
-
-3. **EXAMPLE: BRAVE SEARCH:**
-   - **STEP 1**: check_server_requirements("brave-search")
-   - **STEP 2**: If API key not stored, ask user for it
-   - **STEP 3**: Install: install_mcp_server_from_registry(server_id="brave-search", token="USER_PROVIDED_KEY")
-   - **STEP 4**: Use: brave_search(query="search term")
-
-4. **EXAMPLE: FILESYSTEM:**
-   - **STEP 1**: check_server_requirements("filesystem")
-   - **STEP 2**: Ask user which directory to provide access to
-   - **STEP 3**: Install: install_mcp_server_from_registry(server_id="filesystem", path="/user/provided/path")
-
-5. **EXAMPLE: MEMORY SERVER:**
-   - **STEP 1**: check_server_requirements("memory")
-   - **STEP 2**: Install directly (no requirements): install_mcp_server_from_registry(server_id="memory")
-
-6. **EXAMPLE: OBSIDIAN:**
-   - **STEP 1**: check_server_requirements("obsidian")
-   - **STEP 2**: Ask user for vault path
-   - **STEP 3**: Install: install_mcp_server_from_registry(server_id="obsidian", vault_path1="/path/to/vault")
-
-**IMPORTANT RULES:** 
-- Always search registry when users need specific functionality
-- **NEVER** try to install servers with API keys without asking the user first
-- If a server requires an API key (brave-search, github, etc.), ALWAYS ask the user to provide it
-- Store conversations about user preferences/identity in memory server
-- API keys are encrypted and stored securely after the user provides them
-- **CONTINUE USING TOOLS** - Don't switch to just answering after the first tool call
-
-**USING MCP SERVERS:**
-- When an MCP server is installed, its tools become available with the prefix: {server_id}_{tool_name}
-- For example: obsidian_read_note(), filesystem_list_directory(), github_list_repos()
-- The tools will appear after the server is successfully installed and connected
-- Use the actual MCP tools rather than generic file tools when available
-- **ALWAYS USE TOOLS** when the user asks for actions, don't just describe what you would do
-
-Be helpful and proactive about finding the right tools."""
+                # Get the system prompt from configuration
+                system_prompt = self.prompt_manager.get_system_prompt("coding_agent.main")
 
                 # Recreate agent with all tools
                 self.agent = ReActAgent.from_tools(

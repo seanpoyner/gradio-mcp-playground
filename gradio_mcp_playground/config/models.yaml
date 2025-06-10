@@ -1,0 +1,50 @@
+# Available LLM Models Configuration
+# This file contains the list of models available for the coding agent
+
+models:
+  "Qwen/Qwen2.5-Coder-32B-Instruct":
+    name: "Qwen2.5 Coder 32B (CODING SPECIALIST)"
+    description: "🎯 Specialized 32B coding model - excellent for programming tasks and code analysis"
+    context_window: 32768
+    size: "32B parameters"
+    strengths:
+      - "Code generation"
+      - "Code analysis"
+      - "Debugging"
+      - "Multiple languages"
+      - "Latest architecture"
+
+  "mistralai/Mixtral-8x7B-Instruct-v0.1":
+    name: "Mixtral 8x7B Instruct (LARGE)"
+    description: "🚀 Massive 8x7B parameter model - excellent for complex coding tasks and reasoning"
+    context_window: 32768
+    size: "8x7B parameters"
+    strengths:
+      - "Complex reasoning"
+      - "Long context"
+      - "Code generation"
+      - "Multi-step problems"
+
+  "HuggingFaceH4/zephyr-7b-beta":
+    name: "Zephyr 7B Beta (FAST)"
+    description: "⚡ Fine-tuned 7B model - fast responses, good for most coding tasks"
+    context_window: 8192
+    size: "7B parameters"
+    strengths:
+      - "Fast responses"
+      - "General coding"
+      - "Explanations"
+      - "Quick iterations"
+
+# Default model settings
+defaults:
+  temperature: 0.7
+  top_p: 0.95
+  max_new_tokens: 2048
+  timeout: 60.0
+
+# Model selection criteria
+selection_guide:
+  code_generation: "Qwen/Qwen2.5-Coder-32B-Instruct"
+  complex_reasoning: "mistralai/Mixtral-8x7B-Instruct-v0.1"
+  quick_responses: "HuggingFaceH4/zephyr-7b-beta"
