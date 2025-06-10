@@ -610,12 +610,7 @@ def create_unified_dashboard():
                             show_copy_button=True,
                             type="messages",
                             bubble_full_width=True,
-                            value=[
-                                {
-                                    "role": "assistant",
-                                    "content": "👋 Hello! I'm Arthur, your agent creation specialist.\n\nI can help you create custom Gradio agents for various tasks. Here are some things you can ask me:\n\n• **Show available templates** - See what agent templates are available\n• **Create a data analysis agent** - Build an agent for data science tasks\n• **Make a creative writing assistant** - Design an agent for content creation\n• **Build a code review agent** - Create an agent for code analysis\n\nWhat kind of agent would you like to create today?",
-                                }
-                            ],
+                            value=[],
                         )
 
                         with gr.Row():
