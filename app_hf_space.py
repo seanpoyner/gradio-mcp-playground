@@ -337,7 +337,7 @@ while True:
                             gr.Markdown("#### Available Templates")
                             
                             for template in self.templates:
-                                with gr.Box():
+                                with gr.Group():
                                     gr.Markdown(f"**{template['name']}**")
                                     gr.Markdown(f"*{template['description']}*")
                                     gr.Code(
