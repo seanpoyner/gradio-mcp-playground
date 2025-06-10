@@ -109,3 +109,9 @@ site/
 CLAUDE.md
 .claude
 
+# HuggingFace deployment directories
+hackathon-submission/
+hf-hackathon-deploy/
+hf-personal-deploy/
+hf-space-deploy/
+hf-space-gradio-mcp/
