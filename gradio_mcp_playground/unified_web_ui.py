@@ -728,7 +728,6 @@ def create_unified_dashboard():
 
                         with gr.Row():
                             disconnect_btn = gr.Button("🔌 Disconnect", variant="stop")
-                            test_conn_btn = gr.Button("🧪 Test", variant="secondary")
 
                     # Custom Connection
                     with gr.Tab("➕ Custom Connection"):
@@ -758,31 +757,7 @@ def create_unified_dashboard():
                             lines=3,
                         )
 
-            # Tab 5: Tool Testing
-            with gr.Tab("🧪 Tool Testing"):
-                gr.Markdown("### Test MCP Tools")
-
-                with gr.Row():
-                    test_server_url = gr.Textbox(
-                        label="Server URL", placeholder="http://localhost:7860"
-                    )
-                    test_protocol = gr.Dropdown(
-                        choices=["auto", "stdio", "sse"], label="Protocol", value="auto"
-                    )
-                    connect_test_btn = gr.Button("🔗 Connect", variant="primary")
-
-                tools_list = gr.JSON(label="Available Tools", visible=False)
-
-                with gr.Row():
-                    tool_name = gr.Textbox(label="Tool Name")
-                    tool_args = gr.Textbox(
-                        label="Arguments (JSON)", placeholder='{"param": "value"}', lines=3
-                    )
-
-                call_tool_btn = gr.Button("🚀 Call Tool", variant="primary")
-                tool_result = gr.JSON(label="Tool Result")
-
-            # Tab 6: Help & Resources
+            # Tab 5: Help & Resources
             with gr.Tab("📚 Help & Resources"):
                 with gr.Tabs():
                     # Documentation
@@ -1275,10 +1250,13 @@ def create_unified_dashboard():
         # Assistant mode switching (3 modes)
         def switch_assistant_mode(mode):
             if mode == "Assistant":
+                # Show general assistant, hide others
                 return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)
             elif mode == "MCP Agent":
+                # Show MCP agent (Liam), hide others
                 return gr.update(visible=False), gr.update(visible=True), gr.update(visible=False)
             else:  # Agent Builder
+                # Show agent builder (Arthur), hide others  
                 return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True)
 
         assistant_mode.change(
@@ -1687,46 +1665,6 @@ def create_unified_dashboard():
                     outputs=[settings_output],
                 )
 
-            # Tool Testing event handlers
-            if "connect_test_btn" in locals():
-
-                def test_connection(url, protocol):
-                    """Test connection to MCP server and list tools"""
-                    if not HAS_CLIENT_MANAGER:
-                        return gr.update(
-                            value={"error": "Client manager not available"}, visible=True
-                        )
-
-                    try:
-                        # This would connect and get tools
-                        # For now, return placeholder
-                        return gr.update(
-                            value={"tools": ["example_tool_1", "example_tool_2"]}, visible=True
-                        )
-                    except Exception as e:
-                        return gr.update(value={"error": str(e)}, visible=True)
-
-                connect_test_btn.click(
-                    test_connection, inputs=[test_server_url, test_protocol], outputs=[tools_list]
-                )
-
-            if "call_tool_btn" in locals():
-
-                def call_mcp_tool(name, args_json):
-                    """Call an MCP tool"""
-                    try:
-                        import json
-
-                        args = json.loads(args_json) if args_json else {}
-                        # This would actually call the tool
-                        # For now, return placeholder
-                        return {"success": True, "result": f"Called {name} with args: {args}"}
-                    except Exception as e:
-                        return {"error": str(e)}
-
-                call_tool_btn.click(
-                    call_mcp_tool, inputs=[tool_name, tool_args], outputs=[tool_result]
-                )
 
             # Connection management buttons
             if "disconnect_btn" in locals():
@@ -1736,19 +1674,6 @@ def create_unified_dashboard():
                     outputs=[gr.Textbox(visible=False)],  # Status message
                 ).then(refresh_connections, outputs=[connections_list, connection_dropdown])
 
-            if "test_conn_btn" in locals():
-
-                def test_existing_connection(connection_name):
-                    """Test an existing connection"""
-                    if not connection_name:
-                        return "Please select a connection to test"
-                    return f"✅ Connection '{connection_name}' is active"
-
-                test_conn_btn.click(
-                    test_existing_connection,
-                    inputs=[connection_dropdown],
-                    outputs=[gr.Textbox(visible=False)],  # Status message
-                )
 
         # Initialize on load
         if "connections_list" in locals():
