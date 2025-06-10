@@ -309,6 +309,9 @@ def create_mcp_tools_for_server(server: MCPServerProcess) -> List[Any]:
                                     if generic_path == "/tmp/":
                                         # Use Windows temp directory
                                         value = value.replace(generic_path, windows_home + "\\temp\\")
+                                    elif generic_path == "~/":
+                                        # Replace ~/ with Windows home, preserving the rest of the path
+                                        value = value.replace("~/", windows_home + "\\").replace("/", "\\")
                                     else:
                                         value = value.replace(generic_path.rstrip("/"), windows_home).replace("/", "\\")
                                     logger.info(f"Replaced generic path for {srv.server_id}.{name}: {generic_path} -> {windows_home}")
@@ -317,6 +320,9 @@ def create_mcp_tools_for_server(server: MCPServerProcess) -> List[Any]:
                                     windows_home = env_info['paths']['home']
                                     if generic_path == "/tmp/":
                                         value = value.replace(generic_path, windows_home + "\\temp\\")
+                                    elif generic_path == "~/":
+                                        # Replace ~/ with Windows home, preserving the rest of the path
+                                        value = value.replace("~/", windows_home + "\\").replace("/", "\\")
                                     else:
                                         value = value.replace(generic_path.rstrip("/"), windows_home).replace("/", "\\")
                                 break

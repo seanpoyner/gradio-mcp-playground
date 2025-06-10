@@ -180,7 +180,7 @@ def create_dashboard():
                             model_dropdown = gr.Dropdown(
                                 label="Select Model",
                                 choices=list(coding_agent.get_available_models().keys()),
-                                value="Qwen/Qwen2.5-Coder-32B-Instruct",  # Default to coding specialist model
+                                value="microsoft/Phi-3.5-mini-instruct",  # Default to a model with larger context
                                 info="Choose a model for the AI assistant",
                             )
 
@@ -223,10 +223,9 @@ def create_dashboard():
                         model_info = gr.JSON(label="", visible=True)
 
                     # Chat interface
-                    gr.Markdown("#### Chat with Liam - Your MCP Assistant")
                     chatbot = gr.Chatbot(
-                        label="Liam - AI Coding Assistant",
-                        height=400,
+                        label="Chat with Liam",
+                        height=500,
                         show_copy_button=True,
                         type="messages",
                         bubble_full_width=True,
@@ -3231,38 +3230,24 @@ For others, please install manually using the command above."""
         if coding_agent:
             def initialize_liam_greeting():
                 """Generate Liam's initial greeting with available MCP servers"""
-                greeting = "👋 Hello! I'm Liam, your MCP (Model Context Protocol) assistant.\n\n"
-                greeting += "I'm here to help you with:\n"
-                greeting += "• 🔧 Installing and managing MCP servers\n"
-                greeting += "• 💻 Writing code and analyzing projects\n"
-                greeting += "• 🚀 Building Gradio applications\n"
-                greeting += "• 📚 Learning about MCP development\n\n"
-                
-                # List available MCP servers
-                greeting += "**Available MCP Servers:**\n\n"
-                
-                # Check which servers are loaded
+                # Count connected servers
+                connected_count = 0
                 if hasattr(coding_agent, '_mcp_servers') and coding_agent._mcp_servers:
-                    greeting += "✅ **Currently Connected:**\n"
-                    for server_name in coding_agent._mcp_servers.keys():
-                        greeting += f"• {server_name}\n"
-                    greeting += "\n"
+                    connected_count = len(coding_agent._mcp_servers)
                 
-                # List servers that can be installed
-                greeting += "📦 **Ready to Install:**\n"
-                greeting += "• **filesystem** - Secure file operations\n"
-                greeting += "• **memory** - Persistent conversation memory\n"
-                greeting += "• **github** - GitHub repository management\n"
-                greeting += "• **brave-search** - Web search capabilities\n"
-                greeting += "• **obsidian** - Obsidian vault integration\n"
-                greeting += "• **sequential-thinking** - Step-by-step reasoning\n\n"
+                greeting = f"👋 Hi! I'm Liam, your MCP assistant. I can help you install and manage MCP servers, write code, and build Gradio apps.\n\n"
                 
-                greeting += "💡 **Quick Start:**\n"
-                greeting += "• To install a server: `install memory server`\n"
-                greeting += "• To search for servers: `find servers for database`\n"
-                greeting += "• To check requirements: `what do I need for github server?`\n\n"
+                if connected_count > 0:
+                    greeting += f"✅ **{connected_count} servers connected** "
+                    # Show first 3 servers
+                    server_names = list(coding_agent._mcp_servers.keys())[:3]
+                    greeting += f"({', '.join(server_names)}"
+                    if connected_count > 3:
+                        greeting += f", +{connected_count - 3} more"
+                    greeting += ")\n\n"
                 
-                greeting += "How can I help you today?"
+                greeting += "💡 **Quick commands:** `install memory` • `find database servers` • `what's MCP?`\n\n"
+                greeting += "What would you like to do?"
                 
                 return [{"role": "assistant", "content": greeting}]
             
