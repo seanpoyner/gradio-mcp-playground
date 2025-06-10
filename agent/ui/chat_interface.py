@@ -7,19 +7,40 @@ import asyncio
 from typing import List, Dict, Any, Tuple, Optional
 import gradio as gr
 
+# Import Agent Builder
+from ..core.agent_builder import AgentBuilder
+
 
 class ChatInterface:
     """Main chat interface for the GMP Agent"""
     
     def __init__(self, agent):
-        self.agent = agent
+        self.mcp_agent = agent  # Keep reference to original agent
+        self.agent_builder = AgentBuilder()
+        self.agent = self.agent_builder  # Start with Agent Builder as default
         self.conversation_history = []
         self.mcp_connections_panel = None  # Will be set later
+        self.current_agent_mode = "Agent Builder"  # Start with Agent Builder as default
         
     def create_interface(self) -> None:
         """Create the chat interface components"""
         
         with gr.Column(scale=1):
+            # Agent Selection Dropdown
+            with gr.Row():
+                self.agent_selector = gr.Dropdown(
+                    label="🤖 Select Agent Mode",
+                    choices=["Agent Builder", "MCP Agent"],
+                    value="Agent Builder",  # Default to Agent Builder
+                    info="Choose between Agent creation (Agent Builder) or MCP Server building (MCP Agent)",
+                    scale=2
+                )
+                
+                self.agent_info = gr.Markdown(
+                    """**Agent Builder**: Create custom Gradio agents using AI and system prompts""",
+                    elem_classes="agent-info"
+                )
+            
             # Chat display area
             self.chatbot = gr.Chatbot(
                 label="GMP Agent",
@@ -29,7 +50,7 @@ class ChatInterface:
                 bubble_full_width=False,
                 type="messages",
                 value=[
-                    {"role": "assistant", "content": "👋 Hello! I'm the GMP Agent, your intelligent assistant for building MCP servers. How can I help you today?"}
+                    {"role": "assistant", "content": "🤖 Hello! I'm the Agent Builder, your intelligent assistant for creating custom Gradio agents. I can help you build specialized agents using system prompts from top AI assistants. What kind of agent would you like to create?"}
                 ]
             )
             
@@ -37,7 +58,7 @@ class ChatInterface:
                 # Message input
                 self.message_input = gr.Textbox(
                     label="Message",
-                    placeholder="Describe what you want to build... (e.g., 'Create a calculator server')",
+                    placeholder="Describe the agent you want to build... (e.g., 'Create a code review agent')",
                     lines=2,
                     scale=4,
                     show_label=False
@@ -61,14 +82,14 @@ class ChatInterface:
                     self.examples_dropdown = gr.Dropdown(
                         label="Quick Examples",
                         choices=[
-                            "Create a basic calculator server",
-                            "Build an image processing pipeline",
-                            "Make a text analyzer with sentiment analysis",
-                            "Create a data visualization dashboard",
-                            "Build a file converter tool",
-                            "Help me understand MCP protocol",
-                            "Show me available server templates",
-                            "How do I deploy my server?"
+                            "Create a code review agent using Claude's system prompt",
+                            "Build a creative writing assistant with v0's style",
+                            "Make a data analysis agent with GitHub Copilot's approach",
+                            "Create a UI component builder like Cursor IDE",
+                            "Build a conversational agent using Anthropic's prompt",
+                            "Make a debugging assistant with advanced reasoning",
+                            "Create a documentation writer agent",
+                            "Build a Python tutor agent"
                         ],
                         value=None,
                         interactive=True
@@ -115,6 +136,9 @@ class ChatInterface:
                 
                 self.model_status = gr.Markdown("**Model Status**: Initializing...")
 
+            # Agent mode selection (duplicate removed - using agent_selector instead)
+            # The agent_mode_dropdown is redundant with agent_selector
+        
         # Set up event handlers
         self._setup_event_handlers()
         
@@ -124,13 +148,16 @@ class ChatInterface:
     def _initialize_hf_interface(self) -> None:
         """Initialize HF interface components after agent setup"""
         try:
+            # Use the current agent based on mode
+            current_agent = self.agent_builder if self.current_agent_mode == "Agent Builder" else self.mcp_agent
+            
             # Load existing token if available
-            existing_token = self.agent.get_hf_token()
+            existing_token = current_agent.get_hf_token()
             if existing_token:
                 self.hf_token_input.value = "••••••••••••" + existing_token[-8:] if len(existing_token) > 8 else "••••••••"
             
             # Set current model selection
-            current_model = self.agent.get_current_model()
+            current_model = current_agent.get_current_model()
             if current_model:
                 self.model_dropdown.value = current_model
             
@@ -207,6 +234,13 @@ class ChatInterface:
             outputs=[self.model_status]
         )
 
+        # Agent selector change
+        self.agent_selector.change(
+            fn=self._change_agent_mode,
+            inputs=[self.agent_selector],
+            outputs=[self.chatbot, self.context_display, self.suggestions_display, self.agent_info]
+        )
+
     async def _handle_message(self, message: str, chat_history: List[Dict]) -> Tuple[List[Dict], str, Dict[str, Any], str]:
         """Handle user message and generate response"""
         
@@ -220,16 +254,23 @@ class ChatInterface:
             # Update agent with current MCP connections if available
             if self.mcp_connections_panel:
                 active_connections = self.mcp_connections_panel.get_active_connections()
-                self.agent.set_mcp_connections(active_connections)
+                if self.current_agent_mode == "Agent Builder":
+                    self.agent_builder.set_mcp_connections(active_connections)
+                else:
+                    self.mcp_agent.set_mcp_connections(active_connections)
             
-            # Process message with agent
-            response, metadata = await self.agent.process_message(message)
+            # Process message with the current agent
+            if self.current_agent_mode == "Agent Builder":
+                response, metadata = await self.agent_builder.process_agent_request(message)
+            else:
+                response, metadata = await self.mcp_agent.process_message(message)
             
             # Add agent response to chat
             chat_history.append({"role": "assistant", "content": response})
             
             # Update context display
             context_info = {
+                "agent_mode": self.current_agent_mode,
                 "intent": metadata.get("intent", "unknown"),
                 "confidence": metadata.get("confidence", 0.0),
                 "entities": metadata.get("entities", {}),
@@ -241,7 +282,7 @@ class ChatInterface:
             if metadata.get("source") == "huggingface_model":
                 context_info["model"] = metadata.get("model", "unknown")
             
-            # Generate suggestions
+            # Generate suggestions based on current mode
             suggestions = self._generate_suggestions(metadata)
             
             return chat_history, "", context_info, suggestions
@@ -251,7 +292,7 @@ class ChatInterface:
             error_response = f"I encountered an error: {str(e)}. Please try rephrasing your request or ask for help."
             chat_history.append({"role": "assistant", "content": error_response})
             
-            return chat_history, "", {"error": str(e)}, "Try asking for help or rephrasing your request."
+            return chat_history, "", {"error": str(e), "agent_mode": self.current_agent_mode}, "Try asking for help or rephrasing your request."
     
     def _handle_example_selection(self, selected_example: str, chat_history: List[Dict]) -> Tuple[List[Dict], str, str, Dict[str, Any], str]:
         """Handle selection of an example prompt"""
@@ -265,12 +306,22 @@ class ChatInterface:
     def _clear_conversation(self) -> Tuple[List[Dict], Dict[str, Any], str]:
         """Clear the conversation history"""
         
-        self.agent.clear_conversation()
+        # Clear conversation for current agent
+        if self.current_agent_mode == "Agent Builder":
+            # Agent Builder doesn't have clear_conversation method, so just reset locally
+            self.conversation_history = []
+        else:
+            self.mcp_agent.clear_conversation()
         
-        # Return initial state with system message
-        initial_history = [
-            {"role": "assistant", "content": "👋 Hello! I'm the GMP Agent, your intelligent assistant for building MCP servers. How can I help you today?"}
-        ]
+        # Return initial state with system message based on current mode
+        if self.current_agent_mode == "Agent Builder":
+            initial_history = [
+                {"role": "assistant", "content": "🤖 Hello! I'm the Agent Builder, your intelligent assistant for creating custom Gradio agents. I can help you build specialized agents using system prompts from top AI assistants. What kind of agent would you like to create?"}
+            ]
+        else:
+            initial_history = [
+                {"role": "assistant", "content": "👋 Hello! I'm the GMP Agent, your intelligent assistant for building MCP servers. How can I help you today?"}
+            ]
         
         return initial_history, {}, ""
     
@@ -307,6 +358,7 @@ class ChatInterface:
         action = metadata.get("action", "")
         intent = metadata.get("intent", "")
         source = metadata.get("source", "rule_based")
+        agent_mode = metadata.get("agent_mode", self.current_agent_mode)
         
         suggestions = "## 💡 What you can do next:\n\n"
         
@@ -315,48 +367,76 @@ class ChatInterface:
             model_name = metadata.get("model", "Unknown")
             suggestions += f"🤖 *Response generated using {model_name}*\n\n"
         
-        if action == "show_recommendations":
-            suggestions += """
+        # Agent Builder specific suggestions
+        if agent_mode == "Agent Builder":
+            if action == "request_agent_details":
+                suggestions += """
+- **"Create a code review agent"** - Build an AI coding assistant
+- **"Make a creative writing helper"** - Generate content creation agent
+- **"Build a data analysis agent"** - Create data science assistant
+- **"I want a UI component builder"** - Make interface generation agent
+"""
+            elif action == "ready_to_build":
+                suggestions += """
+- **"Use Claude's system prompt"** - Professional conversational style
+- **"Apply v0's approach"** - UI/UX focused generation
+- **"Use GitHub Copilot style"** - Code-focused assistance
+- **"Apply default style"** - Balanced general-purpose agent
+"""
+            elif action == "agent_created":
+                suggestions += """
+- **"Create another agent"** - Build a different type of agent
+- **"Test the new agent"** - Try out your created agent
+- **"Show me the code"** - View generated agent code
+- **"Customize further"** - Add more features to the agent
+"""
+            else:
+                suggestions += """
+- **"Create a Python tutor agent"** - Educational assistant
+- **"Build a debugging helper"** - Code troubleshooting agent
+- **"Make a documentation writer"** - Technical writing assistant
+- **"Create a conversational agent"** - General purpose chat agent
+"""
+        
+        # MCP Agent specific suggestions
+        else:
+            if action == "show_recommendations":
+                suggestions += """
 - **"Create the first option"** - Build the top recommended server
 - **"Customize option 2"** - Modify a recommended server for your needs  
 - **"Show me more options"** - See additional server templates
 - **"Explain how X works"** - Learn about a specific server type
 """
-        
-        elif action == "request_clarification":
-            suggestions += """
+            elif action == "request_clarification":
+                suggestions += """
 - **Be more specific** about your requirements
 - **Mention the type of data** you'll work with
 - **Describe your use case** in more detail
 - **Ask for examples** of similar servers
 """
-        
-        elif action == "show_search_results":
-            suggestions += """
+            elif action == "show_search_results":
+                suggestions += """
 - **"Create server X"** - Build one of the found servers
 - **"Tell me more about Y"** - Get details about a specific server
 - **"Show similar servers"** - Find related options
 - **"Search for Z"** - Try a different search
 """
-        
-        elif intent == "create_server":
-            suggestions += """
+            elif intent == "create_server":
+                suggestions += """
 - **"Start building"** - Begin server creation
 - **"Use template X"** - Choose a specific template
 - **"Add custom features"** - Extend beyond basic templates
 - **"Show me the code"** - See what will be generated
 """
-        
-        elif intent == "get_help":
-            suggestions += """
+            elif intent == "get_help":
+                suggestions += """
 - **"Show me an example"** - See sample implementations
 - **"What can you build?"** - Explore available options
 - **"How do I deploy?"** - Learn about deployment
 - **"Explain MCP protocol"** - Understand the technology
 """
-        
-        else:
-            suggestions += """
+            else:
+                suggestions += """
 - **"Create a new server"** - Start building something
 - **"Show available templates"** - Browse options
 - **"Help me understand MCP"** - Learn the basics
@@ -370,7 +450,9 @@ class ChatInterface:
     def _update_model_status(self) -> str:
         """Update and return current model status"""
         try:
-            status = self.agent.get_model_status()
+            # Use the current agent based on mode
+            current_agent = self.agent_builder if self.current_agent_mode == "Agent Builder" else self.mcp_agent
+            status = current_agent.get_model_status()
             
             if not status["has_transformers"]:
                 return "**Model Status**: ❌ Transformers library not installed. Run: `pip install transformers torch`"
@@ -378,7 +460,7 @@ class ChatInterface:
             if not status["has_secure_storage"]:
                 return "**Model Status**: ❌ Secure storage not available. Install cryptography: `pip install cryptography`"
             
-            if not status["has_token"]:
+            if not status.get("has_token", False):
                 return "**Model Status**: ⚠️ No HuggingFace token found. Please enter your token above."
             
             if status["model_loaded"]:
@@ -399,7 +481,10 @@ class ChatInterface:
             if "••••" in token:
                 return "**Model Status**: ⚠️ Token already saved. Enter a new token to update."
             
-            if self.agent.set_hf_token(token.strip()):
+            # Use the current agent based on mode
+            current_agent = self.agent_builder if self.current_agent_mode == "Agent Builder" else self.mcp_agent
+            
+            if current_agent.set_hf_token(token.strip()):
                 return "**Model Status**: ✅ Token saved securely!"
             else:
                 return "**Model Status**: ❌ Failed to save token. Check secure storage setup."
@@ -413,11 +498,14 @@ class ChatInterface:
             if not model_name:
                 return "**Model Status**: ❌ Please select a model"
             
+            # Use the current agent based on mode
+            current_agent = self.agent_builder if self.current_agent_mode == "Agent Builder" else self.mcp_agent
+            
             # Check if token is available
-            if not self.agent.get_hf_token():
+            if not current_agent.get_hf_token():
                 return "**Model Status**: ❌ Please save your HuggingFace token first"
             
-            success = await self.agent.load_hf_model(model_name)
+            success = await current_agent.load_hf_model(model_name)
             
             if success:
                 return f"**Model Status**: ✅ Model loaded successfully: `{model_name}`"
@@ -430,7 +518,9 @@ class ChatInterface:
     def _unload_hf_model(self) -> str:
         """Unload current HuggingFace model"""
         try:
-            self.agent.unload_hf_model()
+            # Use the current agent based on mode
+            current_agent = self.agent_builder if self.current_agent_mode == "Agent Builder" else self.mcp_agent
+            current_agent.unload_hf_model()
             return "**Model Status**: ✅ Model unloaded successfully"
         except Exception as e:
             return f"**Model Status**: ❌ Error unloading model: {str(e)}"
@@ -512,3 +602,34 @@ Great work! 🚀
 """
         
         return message
+    
+    def _change_agent_mode(self, selected_mode: str) -> Tuple[List[Dict], Dict[str, Any], str, str]:
+        """Change the agent mode between MCP Agent and Agent Builder"""
+        
+        self.current_agent_mode = selected_mode
+        
+        if selected_mode == "Agent Builder":
+            # Switch to Agent Builder
+            self.agent = self.agent_builder
+            # Set up MCP connections for Agent Builder (for GitHub prompts)
+            if self.mcp_connections_panel:
+                active_connections = self.mcp_connections_panel.get_active_connections()
+                self.agent_builder.set_mcp_connections(active_connections)
+            
+            initial_message = [
+                {"role": "assistant", "content": "🤖 Switched to Agent Builder mode! I can help you create custom Gradio agents using system prompts from top AI assistants like Claude, GPT, and Cursor IDE. What kind of agent would you like to build?"}
+            ]
+            agent_info = "**Agent Builder**: Create custom Gradio agents using AI and system prompts"
+            
+        else:
+            # Switch back to MCP Agent
+            self.agent = self.mcp_agent
+            initial_message = [
+                {"role": "assistant", "content": "👋 Switched to MCP Agent mode! I'm here to help you build MCP servers using the Gradio MCP Playground. What would you like to create?"}
+            ]
+            agent_info = "**MCP Agent**: Build and manage MCP servers using Gradio MCP Playground"
+        
+        # Clear conversation context for new mode
+        self.conversation_history = []
+        
+        return initial_message, {}, "**Suggestions will appear here based on our conversation...**", agent_info
