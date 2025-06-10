@@ -1536,16 +1536,6 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                                 tutorial_content = gr.Markdown(
                                     value=load_documentation("getting-started.md")
                                 )
-                                    ```
-                                    
-                                    ## 💡 Pro Tips:
-                                    
-                                    - **Use Templates**: Start with templates and modify them
-                                    - **Test Locally**: Always test servers locally first
-                                    - **Monitor Logs**: Check server logs for debugging
-                                    - **Ask the AI**: Use the assistant for code help
-                                    """
-                                )
                     
                     # API Reference
                     with gr.Tab("🔧 API Reference"):
