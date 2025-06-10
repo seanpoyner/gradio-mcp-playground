@@ -239,6 +239,12 @@ class ServerManager:
                 
                 self.export_logs_btn = gr.Button("📤 Export Logs")
             
+            # File output for log export (hidden)
+            self.log_export_file = gr.File(
+                label="Exported Logs",
+                visible=False
+            )
+            
             with gr.Row():
                 # Logs panel
                 with gr.Column(scale=2):
@@ -398,6 +404,13 @@ Server restarted successfully
                 self.save_settings_btn = gr.Button("💾 Save Settings", variant="primary")
                 self.reset_settings_btn = gr.Button("🔄 Reset to Defaults")
                 self.export_settings_btn = gr.Button("📤 Export Settings")
+            
+            # Status message
+            self.settings_status = gr.Textbox(
+                label="Status",
+                interactive=False,
+                visible=False
+            )
         
         # Set up settings handlers
         self._setup_settings_handlers()
@@ -474,7 +487,7 @@ Server restarted successfully
         # Export logs
         self.export_logs_btn.click(
             fn=self._export_logs,
-            outputs=[gr.File(visible=False)]  # For download
+            outputs=[self.log_export_file]
         )
     
     def _setup_settings_handlers(self) -> None:
@@ -494,7 +507,7 @@ Server restarted successfully
                 self.default_port, self.auto_start, self.log_retention,
                 self.server_port, self.server_public, self.env_vars
             ],
-            outputs=[gr.Textbox(visible=False)]  # Status message
+            outputs=[self.settings_status]
         )
     
     def _get_mock_servers_data(self) -> List[List[str]]:
@@ -671,7 +684,33 @@ if __name__ == "__main__":
     def _export_logs(self) -> str:
         """Export logs to file"""
         
-        return "Server logs exported successfully"
+        # Create a temporary log file
+        import tempfile
+        import os
+        from datetime import datetime
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_content = f"""# Server Logs Export
+# Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+[INFO] Server started successfully on port 7860
+[INFO] MCP connection established
+[WARNING] High memory usage detected (85%)
+[INFO] Processing request from client
+[ERROR] Connection timeout for client 192.168.1.100
+[INFO] Backup completed successfully
+"""
+        
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(
+            mode='w',
+            suffix=f'_server_logs_{timestamp}.txt',
+            delete=False
+        )
+        temp_file.write(log_content)
+        temp_file.close()
+        
+        return temp_file.name
     
     def _load_server_settings(self, server_name: str) -> Tuple[int, bool, bool, bool]:
         """Load settings for selected server"""

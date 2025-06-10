@@ -17,12 +17,17 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 # Import core components
-from core.agent import GMPAgent
-from ui.chat_interface import ChatInterface
-from ui.pipeline_view import PipelineView
-from ui.server_manager import ServerManager
-from ui.control_panel import ControlPanelUI
-from ui.mcp_connections_panel import MCPConnectionsPanel
+try:
+    from core.agent import GMPAgent
+    from ui.chat_interface import ChatInterface
+    from ui.pipeline_view import PipelineView
+    from ui.server_manager import ServerManager
+    from ui.control_panel import ControlPanelUI
+    from ui.mcp_connections_panel import MCPConnectionsPanel
+except ImportError as e:
+    console.print(f"[red]Import error: {e}[/red]")
+    console.print("[yellow]Make sure you're running from the agent directory or have proper Python path setup[/yellow]")
+    sys.exit(1)
 
 console = Console()
 

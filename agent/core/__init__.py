@@ -6,4 +6,8 @@ from .registry import EnhancedRegistry
 from .knowledge import KnowledgeBase
 from .agent_runner import AgentRunner, get_agent_runner
 
-__all__ = ["GMPAgent", "ServerBuilder", "EnhancedRegistry", "KnowledgeBase", "AgentRunner", "get_agent_runner"]
+try:
+    from .agent_builder import AgentBuilder
+    __all__ = ["GMPAgent", "ServerBuilder", "EnhancedRegistry", "KnowledgeBase", "AgentRunner", "get_agent_runner", "AgentBuilder"]
+except ImportError:
+    __all__ = ["GMPAgent", "ServerBuilder", "EnhancedRegistry", "KnowledgeBase", "AgentRunner", "get_agent_runner"]

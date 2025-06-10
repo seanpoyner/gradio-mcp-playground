@@ -7,20 +7,52 @@ import asyncio
 from typing import List, Dict, Any, Tuple, Optional
 import gradio as gr
 
-# Import Agent Builder
-from ..core.agent_builder import AgentBuilder
+# Import Agent Builder and MCP Agent
+try:
+    # Try relative imports first (when used as package)
+    from ..core.agent_builder import AgentBuilder
+    from ..core.agent import GMPAgent
+except ImportError:
+    try:
+        # Try absolute imports (when running as script from agent directory)
+        from core.agent_builder import AgentBuilder
+        from core.agent import GMPAgent
+    except ImportError:
+        # Last resort - add path and import
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from core.agent_builder import AgentBuilder
+        from core.agent import GMPAgent
 
 
 class ChatInterface:
     """Main chat interface for the GMP Agent"""
     
-    def __init__(self, agent):
-        self.mcp_agent = agent  # Keep reference to original agent
-        self.agent_builder = AgentBuilder()
-        self.agent = self.agent_builder  # Start with Agent Builder as default
+    def __init__(self, agent=None):
+        # Initialize MCP agent
+        if agent is None:
+            self.mcp_agent = GMPAgent()
+        else:
+            self.mcp_agent = agent
+            
+        # Initialize Agent Builder
+        try:
+            self.agent_builder = AgentBuilder()
+        except Exception as e:
+            print(f"Warning: Could not initialize AgentBuilder: {e}")
+            self.agent_builder = None
+            
+        # Start with Agent Builder as default if available, otherwise MCP Agent
+        if self.agent_builder is not None:
+            self.agent = self.agent_builder
+            self.current_agent_mode = "Agent Builder"
+        else:
+            self.agent = self.mcp_agent
+            self.current_agent_mode = "MCP Agent"
+            
         self.conversation_history = []
         self.mcp_connections_panel = None  # Will be set later
-        self.current_agent_mode = "Agent Builder"  # Start with Agent Builder as default
         
     def create_interface(self) -> None:
         """Create the chat interface components"""
@@ -28,16 +60,31 @@ class ChatInterface:
         with gr.Column(scale=1):
             # Agent Selection Dropdown
             with gr.Row():
+                # Determine available choices and default
+                choices = []
+                default_value = "MCP Agent"
+                
+                if self.agent_builder is not None:
+                    choices.append("Agent Builder")
+                    default_value = "Agent Builder"
+                    
+                choices.append("MCP Agent")
+                
                 self.agent_selector = gr.Dropdown(
                     label="🤖 Select Agent Mode",
-                    choices=["Agent Builder", "MCP Agent"],
-                    value="Agent Builder",  # Default to Agent Builder
+                    choices=choices,
+                    value=default_value,
                     info="Choose between Agent creation (Agent Builder) or MCP Server building (MCP Agent)",
                     scale=2
                 )
                 
+                # Dynamic agent info based on current mode
+                info_text = "**MCP Agent**: Build and manage Model Context Protocol servers"
+                if self.current_agent_mode == "Agent Builder":
+                    info_text = "**Agent Builder**: Create custom Gradio agents using AI and system prompts"
+                    
                 self.agent_info = gr.Markdown(
-                    """**Agent Builder**: Create custom Gradio agents using AI and system prompts""",
+                    info_text,
                     elem_classes="agent-info"
                 )
             
@@ -58,7 +105,7 @@ class ChatInterface:
                 # Message input
                 self.message_input = gr.Textbox(
                     label="Message",
-                    placeholder="Describe the agent you want to build... (e.g., 'Create a code review agent')",
+                    placeholder="Describe what you want to build",
                     lines=2,
                     scale=4,
                     show_label=False
@@ -608,7 +655,7 @@ Great work! 🚀
         
         self.current_agent_mode = selected_mode
         
-        if selected_mode == "Agent Builder":
+        if selected_mode == "Agent Builder" and self.agent_builder is not None:
             # Switch to Agent Builder
             self.agent = self.agent_builder
             # Set up MCP connections for Agent Builder (for GitHub prompts)
@@ -622,8 +669,9 @@ Great work! 🚀
             agent_info = "**Agent Builder**: Create custom Gradio agents using AI and system prompts"
             
         else:
-            # Switch back to MCP Agent
+            # Switch back to MCP Agent (or fallback if Agent Builder not available)
             self.agent = self.mcp_agent
+            self.current_agent_mode = "MCP Agent"  # Ensure consistency
             initial_message = [
                 {"role": "assistant", "content": "👋 Switched to MCP Agent mode! I'm here to help you build MCP servers using the Gradio MCP Playground. What would you like to create?"}
             ]

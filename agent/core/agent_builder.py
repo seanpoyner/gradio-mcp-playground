@@ -135,35 +135,6 @@ class SystemPromptManager:
         }
         
         return fallback_prompts.get(prompt_name, "You are a helpful AI assistant specialized in creating Gradio applications.")
-        if prompt_name in self.prompt_cache:
-            return self.prompt_cache[prompt_name]
-            
-        try:
-            if "github" in self.mcp_connections:
-                github_client = self.mcp_connections["github"]
-                
-                # Construct the filename
-                filename = f"{prompt_name}.md"
-                
-                result = await github_client.call_tool(
-                    "f1e_get_file_contents",
-                    {
-                        "owner": "jujumilk3", 
-                        "repo": "leaked-system-prompts",
-                        "path": filename
-                    }
-                )
-                
-                if result and "content" in result:
-                    content = result["content"]
-                    self.prompt_cache[prompt_name] = content
-                    return content
-                    
-        except Exception as e:
-            print(f"Error fetching prompt content for {prompt_name}: {e}")
-            
-        # Return a basic fallback prompt
-        return f"You are a helpful AI assistant specialized in {prompt_name.replace('-', ' ')}."
 
 
 class AgentCodeGenerator:
