@@ -5,11 +5,8 @@ server startup messages before they reach the MCP client.
 """
 
 import asyncio
-import subprocess
 import logging
-from typing import Optional, Tuple, Dict, Any
-import json
-import re
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 

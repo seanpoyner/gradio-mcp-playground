@@ -28,81 +28,24 @@ class MCPServerManager:
     """Manages MCP servers through gmp CLI commands"""
 
     def __init__(self):
-        pass
+        from .prompt_manager import get_prompt_manager
+
+        self.prompt_manager = get_prompt_manager()
 
     def _get_server_specific_guidance(self, server_id: str, kwargs: dict) -> str:
         """Get server-specific guidance for users"""
-        guidance = ""
 
+        # Special handling for WSL path issues
         if server_id == "obsidian":
             vault_path = kwargs.get("vault_path1", "")
-            if vault_path:
-                # Check if running on WSL with Windows path
-                if vault_path.startswith("/mnt/"):
-                    guidance = f"""\n**⚠️ WSL Path Issue Detected**
+            if vault_path and vault_path.startswith("/mnt/"):
+                return "\n" + self.prompt_manager.get_server_guidance(
+                    server_id, "wsl_path_issue", vault_path=vault_path
+                )
 
-The Obsidian server cannot access Windows paths through WSL mounts.
-Your path: {vault_path}
-
-**Recommended Alternative:**
-Use the filesystem server instead for cross-platform file access:
-```
-install_mcp_server_from_registry(server_id='filesystem', path='{vault_path}')
-```
-
-The filesystem server supports WSL mount paths and provides similar functionality."""
-                else:
-                    guidance = f"""\n**✅ Obsidian tools are now available in this chat!**
-You can use:
-- `obsidian_read_note()` - Read a note from your vault
-- `obsidian_create_note()` - Create a new note
-- `obsidian_search_notes()` - Search through your notes
-- `obsidian_list_notes()` - List notes in your vault
-
-Your vault path: {vault_path}"""
-
-        elif server_id == "filesystem":
-            path = kwargs.get("path", "")
-            if path:
-                guidance = f"""\n**✅ Filesystem tools are now available in this chat!**
-You can use:
-- `filesystem_read_file()` - Read file contents
-- `filesystem_write_file()` - Write to files
-- `filesystem_list_directory()` - List directory contents
-- `filesystem_create_directory()` - Create directories
-
-Access path: {path}"""
-
-        elif server_id == "github":
-            guidance = """\n**✅ GitHub tools are now available in this chat!**
-You can use:
-- `github_list_repos()` - List your repositories
-- `github_get_issues()` - Get issues from a repo
-- `github_create_issue()` - Create a new issue
-- And many more GitHub operations!"""
-
-        elif server_id == "brave-search":
-            guidance = """\n**✅ Brave Search is ready!**
-You can use `brave_search(query='your search')` directly in this chat!"""
-
-        elif server_id == "memory":
-            guidance = """\n**✅ Memory server is ready!**
-You can use:
-- `memory_store_conversation(topic='topic', content='content')` to store
-- `memory_retrieve_conversation(topic='topic')` to retrieve
-- `memory_search_conversations(query='search term')` to search"""
-
-        elif server_id == "time":
-            timezone = kwargs.get("timezone", "UTC")
-            guidance = f"""\n**✅ Time server tools are now available!**
-You can use:
-- `time_get_current_time()` - Get current time
-- `time_convert_timezone()` - Convert between timezones
-- `time_format_date()` - Format dates
-
-Configured timezone: {timezone}"""
-
-        return guidance
+        # Get standard success guidance
+        guidance = self.prompt_manager.get_server_guidance(server_id, "success", **kwargs)
+        return "\n" + guidance if guidance else ""
 
     def _get_gmp_path(self) -> str:
         """Get the path to the gmp command"""
@@ -468,9 +411,11 @@ Configured timezone: {timezone}"""
 
             from .registry import ServerRegistry
             from .secure_storage import SecureTokenStorage
+            from .path_translator import PathTranslator
 
             registry = ServerRegistry()
             storage = SecureTokenStorage()
+            path_translator = PathTranslator()
 
             # Get server info from registry
             server_info = registry.get_server_info(server_id)
@@ -500,17 +445,27 @@ Configured timezone: {timezone}"""
                     # Use stored key
                     kwargs["GITHUB_TOKEN"] = stored_keys["GITHUB_TOKEN"]
 
+            # Process and translate paths in kwargs
+            for key, value in list(kwargs.items()):
+                if key in ["path", "vault_path1", "vault_path2"] and isinstance(value, str):
+                    # Replace generic paths with actual environment paths
+                    if value == "/home/user" or value == "/home/user/":
+                        value = os.path.expanduser("~")
+                    elif value == "/home/user/workspace":
+                        value = os.path.join(os.path.expanduser("~"), "workspace")
+                    elif value.startswith("/home/user/"):
+                        # Replace /home/user/ with actual home directory
+                        relative_path = value[len("/home/user/"):]
+                        value = os.path.join(os.path.expanduser("~"), relative_path)
+                    
+                    # Translate paths for cross-platform compatibility
+                    kwargs[key] = path_translator.translate_path(value)
+
             # Auto-detect and set default arguments for specific servers
             if server_id == "filesystem" and "path" not in kwargs:
                 # Auto-detect home directory based on OS
-
-                system = platform.system().lower()
-                if system == "windows":
-                    home_path = os.environ.get("USERPROFILE", os.path.expanduser("~"))
-                else:  # Linux, macOS, etc.
-                    home_path = os.path.expanduser("~")
-
-                kwargs["path"] = home_path
+                home_path = os.path.expanduser("~")
+                kwargs["path"] = path_translator.translate_path(home_path)
                 auto_detected_path = True
             else:
                 auto_detected_path = False
@@ -579,20 +534,23 @@ Configured timezone: {timezone}"""
 
                     # Give it a moment to start
                     time.sleep(1)
-                    
+
                     # For stdio servers, check if they printed their startup message
                     if server_id in ["memory", "filesystem", "github", "obsidian", "time"]:
                         # These are stdio servers - check for startup output
-                        import select
                         import os
-                        
+                        import select
+
                         # Non-blocking read of stdout
                         if sys.platform != "win32":
                             # Unix-like systems
                             ready, _, _ = select.select([process.stdout], [], [], 0.1)
                             if ready:
                                 output = process.stdout.read(1024).decode("utf-8", errors="replace")
-                                if "running on stdio" in output.lower() or "server" in output.lower():
+                                if (
+                                    "running on stdio" in output.lower()
+                                    or "server" in output.lower()
+                                ):
                                     # Server started successfully
                                     process_is_running = True
                                 else:
@@ -620,8 +578,9 @@ Configured timezone: {timezone}"""
 
                         # Save server configuration
                         from .mcp_server_config import MCPServerConfig
+
                         mcp_config = MCPServerConfig()
-                        
+
                         # For registry servers, we need to store the command and args
                         # Extract command and args from cmd list
                         if len(cmd) > 0:
@@ -630,13 +589,13 @@ Configured timezone: {timezone}"""
                         else:
                             server_command = install_config["command"]
                             server_args = install_config["args"]
-                        
+
                         # Save the server configuration
                         mcp_config.add_server(
                             name=server_id,
                             command=server_command,
                             args=server_args,
-                            env=install_config.get("env", {})
+                            env=install_config.get("env", {}),
                         )
                         print(f"Saved {server_id} configuration to MCP servers config")
 
@@ -652,20 +611,11 @@ Configured timezone: {timezone}"""
                             import gradio_mcp_playground.web_ui as web_ui
 
                             if hasattr(web_ui, "coding_agent") and web_ui.coding_agent:
-                                # Define tools for each server type (used as fallback)
-                                tools_map = {
-                                    "brave-search": ["search"],
-                                    "memory": ["store", "retrieve", "search"],
-                                    "filesystem": ["read", "write", "list", "create"],
-                                    "github": ["repos", "issues", "prs"],
-                                    "time": ["current", "convert", "format"],
-                                    "obsidian": [
-                                        "read_note",
-                                        "create_note",
-                                        "search_notes",
-                                        "list_notes",
-                                    ],
-                                }
+                                # Use the subprocess-based MCP client for better compatibility
+                                from .mcp_working_client import (
+                                    MCPServerProcess,
+                                    create_mcp_tools_for_server,
+                                )
 
                                 # Properly separate command and args
                                 if len(cmd) > 0:
@@ -674,36 +624,54 @@ Configured timezone: {timezone}"""
                                 else:
                                     actual_command = install_config["command"]
                                     actual_args = install_config["args"]
-                                
-                                connection_info = {
-                                    "name": server_info.get("name", server_id),
-                                    "tools": tools_map.get(server_id, []),
-                                    "env": env,
-                                    "command": actual_command,
-                                    "args": actual_args,
-                                }
-                                web_ui.coding_agent.add_mcp_connection(server_id, connection_info)
-                                print(f"Added {server_id} connection to coding agent")
 
-                                # Check if tools are available
-                                if (
-                                    hasattr(web_ui.coding_agent, "mcp_tools")
-                                    and server_id in web_ui.coding_agent.mcp_tools
-                                ):
-                                    tool_count = len(web_ui.coding_agent.mcp_tools[server_id])
-                                    print(f"✅ {tool_count} tools registered for {server_id}")
+                                # Create server process
+                                server = MCPServerProcess(
+                                    server_id, actual_command, actual_args, env
+                                )
 
-                                    # List the tool names for debugging
-                                    tool_names = [
-                                        tool.name
-                                        for tool in web_ui.coding_agent.mcp_tools[server_id]
-                                        if hasattr(tool, "name")
-                                    ]
-                                    print(f"   Available tools: {', '.join(tool_names)}")
+                                if server.start() and server.initialize():
+                                    # Create tools
+                                    server_tools = create_mcp_tools_for_server(server)
+
+                                    if server_tools:
+                                        # Add tools to agent
+                                        web_ui.coding_agent.tools.extend(server_tools)
+
+                                        # Store tools and server
+                                        if not hasattr(web_ui.coding_agent, "mcp_tools"):
+                                            web_ui.coding_agent.mcp_tools = {}
+                                        web_ui.coding_agent.mcp_tools[server_id] = server_tools
+
+                                        if not hasattr(web_ui.coding_agent, "_mcp_servers"):
+                                            web_ui.coding_agent._mcp_servers = {}
+                                        web_ui.coding_agent._mcp_servers[server_id] = server
+
+                                        # Recreate agent with new tools
+                                        if web_ui.coding_agent.is_configured():
+                                            web_ui.coding_agent._recreate_agent_with_mcp_tools()
+
+                                        print(
+                                            f"✅ {len(server_tools)} tools registered for {server_id}"
+                                        )
+
+                                        # List the tool names
+                                        tool_names = [
+                                            tool.name
+                                            for tool in server_tools
+                                            if hasattr(tool, "name")
+                                        ]
+                                        print(f"   Available tools: {', '.join(tool_names)}")
+                                    else:
+                                        print(f"⚠️ No tools created for {server_id}")
+                                        server.stop()
                                 else:
-                                    print(f"⚠️ No tools found for {server_id} in mcp_tools")
+                                    print(f"⚠️ Failed to initialize {server_id} server")
                         except Exception as e:
-                            print(f"Could not add connection to coding agent: {e}")
+                            print(f"Could not add tools to coding agent: {e}")
+                            import traceback
+
+                            traceback.print_exc()
 
                         return f"""✅ MCP Server '{server_id}' started automatically!{path_info}
 
@@ -736,10 +704,24 @@ Add this to your Claude Desktop config:
                         stdout, stderr = process.communicate()
                         stdout_msg = stdout.decode("utf-8", errors="replace") if stdout else ""
                         stderr_msg = stderr.decode("utf-8", errors="replace") if stderr else ""
-                        
+
                         # Check if it's a stdio server's normal startup message
-                        stdio_servers = ["memory", "filesystem", "github", "obsidian", "time", "brave-search"]
-                        if server_id in stdio_servers and ("running on stdio" in stdout_msg.lower() or "server" in stdout_msg.lower()) and not stderr_msg:
+                        stdio_servers = [
+                            "memory",
+                            "filesystem",
+                            "github",
+                            "obsidian",
+                            "time",
+                            "brave-search",
+                        ]
+                        if (
+                            server_id in stdio_servers
+                            and (
+                                "running on stdio" in stdout_msg.lower()
+                                or "server" in stdout_msg.lower()
+                            )
+                            and not stderr_msg
+                        ):
                             # This is actually a successful start - stdio server just printed and is waiting
                             # We need to restart it properly with stdin
                             process = subprocess.Popen(
@@ -750,35 +732,36 @@ Add this to your Claude Desktop config:
                                 env=env,
                                 shell=True if sys.platform == "win32" else False,
                             )
-                            
+
                             # Store the process
                             if not hasattr(self, "_running_mcp_servers"):
                                 self._running_mcp_servers = {}
-                            
+
                             self._running_mcp_servers[server_id] = {
                                 "process": process,
                                 "command": cmd_str,
                                 "pid": process.pid,
                             }
-                            
+
                             # Save configuration (duplicate code but needed here)
                             from .mcp_server_config import MCPServerConfig
+
                             mcp_config = MCPServerConfig()
-                            
+
                             if len(cmd) > 0:
                                 server_command = cmd[0]
                                 server_args = cmd[1:] if len(cmd) > 1 else []
                             else:
                                 server_command = install_config["command"]
                                 server_args = install_config["args"]
-                            
+
                             mcp_config.add_server(
                                 name=server_id,
                                 command=server_command,
                                 args=server_args,
-                                env=install_config.get("env", {})
+                                env=install_config.get("env", {}),
                             )
-                            
+
                             return f"""✅ MCP Server '{server_id}' started successfully!
 
 **🚀 Server Running:**
@@ -790,7 +773,7 @@ Add this to your Claude Desktop config:
 
 {self._get_server_specific_guidance(server_id, kwargs)}
 """
-                        
+
                         # Otherwise it's a real error
                         error_msg = stderr_msg or stdout_msg or "Unknown error"
                         return f"""❌ Failed to start MCP Server '{server_id}'
@@ -856,35 +839,79 @@ Add this to your Claude Desktop config:
         Returns:
             str: Result of stopping the server
         """
-        if not hasattr(self, "_running_mcp_servers") or server_id not in self._running_mcp_servers:
-            return f"❌ Server '{server_id}' is not running or was not started by this session"
+        stopped_subprocess = False
+        stopped_agent_server = False
 
-        try:
-            server_info = self._running_mcp_servers[server_id]
-            process = server_info["process"]
-
-            # Terminate the process
-            process.terminate()
-
-            # Wait a bit for graceful shutdown
+        # Check subprocess tracking
+        if hasattr(self, "_running_mcp_servers") and server_id in self._running_mcp_servers:
             try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                # Force kill if needed
-                process.kill()
-                process.wait()
+                server_info = self._running_mcp_servers[server_id]
+                process = server_info["process"]
 
-            # Remove from running servers
-            del self._running_mcp_servers[server_id]
+                # Terminate the process
+                process.terminate()
+
+                # Wait a bit for graceful shutdown
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    # Force kill if needed
+                    process.kill()
+                    process.wait()
+
+                # Remove from running servers
+                del self._running_mcp_servers[server_id]
+                stopped_subprocess = True
+
+            except Exception as e:
+                return f"❌ Error stopping server subprocess '{server_id}': {str(e)}"
+
+        # Also check coding agent for MCP servers
+        try:
+            import gradio_mcp_playground.web_ui as web_ui
+
+            if hasattr(web_ui, "coding_agent") and web_ui.coding_agent:
+                if (
+                    hasattr(web_ui.coding_agent, "_mcp_servers")
+                    and server_id in web_ui.coding_agent._mcp_servers
+                ):
+                    server = web_ui.coding_agent._mcp_servers[server_id]
+                    server.stop()
+
+                    # Remove from agent tracking
+                    del web_ui.coding_agent._mcp_servers[server_id]
+
+                    # Remove tools
+                    if (
+                        hasattr(web_ui.coding_agent, "mcp_tools")
+                        and server_id in web_ui.coding_agent.mcp_tools
+                    ):
+                        del web_ui.coding_agent.mcp_tools[server_id]
+
+                    # Recreate agent without these tools
+                    if web_ui.coding_agent.is_configured():
+                        web_ui.coding_agent._recreate_agent_with_mcp_tools()
+
+                    stopped_agent_server = True
+
+        except Exception as e:
+            if not stopped_subprocess:
+                return f"❌ Error accessing coding agent: {str(e)}"
+
+        if stopped_subprocess or stopped_agent_server:
+            sources = []
+            if stopped_subprocess:
+                sources.append("subprocess manager")
+            if stopped_agent_server:
+                sources.append("coding agent")
 
             return f"""⏹️ MCP Server '{server_id}' stopped successfully!
 
-**Process ID:** {server_info['pid']}
-**Command:** {server_info['command']}
+**Stopped from:** {' and '.join(sources)}
+**Server ID:** {server_id}
 """
-
-        except Exception as e:
-            return f"❌ Error stopping server '{server_id}': {str(e)}"
+        else:
+            return f"❌ Server '{server_id}' is not running or was not started by this session"
 
     def create_and_start_server(
         self, name: str, template: str = "basic", port: Optional[int] = None
@@ -1035,7 +1062,31 @@ def create_mcp_management_tools():
     if not HAS_LLAMAINDEX:
         return []
 
+    import os
+    
     manager = get_mcp_manager()
+    
+    # Import path translator for preprocessing paths
+    from .path_translator import PathTranslator
+    path_translator = PathTranslator()
+    
+    def preprocess_path(path: str) -> str:
+        """Preprocess paths to replace generic placeholders with actual paths"""
+        if not path:
+            return path
+            
+        # Replace generic paths with actual environment paths
+        if path == "/home/user" or path == "/home/user/":
+            path = os.path.expanduser("~")
+        elif path == "/home/user/workspace":
+            path = os.path.join(os.path.expanduser("~"), "workspace")
+        elif path.startswith("/home/user/"):
+            # Replace /home/user/ with actual home directory
+            relative_path = path[len("/home/user/"):]
+            path = os.path.join(os.path.expanduser("~"), relative_path)
+        
+        # Translate paths for cross-platform compatibility
+        return path_translator.translate_path(path)
 
     tools = []
 
@@ -1220,13 +1271,13 @@ def create_mcp_management_tools():
         if token is not None:
             kwargs["token"] = token
         if path is not None:
-            kwargs["path"] = path
+            kwargs["path"] = preprocess_path(path)
         if timezone is not None:
             kwargs["timezone"] = timezone
         if vault_path1 is not None:
-            kwargs["vault_path1"] = vault_path1
+            kwargs["vault_path1"] = preprocess_path(vault_path1)
         if vault_path2 is not None:
-            kwargs["vault_path2"] = vault_path2
+            kwargs["vault_path2"] = preprocess_path(vault_path2)
 
         return manager.install_mcp_server_from_registry(server_id, **kwargs)
 

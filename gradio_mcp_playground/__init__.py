@@ -3,6 +3,10 @@
 A comprehensive toolkit for building and managing Gradio apps as MCP servers.
 """
 
+import warnings
+# Suppress Pydantic model_name warning
+warnings.filterwarnings("ignore", message="Field \"model_name\" has conflict with protected namespace \"model_\"", category=UserWarning)
+
 # Always available imports
 from .config_manager import ConfigManager
 from .registry import ServerRegistry

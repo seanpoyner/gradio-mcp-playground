@@ -3,6 +3,10 @@
 Command-line interface for managing Gradio MCP servers and clients.
 """
 
+import warnings
+# Suppress Pydantic model_name warning
+warnings.filterwarnings("ignore", message="Field \"model_name\" has conflict with protected namespace \"model_\"", category=UserWarning)
+
 import json
 import os
 import subprocess

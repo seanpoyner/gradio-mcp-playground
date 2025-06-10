@@ -11,12 +11,20 @@ This document tracks known issues, bugs, and planned improvements for the Gradio
    - Status: Fixed in latest commit, but git history still contains exposed keys
    - Action: Ensure that credentials are protected from accidental exposure in all future testing.
    - Related: #security
+   - **⚠️ URGENT**: Exposed keys need to be revoked immediately
+   - Keys are now encrypted using SecureTokenStorage
 
 2. **Agent Stops Using Tools After First MCP Call**
    - Issue: ReAct agent switches to just answering instead of continuing to use tools after first successful MCP tool call
    - Status: Added explicit instructions in system prompt to continue using tools
    - Action: Monitor agent behavior and consider implementing a more robust solution if issue persists
    - Related: #agent-behavior
+
+3. **Token Limit Exceeded with Large MCP Tool Outputs**
+   - Issue: MCP tools can return very large outputs (e.g., GitHub search returning entire movie scripts) that exceed model context limits
+   - Status: ✅ Fixed - Implemented output truncation at 15,000 characters
+   - Action: Monitor for any edge cases where truncation might cut off important information
+   - Related: #mcp-tools #context-limits
 
 ### Medium Priority
 
@@ -149,6 +157,9 @@ If you'd like to help with any of these issues:
 ## 🔄 Last Updated
 
 - Date: June 9, 2025
-- Version: After MCP integration implementation and agent behavior fixes
+- Version: After implementing output truncation for MCP tools
 - Next Review: June 16, 2025
-- Recent changes: Added issue #2 about agent stopping tool use after first MCP call
+- Recent changes: 
+  - Added issue #2 about agent stopping tool use after first MCP call
+  - Added issue #3 about token limit exceeded with large outputs (now fixed)
+  - Implemented 15,000 character truncation for MCP tool outputs

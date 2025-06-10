@@ -481,7 +481,7 @@ class GradioMCPServer:
             # Determine current status based on the most recent events
             if last_message_activity and last_activity:
                 # If we've seen message activity in the last 5 minutes, server is running
-                from datetime import datetime, timezone, timedelta
+                from datetime import datetime, timedelta, timezone
 
                 now = datetime.now(timezone.utc)
                 if (now - last_message_activity) < timedelta(minutes=5):

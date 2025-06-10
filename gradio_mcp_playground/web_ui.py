@@ -3,8 +3,12 @@
 Web-based dashboard for managing Gradio MCP servers.
 """
 
+import warnings
 import json
 from pathlib import Path
+
+# Suppress Pydantic model_name warning
+warnings.filterwarnings("ignore", message="Field \"model_name\" has conflict with protected namespace \"model_\"", category=UserWarning)
 
 # Optional imports
 try:
@@ -92,6 +96,66 @@ def create_dashboard():
             color: #dc3545;
             font-weight: bold;
         }
+        /* Fix chatbot message width */
+        .message-wrap {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        .message {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        .prose {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        /* Ensure chat messages use full width */
+        div[class*="message"] {
+            max-width: 100% !important;
+        }
+        /* Override Gradio's default message bubble width */
+        .user, .bot {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        /* Fix for message content */
+        .md-message {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        /* Override prose styling that limits width */
+        .gradio-container .prose {
+            max-width: none !important;
+        }
+        /* Ensure code blocks also use full width */
+        .prose pre {
+            max-width: 100% !important;
+            overflow-x: auto;
+        }
+        /* Custom class for full-width chat */
+        .full-width-chat .message-wrap {
+            max-width: 100% !important;
+        }
+        .full-width-chat .message {
+            max-width: 100% !important;
+        }
+        /* Fix Gradio chatbot message bubbles */
+        .chatbot-message {
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        /* Override the default 48rem max-width */
+        [class*="max-w-\\[48rem\\]"] {
+            max-width: 100% !important;
+        }
+        /* Target Gradio's specific message classes */
+        .gr-chatbot .message-row {
+            max-width: 100% !important;
+        }
+        .gr-chatbot .message-bubble-border {
+            max-width: 100% !important;
+            width: auto !important;
+        }
     """,
     ) as dashboard:
         gr.Markdown(
@@ -165,16 +229,21 @@ def create_dashboard():
                         interactive=False,
                     )
 
-                    # Model info display
-                    model_info = gr.JSON(label="Selected Model Information", visible=False)
+                    # Model info display in collapsible accordion
+                    with gr.Accordion("📊 Selected Model Information", open=False, visible=False) as model_info_accordion:
+                        model_info = gr.JSON(label="", visible=True)
 
                     # Chat interface
-                    gr.Markdown("#### Chat Interface")
+                    gr.Markdown("#### Chat with Liam - Your MCP Assistant")
                     chatbot = gr.Chatbot(
-                        label="AI Coding Assistant",
+                        label="Liam - AI Coding Assistant",
                         height=400,
                         show_copy_button=True,
                         type="messages",
+                        elem_classes=["full-width-chat"],
+                        container=True,
+                        scale=1,
+                        min_width=None,
                     )
 
                     with gr.Row():
@@ -677,14 +746,14 @@ def create_dashboard():
 
                                         with gr.Row():
                                             server_buttons[server_id] = gr.Button(
-                                                f"Connect",
+                                                "Connect",
                                                 variant="primary",
                                                 elem_id=f"connect_{server_id}",
                                                 scale=1,
                                             )
 
                                             server_install_buttons[server_id] = gr.Button(
-                                                f"Auto-Install & Connect",
+                                                "Auto-Install & Connect",
                                                 variant="secondary",
                                                 elem_id=f"install_{server_id}",
                                                 scale=1,
@@ -711,14 +780,14 @@ def create_dashboard():
 
                                         with gr.Row():
                                             server_buttons[server_id] = gr.Button(
-                                                f"Connect",
+                                                "Connect",
                                                 variant="primary",
                                                 elem_id=f"connect_{server_id}",
                                                 scale=1,
                                             )
 
                                             server_install_buttons[server_id] = gr.Button(
-                                                f"Auto-Install & Connect",
+                                                "Auto-Install & Connect",
                                                 variant="secondary",
                                                 elem_id=f"install_{server_id}",
                                                 scale=1,
@@ -1088,13 +1157,13 @@ def create_dashboard():
                     progress += f"📖 Installation Instructions for {server_info['name']}:\n\n"
 
                     if install_cmd["install_method"] == "npm":
-                        progress += f"Run this command:\n"
+                        progress += "Run this command:\n"
                         progress += f"npm install -g {install_cmd['package']}\n\n"
                     elif install_cmd["install_method"] == "uvx":
-                        progress += f"Run this command:\n"
+                        progress += "Run this command:\n"
                         progress += f"uvx {install_cmd['package']}\n\n"
                     elif install_cmd["install_method"] == "git":
-                        progress += f"Run this command:\n"
+                        progress += "Run this command:\n"
                         progress += f"git clone {install_cmd['package']}\n\n"
 
                     if install_cmd.get("env"):
@@ -1120,7 +1189,7 @@ def create_dashboard():
                     (f"{server['name']} ({server['id']})", server["id"]) for server in servers
                 ]
                 return gr.update(choices=choices)
-            except Exception as e:
+            except Exception:
                 return gr.update(choices=[])
 
         def refresh_categories_data():
@@ -1262,49 +1331,72 @@ def create_dashboard():
 
             def send_message(message, history, show_thinking_steps):
                 """Send message to AI assistant"""
+                # Show user message immediately
+                if not message.strip():
+                    return history, ""
+                
+                history.append({"role": "user", "content": message})
+                
                 if not coding_agent.is_configured():
                     bot_response = (
                         "Please configure a model first by providing your HuggingFace token."
                     )
-                    history.append({"role": "user", "content": message})
                     history.append({"role": "assistant", "content": bot_response})
                     return history, ""
-                
+
                 # Check if user is providing an API key in a natural way
                 import re
-                
+
                 # Pattern 1: "install brave search with key YOUR_KEY"
-                brave_key_match = re.search(r"install brave search with (?:key|token) ([\w-]+)", message, re.IGNORECASE)
+                brave_key_match = re.search(
+                    r"install brave search with (?:key|token) ([\w-]+)", message, re.IGNORECASE
+                )
                 if brave_key_match:
                     api_key = brave_key_match.group(1)
                     message = f"install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
-                
+
                 # Pattern 2: "install github with token YOUR_TOKEN"
-                github_key_match = re.search(r"install github with (?:key|token) ([\w-]+)", message, re.IGNORECASE)
+                github_key_match = re.search(
+                    r"install github with (?:key|token) ([\w-]+)", message, re.IGNORECASE
+                )
                 if github_key_match:
                     api_key = github_key_match.group(1)
-                    message = f"install_mcp_server_from_registry(server_id='github', token='{api_key}')"
-                
+                    message = (
+                        f"install_mcp_server_from_registry(server_id='github', token='{api_key}')"
+                    )
+
                 # Pattern 3: "my brave api key is YOUR_KEY"
-                brave_key_statement = re.search(r"(?:my )?brave (?:api )?key (?:is |= ?)([\w-]+)", message, re.IGNORECASE)
+                brave_key_statement = re.search(
+                    r"(?:my )?brave (?:api )?key (?:is |= ?)([\w-]+)", message, re.IGNORECASE
+                )
                 if brave_key_statement:
                     api_key = brave_key_statement.group(1)
                     message = f"I have your Brave API key. Let me install the brave search server: install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
-                
+
                 # Pattern 4: "use path /home/user/workspace" (for filesystem server)
-                path_statement = re.search(r"(?:use |provide )?path (?:is |= ?)?([/\\][^\s]+)", message, re.IGNORECASE)
+                path_statement = re.search(
+                    r"(?:use |provide )?path (?:is |= ?)?([/\\][^\s]+)", message, re.IGNORECASE
+                )
                 if path_statement:
                     path = path_statement.group(1)
                     message = f"I'll use path '{path}' for the filesystem server: install_mcp_server_from_registry(server_id='filesystem', path='{path}')"
-                
+
                 # Pattern 5: "my obsidian vault is at /path/to/vault"
-                vault_statement = re.search(r"(?:my )?obsidian vault (?:is )?(?:at |in )?([/\\][^\s]+)", message, re.IGNORECASE)
+                vault_statement = re.search(
+                    r"(?:my )?obsidian vault (?:is )?(?:at |in )?([/\\][^\s]+)",
+                    message,
+                    re.IGNORECASE,
+                )
                 if vault_statement:
                     vault_path = vault_statement.group(1)
                     message = f"I'll use your Obsidian vault at '{vault_path}': install_mcp_server_from_registry(server_id='obsidian', vault_path1='{vault_path}')"
-                
+
                 # Pattern 6: "my github token is YOUR_TOKEN"
-                github_token_statement = re.search(r"(?:my )?github (?:token|pat|personal access token) (?:is |= ?)([\w-]+)", message, re.IGNORECASE)
+                github_token_statement = re.search(
+                    r"(?:my )?github (?:token|pat|personal access token) (?:is |= ?)([\w-]+)",
+                    message,
+                    re.IGNORECASE,
+                )
                 if github_token_statement:
                     token = github_token_statement.group(1)
                     message = f"I have your GitHub token. Let me install the GitHub server: install_mcp_server_from_registry(server_id='github', token='{token}')"
@@ -1326,74 +1418,100 @@ def create_dashboard():
                     full_response = coding_agent.chat(message)
 
                 # Check if the response indicates missing API keys or if Brave search needs API key
-                if "Missing required arguments:" in full_response and "Example for" in full_response:
+                if (
+                    "Missing required arguments:" in full_response
+                    and "Example for" in full_response
+                ):
                     # Extract server ID and missing arguments
                     import re
+
                     server_match = re.search(r"Example for ([\w-]+):", full_response)
-                    args_match = re.search(r"Missing required arguments: \[([^\]]+)\]", full_response)
-                    
+                    args_match = re.search(
+                        r"Missing required arguments: \[([^\]]+)\]", full_response
+                    )
+
                     if server_match and args_match:
                         server_id = server_match.group(1)
-                        missing_args = [arg.strip().strip("'") for arg in args_match.group(1).split(",")]
-                        
+                        missing_args = [
+                            arg.strip().strip("'") for arg in args_match.group(1).split(",")
+                        ]
+
                         # Create a helpful prompt for the user
-                        api_key_prompt = f"\n\n🔑 **API Key Required**\n\n"
+                        api_key_prompt = "\n\n🔑 **API Key Required**\n\n"
                         api_key_prompt += f"The {server_id} server requires the following:"
-                        
+
                         for arg in missing_args:
                             if "token" in arg.lower() or "key" in arg.lower():
                                 api_key_prompt += f"\n- **{arg}**: Please provide your API key"
                             else:
-                                api_key_prompt += f"\n- **{arg}**: Please provide the required value"
-                        
-                        api_key_prompt += "\n\nPlease provide the required information in your next message."
+                                api_key_prompt += (
+                                    f"\n- **{arg}**: Please provide the required value"
+                                )
+
+                        api_key_prompt += (
+                            "\n\nPlease provide the required information in your next message."
+                        )
                         api_key_prompt += "\n\nExample: `install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
-                        
+
                         full_response += api_key_prompt
-                
+
                 # Check if Brave Search API key is needed
                 elif "BRAVE_API_KEY not set" in full_response:
-                    api_key_prompt = f"\n\n🔑 **Brave Search API Key Required**\n\n"
+                    api_key_prompt = "\n\n🔑 **Brave Search API Key Required**\n\n"
                     api_key_prompt += "To use Brave Search, you need to provide an API key.\n\n"
                     api_key_prompt += "🌐 **Get your API key:**\n"
                     api_key_prompt += "1. Visit https://brave.com/search/api/\n"
                     api_key_prompt += "2. Sign up for a free account\n"
                     api_key_prompt += "3. Copy your API key\n\n"
                     api_key_prompt += "🔧 **To install with your key:**\n"
-                    api_key_prompt += "Please type: `install brave search with key YOUR_API_KEY_HERE`\n\n"
+                    api_key_prompt += (
+                        "Please type: `install brave search with key YOUR_API_KEY_HERE`\n\n"
+                    )
                     api_key_prompt += "Or use the exact command:\n"
                     api_key_prompt += "`install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
-                    
+
                     # Replace the error message with the helpful prompt
                     if "Error: BRAVE_API_KEY not set" in full_response:
-                        full_response = full_response.split("Error: BRAVE_API_KEY not set")[0] + api_key_prompt
+                        full_response = (
+                            full_response.split("Error: BRAVE_API_KEY not set")[0] + api_key_prompt
+                        )
                     else:
                         full_response += api_key_prompt
-                
+
                 # Check if the response shows server requirements
                 elif "Requirements for" in full_response and "Required Arguments:" in full_response:
                     # Add a helpful prompt for providing requirements
                     requirements_prompt = "\n\n📝 **Please provide the required information:**\n\n"
-                    
+
                     # Extract what's needed from the response
                     if "path" in full_response and "Directory path" in full_response:
-                        requirements_prompt += "For **filesystem** server, please specify the directory path:\n"
+                        requirements_prompt += (
+                            "For **filesystem** server, please specify the directory path:\n"
+                        )
                         requirements_prompt += "Example: `use path /home/user/workspace`\n\n"
-                    
+
                     if "vault_path1" in full_response:
-                        requirements_prompt += "For **Obsidian** server, please specify your vault path:\n"
-                        requirements_prompt += "Example: `my obsidian vault is at /path/to/vault`\n\n"
-                    
+                        requirements_prompt += (
+                            "For **Obsidian** server, please specify your vault path:\n"
+                        )
+                        requirements_prompt += (
+                            "Example: `my obsidian vault is at /path/to/vault`\n\n"
+                        )
+
                     if "BRAVE_API_KEY" in full_response and "❌ Not yet provided" in full_response:
-                        requirements_prompt += "For **Brave Search**, please provide your API key:\n"
+                        requirements_prompt += (
+                            "For **Brave Search**, please provide your API key:\n"
+                        )
                         requirements_prompt += "Example: `my brave api key is YOUR_KEY_HERE`\n\n"
-                    
+
                     if "GITHUB_TOKEN" in full_response and "❌ Not yet provided" in full_response:
-                        requirements_prompt += "For **GitHub**, please provide your personal access token:\n"
+                        requirements_prompt += (
+                            "For **GitHub**, please provide your personal access token:\n"
+                        )
                         requirements_prompt += "Example: `my github token is YOUR_TOKEN_HERE`\n\n"
-                    
+
                     full_response += requirements_prompt
-                
+
                 # Convert to messages format for new Gradio chatbot
                 history.append({"role": "user", "content": message})
                 history.append({"role": "assistant", "content": full_response})
@@ -2016,9 +2134,9 @@ def create_dashboard():
         # MCP Connection functions
         def install_and_connect_mcp(server_id):
             """Install MCP server package and connect using registry"""
-            import subprocess
-            import time
             import os
+            import subprocess
+
             from .mcp_management_tool import get_mcp_manager
 
             server_info = predefined_servers.get(server_id)
@@ -2026,64 +2144,69 @@ def create_dashboard():
                 return "❌ Unknown server"
 
             progress = f"📦 Installing {server_info['name']}...\n"
-            
+
             try:
                 # Get the MCP manager
                 manager = get_mcp_manager()
-                
+
                 # Prepare kwargs based on server requirements
                 kwargs = {}
-                
+
                 # Handle filesystem path
                 if server_id == "filesystem" and server_info.get("requires_path"):
                     # Auto-detect home directory
                     import platform
+
                     system = platform.system().lower()
-                    if system == 'windows':
-                        home_path = os.environ.get('USERPROFILE', os.path.expanduser('~'))
+                    if system == "windows":
+                        home_path = os.environ.get("USERPROFILE", os.path.expanduser("~"))
                     else:
-                        home_path = os.path.expanduser('~')
-                    kwargs['path'] = home_path
+                        home_path = os.path.expanduser("~")
+                    kwargs["path"] = home_path
                     progress += f"🏠 Using home directory: {home_path}\n"
-                
+
                 # Handle time server timezone
                 elif server_id == "time" and server_info.get("requires_timezone"):
-                    kwargs['timezone'] = 'UTC'  # Default to UTC
+                    kwargs["timezone"] = "UTC"  # Default to UTC
                     progress += "🕐 Using timezone: UTC\n"
-                
+
                 # Check for required environment variables
                 if server_info.get("requires_env"):
                     missing_env = []
                     for env_var in server_info["requires_env"]:
                         if not os.environ.get(env_var):
                             missing_env.append(env_var)
-                    
+
                     if missing_env:
                         progress += f"⚠️ Missing environment variables: {', '.join(missing_env)}\n"
                         if server_id == "brave-search":
                             progress += "\n📝 To use Brave Search:\n"
                             progress += "1. Get API key from https://brave.com/search/api/\n"
-                            progress += f"2. Set environment variable: BRAVE_API_KEY=your_key_here\n"
+                            progress += (
+                                "2. Set environment variable: BRAVE_API_KEY=your_key_here\n"
+                            )
                         elif server_id == "github":
                             progress += "\n📝 To use GitHub:\n"
                             progress += "1. Create token at https://github.com/settings/tokens\n"
-                            progress += f"2. Set environment variable: GITHUB_TOKEN=your_token_here\n"
+                            progress += (
+                                "2. Set environment variable: GITHUB_TOKEN=your_token_here\n"
+                            )
                         progress += "\n❌ Cannot install without required environment variables\n"
                         return progress
-                
+
                 # Use the registry's install_mcp_server_from_registry function
                 progress += "🚀 Starting installation via registry...\n"
                 result = manager.install_mcp_server_from_registry(server_id, **kwargs)
                 progress += result + "\n"
-                
+
                 # Check if installation was successful
                 if "✅" in result and "started automatically" in result:
                     progress += "\n🎉 Installation and startup successful!\n"
-                    
+
                     # Update connection status
                     if not hasattr(quick_connect_mcp, "connections"):
                         quick_connect_mcp.connections = {}
-                    
+
                     quick_connect_mcp.connections[server_id] = {
                         "name": server_info["name"],
                         "url": server_info["url"],
@@ -2091,14 +2214,14 @@ def create_dashboard():
                         "status": "running",
                         "auto_started": True,
                     }
-                    
+
                     return progress
                 else:
                     return progress + "\n❌ Installation failed\n"
-                    
+
             except Exception as e:
                 return progress + f"\n❌ Error during installation: {str(e)}\n"
-            
+
             # Keep the old filesystem-specific implementation as fallback
             if server_id == "filesystem" and "✅" not in progress:
                 progress = f"📦 Installing {server_info['name']}...\n"
@@ -2123,7 +2246,7 @@ def create_dashboard():
                     if npm_result.returncode != 0:
                         return (
                             progress
-                            + f"❌ npm not found. Node.js is installed but npm is missing.\n\nTry:\n1. Restart your terminal/PowerShell as Administrator\n2. Or reinstall Node.js from https://nodejs.org/\n3. Or check PATH: where npm"
+                            + "❌ npm not found. Node.js is installed but npm is missing.\n\nTry:\n1. Restart your terminal/PowerShell as Administrator\n2. Or reinstall Node.js from https://nodejs.org/\n3. Or check PATH: where npm"
                         )
 
                     progress += f"✅ npm detected: {npm_result.stdout.strip()}\n"
@@ -2290,7 +2413,10 @@ For others, please install manually using the command above."""
                     return "❌ Unknown server"
 
                 # Check if server is already running from auto-install
-                if hasattr(quick_connect_mcp, "connections") and server_id in quick_connect_mcp.connections:
+                if (
+                    hasattr(quick_connect_mcp, "connections")
+                    and server_id in quick_connect_mcp.connections
+                ):
                     conn_info = quick_connect_mcp.connections[server_id]
                     if conn_info.get("auto_started") and conn_info.get("status") == "running":
                         return f"✅ {server_info['name']} is already running!\n\nThis server was auto-started and is ready for use by external MCP clients."
@@ -2526,7 +2652,7 @@ For others, please install manually using the command above."""
                     and connection_name in quick_connect_mcp.connections
                 ):
                     del quick_connect_mcp.connections[connection_name]
-            except Exception as e:
+            except Exception:
                 pass
 
             return get_mcp_connections_data(), get_mcp_connection_choices()
@@ -2571,7 +2697,7 @@ For others, please install manually using the command above."""
                             return {"success": False, "error": "Path is required"}
 
                         try:
-                            with open(path, "r", encoding="utf-8") as f:
+                            with open(path, encoding="utf-8") as f:
                                 content = f.read()
                             return {
                                 "success": True,
@@ -2596,7 +2722,7 @@ For others, please install manually using the command above."""
                             return {
                                 "success": True,
                                 "result": {
-                                    "message": f"File written successfully",
+                                    "message": "File written successfully",
                                     "path": os.path.abspath(path),
                                     "bytes_written": len(content.encode("utf-8")),
                                 },
@@ -2614,7 +2740,7 @@ For others, please install manually using the command above."""
                             return {
                                 "success": True,
                                 "result": {
-                                    "message": f"Directory created successfully",
+                                    "message": "Directory created successfully",
                                     "path": os.path.abspath(path),
                                 },
                             }
@@ -2663,20 +2789,192 @@ For others, please install manually using the command above."""
             )
 
             # Chat functionality
+            def handle_message_submit(message, history, show_thinking):
+                """Handle message submission with immediate display"""
+                if not message.strip():
+                    return history, ""
+                
+                # Clear input immediately and show user message
+                history_with_user = history + [{"role": "user", "content": message}]
+                
+                # Return cleared input and updated history, then process
+                return history_with_user, ""
+            
+            def process_message(history, show_thinking):
+                """Process the last user message and generate response"""
+                if not history or history[-1]["role"] != "user":
+                    return history
+                
+                message = history[-1]["content"]
+                
+                # Add thinking indicator
+                history.append({"role": "assistant", "content": "🤔 Thinking..."})
+                yield history
+                
+                # Now process the actual message
+                try:
+                    # Remove the thinking message
+                    history = history[:-1]
+                    
+                    # Call the original send_message logic
+                    if not coding_agent.is_configured():
+                        bot_response = (
+                            "Please configure a model first by providing your HuggingFace token."
+                        )
+                        history.append({"role": "assistant", "content": bot_response})
+                        yield history
+                        return
+                    
+                    # Your existing message processing logic here...
+                    # Check if user is providing an API key in a natural way
+                    import re
+                    
+                    # Pattern 1: "install brave search with key YOUR_KEY"
+                    brave_key_match = re.search(
+                        r"install brave search with (?:key|token) ([\w-]+)", message, re.IGNORECASE
+                    )
+                    if brave_key_match:
+                        api_key = brave_key_match.group(1)
+                        message = f"install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
+                    
+                    # Pattern 2: "install github with token YOUR_TOKEN"
+                    github_key_match = re.search(
+                        r"install github with (?:key|token) ([\w-]+)", message, re.IGNORECASE
+                    )
+                    if github_key_match:
+                        api_key = github_key_match.group(1)
+                        message = f"install_mcp_server_from_registry(server_id='github', token='{api_key}')"
+                    
+                    # Pattern 3: "my brave api key is YOUR_KEY"
+                    brave_key_statement = re.search(
+                        r"(?:my )?brave (?:api )?key (?:is |= ?)([\w-]+)", message, re.IGNORECASE
+                    )
+                    if brave_key_statement:
+                        api_key = brave_key_statement.group(1)
+                        message = f"I have your Brave API key. Let me install the brave search server: install_mcp_server_from_registry(server_id='brave-search', token='{api_key}')"
+                    
+                    # Pattern 4: "use path /home/user/workspace" (for filesystem server)
+                    path_statement = re.search(
+                        r"(?:use |provide )?path (?:is |= ?)?([/\\][^\s]+)", message, re.IGNORECASE
+                    )
+                    if path_statement:
+                        path = path_statement.group(1)
+                        message = f"I'll use path '{path}' for the filesystem server: install_mcp_server_from_registry(server_id='filesystem', path='{path}')"
+                    
+                    # Pattern 5: "my obsidian vault is at /path/to/vault"
+                    vault_statement = re.search(
+                        r"(?:my )?obsidian vault (?:is )?(?:at |in )?([/\\][^\s]+)",
+                        message,
+                        re.IGNORECASE,
+                    )
+                    if vault_statement:
+                        vault_path = vault_statement.group(1)
+                        message = f"I'll use your Obsidian vault at '{vault_path}': install_mcp_server_from_registry(server_id='obsidian', vault_path1='{vault_path}')"
+                    
+                    # Pattern 6: "my github token is YOUR_TOKEN"
+                    github_token_statement = re.search(
+                        r"(?:my )?github (?:token|pat|personal access token) (?:is |= ?)([\w-]+)",
+                        message,
+                        re.IGNORECASE,
+                    )
+                    if github_token_statement:
+                        token = github_token_statement.group(1)
+                        message = f"I have your GitHub token. Let me install the GitHub server: install_mcp_server_from_registry(server_id='github', token='{token}')"
+                    
+                    # Process with agent
+                    if show_thinking:
+                        steps, bot_response = coding_agent.chat_with_steps(message)
+                        
+                        # Show thinking steps progressively
+                        thinking_content = "## 🧠 AI Thinking Process\n\n"
+                        for step in steps:
+                            thinking_content += f"{step}\n\n"
+                            history[-1] = {"role": "assistant", "content": thinking_content}
+                            yield history
+                        
+                        # Add final response
+                        full_response = thinking_content + "---\n\n## 💬 Final Response\n\n" + bot_response
+                        history[-1] = {"role": "assistant", "content": full_response}
+                    else:
+                        # Regular chat without steps
+                        full_response = coding_agent.chat(message)
+                        history.append({"role": "assistant", "content": full_response})
+                    
+                    # Check and enhance response with helpful prompts
+                    if "Missing required arguments:" in full_response and "Example for" in full_response:
+                        # Extract server ID and missing arguments
+                        server_match = re.search(r"Example for ([\w-]+):", full_response)
+                        args_match = re.search(r"Missing required arguments: \[([^\]]+)\]", full_response)
+                        
+                        if server_match and args_match:
+                            server_id = server_match.group(1)
+                            missing_args = [arg.strip().strip("'") for arg in args_match.group(1).split(",")]
+                            
+                            # Create a helpful prompt for the user
+                            api_key_prompt = "\n\n🔑 **API Key Required**\n\n"
+                            api_key_prompt += f"The {server_id} server requires the following:"
+                            
+                            for arg in missing_args:
+                                if "token" in arg.lower() or "key" in arg.lower():
+                                    api_key_prompt += f"\n- **{arg}**: Please provide your API key"
+                                else:
+                                    api_key_prompt += f"\n- **{arg}**: Please provide the required value"
+                            
+                            api_key_prompt += "\n\nPlease provide the required information in your next message."
+                            api_key_prompt += "\n\nExample: `install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
+                            
+                            full_response += api_key_prompt
+                            history[-1]["content"] = full_response
+                    
+                    # Check if Brave Search API key is needed
+                    elif "BRAVE_API_KEY not set" in full_response:
+                        api_key_prompt = "\n\n🔑 **Brave Search API Key Required**\n\n"
+                        api_key_prompt += "To use Brave Search, you need to provide an API key.\n\n"
+                        api_key_prompt += "🌐 **Get your API key:**\n"
+                        api_key_prompt += "1. Visit https://brave.com/search/api/\n"
+                        api_key_prompt += "2. Sign up for a free account\n"
+                        api_key_prompt += "3. Copy your API key\n\n"
+                        api_key_prompt += "🔧 **To install with your key:**\n"
+                        api_key_prompt += "Please type: `install brave search with key YOUR_API_KEY_HERE`\n\n"
+                        api_key_prompt += "Or use the exact command:\n"
+                        api_key_prompt += "`install_mcp_server_from_registry(server_id='brave-search', token='YOUR_API_KEY_HERE')`"
+                        
+                        # Replace the error message with the helpful prompt
+                        if "Error: BRAVE_API_KEY not set" in full_response:
+                            full_response = full_response.split("Error: BRAVE_API_KEY not set")[0] + api_key_prompt
+                        else:
+                            full_response += api_key_prompt
+                        
+                        history[-1]["content"] = full_response
+                    
+                    yield history
+                    
+                except Exception as e:
+                    error_msg = f"❌ Error: {str(e)}"
+                    history.append({"role": "assistant", "content": error_msg})
+                    yield history
+            
             send_btn.click(
-                send_message,
+                handle_message_submit,
                 inputs=[chat_input, chatbot, show_thinking],
                 outputs=[chatbot, chat_input],
+            ).then(
+                process_message,
+                inputs=[chatbot, show_thinking],
+                outputs=[chatbot],
             )
 
             chat_input.submit(
-                send_message,
+                handle_message_submit,
                 inputs=[chat_input, chatbot, show_thinking],
                 outputs=[chatbot, chat_input],
+            ).then(
+                process_message,
+                inputs=[chatbot, show_thinking],
+                outputs=[chatbot],
             )
 
             reset_chat_btn.click(reset_conversation, outputs=chatbot)
-
 
             # Token management connections (only if secure storage is available)
             if config_manager.has_secure_storage():
@@ -2863,19 +3161,20 @@ For others, please install manually using the command above."""
                 def update_server_status_handler(sid):
                     def handler(install_output):
                         if "✅" in install_output and "started automatically" in install_output:
-                            return f"✅ Running (Auto-started)"
+                            return "✅ Running (Auto-started)"
                         elif "❌" in install_output:
                             return "❌ Installation Failed"
                         else:
                             return "⏳ Installing..."
+
                     return handler
-                
+
                 server_install_buttons[server_id].click(
                     fn=lambda: gr.update(visible=True), outputs=[mcp_install_progress]
                 ).then(fn=create_install_handler(server_id), outputs=[mcp_install_progress]).then(
-                    fn=update_server_status_handler(server_id), 
+                    fn=update_server_status_handler(server_id),
                     inputs=[mcp_install_progress],
-                    outputs=[server_statuses[server_id]]
+                    outputs=[server_statuses[server_id]],
                 ).then(
                     fn=get_mcp_connections_data, outputs=[mcp_connections_table]
                 ).then(
@@ -2940,6 +3239,47 @@ For others, please install manually using the command above."""
         # Load saved token on startup
         if coding_agent and config_manager.has_secure_storage():
             dashboard.load(load_saved_token_on_startup, outputs=[hf_token_input, token_status])
+        
+        # Initialize Liam's greeting
+        if coding_agent:
+            def initialize_liam_greeting():
+                """Generate Liam's initial greeting with available MCP servers"""
+                greeting = "👋 Hello! I'm Liam, your MCP (Model Context Protocol) assistant.\n\n"
+                greeting += "I'm here to help you with:\n"
+                greeting += "• 🔧 Installing and managing MCP servers\n"
+                greeting += "• 💻 Writing code and analyzing projects\n"
+                greeting += "• 🚀 Building Gradio applications\n"
+                greeting += "• 📚 Learning about MCP development\n\n"
+                
+                # List available MCP servers
+                greeting += "**Available MCP Servers:**\n\n"
+                
+                # Check which servers are loaded
+                if hasattr(coding_agent, '_mcp_servers') and coding_agent._mcp_servers:
+                    greeting += "✅ **Currently Connected:**\n"
+                    for server_name in coding_agent._mcp_servers.keys():
+                        greeting += f"• {server_name}\n"
+                    greeting += "\n"
+                
+                # List servers that can be installed
+                greeting += "📦 **Ready to Install:**\n"
+                greeting += "• **filesystem** - Secure file operations\n"
+                greeting += "• **memory** - Persistent conversation memory\n"
+                greeting += "• **github** - GitHub repository management\n"
+                greeting += "• **brave-search** - Web search capabilities\n"
+                greeting += "• **obsidian** - Obsidian vault integration\n"
+                greeting += "• **sequential-thinking** - Step-by-step reasoning\n\n"
+                
+                greeting += "💡 **Quick Start:**\n"
+                greeting += "• To install a server: `install memory server`\n"
+                greeting += "• To search for servers: `find servers for database`\n"
+                greeting += "• To check requirements: `what do I need for github server?`\n\n"
+                
+                greeting += "How can I help you today?"
+                
+                return [{"role": "assistant", "content": greeting}]
+            
+            dashboard.load(initialize_liam_greeting, outputs=[chatbot])
 
     return dashboard
 
