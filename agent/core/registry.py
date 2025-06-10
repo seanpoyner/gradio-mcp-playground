@@ -95,6 +95,30 @@ class EnhancedRegistry:
                 "category": "image",
                 "tags": ["image", "processing", "pil", "opencv"],
                 "template": "image-processor"
+            },
+            {
+                "id": "sentiment-analyzer",
+                "name": "Sentiment Analysis Server",
+                "description": "Analyze text sentiment using AI models with support for multiple languages",
+                "category": "ai",
+                "tags": ["ai", "sentiment", "nlp", "text", "analysis", "emotion"],
+                "template": "ai_sentiment"
+            },
+            {
+                "id": "text-sentiment-basic",
+                "name": "Basic Sentiment Analyzer",
+                "description": "Simple sentiment analysis for text using rule-based approach",
+                "category": "text",
+                "tags": ["text", "sentiment", "basic", "analysis"],
+                "template": "text_processor"
+            },
+            {
+                "id": "advanced-sentiment-ai",
+                "name": "Advanced AI Sentiment Analysis",
+                "description": "Professional sentiment analysis with emotion detection and confidence scores",
+                "category": "ai",
+                "tags": ["ai", "sentiment", "advanced", "emotion", "professional"],
+                "template": "ai_advanced"
             }
         ]
     

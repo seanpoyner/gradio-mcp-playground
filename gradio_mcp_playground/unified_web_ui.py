@@ -328,6 +328,109 @@ def create_unified_dashboard():
             gap: 16px;
             padding: 16px;
         }
+        
+        /* Template gallery styles */
+        .templates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 20px 0;
+        }
+        
+        .template-card {
+            background: white;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .template-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.15);
+            transform: translateY(-2px);
+        }
+        
+        .template-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .template-name {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 0 0 8px 0;
+            color: #1f2937;
+        }
+        
+        .template-category {
+            display: inline-block;
+            background: #f3f4f6;
+            color: #6b7280;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
+        
+        .template-description {
+            color: #4b5563;
+            font-size: 14px;
+            line-height: 1.5;
+            margin: 0 0 16px 0;
+        }
+        
+        .template-difficulty {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .template-grid-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+            font-size: 16px;
+        }
+        
+        .template-details {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 400px;
+        }
+        
+        .template-details h3 {
+            margin-top: 0;
+        }
+        
+        .template-details h4 {
+            color: #1f2937;
+            margin-top: 24px;
+            margin-bottom: 12px;
+        }
+        
+        .template-details ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .template-details code {
+            background: #e5e7eb;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
         """,
     ) as dashboard:
         gr.Markdown(
@@ -626,28 +729,373 @@ def create_unified_dashboard():
 
                     # Templates Gallery
                     with gr.Tab("📚 Templates"):
-                        gr.Markdown("### Server Templates Gallery")
-                        gr.Markdown("Browse and use pre-built server templates")
+                        gr.Markdown(
+                            """
+                            ## 🎨 Server Template Gallery
+                            
+                            Choose from our collection of pre-built MCP server templates to quickly get started.
+                            Each template includes complete code, configuration, and documentation.
+                            """
+                        )
+                        
+                        # Define helper functions first
+                        def create_templates_grid(category="All", search_query=""):
+                            """Create a professional grid display of templates"""
+                            if not HAS_REGISTRY:
+                                return '<div class="template-grid-empty">Registry not available</div>'
+                            
+                            templates = registry.list_templates()
+                            if not templates:
+                                return '<div class="template-grid-empty">No templates available</div>'
+                            
+                            # Template metadata with better organization
+                            template_metadata = {
+                                "basic": {
+                                    "icon": "🎯",
+                                    "category": "Starter",
+                                    "description": "Simple MCP server with basic structure",
+                                    "difficulty": "Beginner",
+                                    "features": ["Single tool", "Minimal setup", "Great for learning"],
+                                    "use_cases": ["Learning MCP", "Simple utilities", "Quick prototypes"]
+                                },
+                                "calculator": {
+                                    "icon": "🔢",
+                                    "category": "Tools",
+                                    "description": "Mathematical operations server",
+                                    "difficulty": "Beginner",
+                                    "features": ["Basic math", "Scientific functions", "Unit conversion"],
+                                    "use_cases": ["Calculations", "Data processing", "Educational tools"]
+                                },
+                                "basic-tool": {
+                                    "icon": "🔧",
+                                    "category": "Starter",
+                                    "description": "Template for single-tool servers",
+                                    "difficulty": "Beginner",
+                                    "features": ["Tool scaffold", "Error handling", "Type validation"],
+                                    "use_cases": ["Custom tools", "API wrappers", "Simple automation"]
+                                },
+                                "multi-tool": {
+                                    "icon": "🛠️",
+                                    "category": "Tools",
+                                    "description": "Server with multiple tools",
+                                    "difficulty": "Intermediate",
+                                    "features": ["Multiple tools", "Shared state", "Complex operations"],
+                                    "use_cases": ["Tool suites", "Workflows", "Complex utilities"]
+                                },
+                                "image-generator": {
+                                    "icon": "🎨",
+                                    "category": "AI/ML",
+                                    "description": "AI-powered image generation",
+                                    "difficulty": "Advanced",
+                                    "features": ["Stable Diffusion", "DALL-E", "Image editing"],
+                                    "use_cases": ["Content creation", "Design tools", "Creative apps"]
+                                }
+                            }
+                            
+                            # Build grid HTML
+                            grid_html = '<div class="templates-grid">'
+                            
+                            for template_name in templates:
+                                template_info = registry.get_template(template_name)
+                                if not template_info:
+                                    continue
+                                
+                                # Get metadata
+                                meta = template_metadata.get(template_name, {
+                                    "icon": "📦",
+                                    "category": "Other",
+                                    "description": template_info.get('description', 'Custom MCP server template'),
+                                    "difficulty": "Intermediate",
+                                    "features": [],
+                                    "use_cases": []
+                                })
+                                
+                                # Apply filters
+                                if category != "All" and meta["category"] != category:
+                                    continue
+                                if search_query and search_query.lower() not in template_name.lower() and search_query.lower() not in meta["description"].lower():
+                                    continue
+                                
+                                # Difficulty badge color
+                                difficulty_colors = {
+                                    "Beginner": "#28a745",
+                                    "Intermediate": "#ffc107",
+                                    "Advanced": "#dc3545"
+                                }
+                                
+                                grid_html += f'''
+                                <div class="template-card" data-template="{template_name}">
+                                    <div class="template-icon">{meta["icon"]}</div>
+                                    <h3 class="template-name">{template_name}</h3>
+                                    <div class="template-category">{meta["category"]}</div>
+                                    <p class="template-description">{meta["description"]}</p>
+                                    <div class="template-difficulty" style="background-color: {difficulty_colors.get(meta['difficulty'], '#6c757d')}">
+                                        {meta["difficulty"]}
+                                    </div>
+                                </div>
+                                '''
+                            
+                            grid_html += '</div>'
+                            return grid_html
+                        
+                        def show_template_details(template_name):
+                            """Show detailed information about a template"""
+                            if not template_name or not HAS_REGISTRY:
+                                return "### Select a template to view details", gr.update(visible=False), gr.update(visible=False)
+                            
+                            template_info = registry.get_template(template_name)
+                            if not template_info:
+                                return "### Template not found", gr.update(visible=False), gr.update(visible=False)
+                            
+                            # Enhanced template metadata
+                            template_metadata = {
+                                "basic": {
+                                    "icon": "🎯",
+                                    "category": "Starter",
+                                    "description": "Simple MCP server with basic structure. Perfect for learning the fundamentals of MCP.",
+                                    "difficulty": "Beginner",
+                                    "features": [
+                                        "Single tool implementation",
+                                        "Basic error handling",
+                                        "Minimal dependencies",
+                                        "Clear code structure"
+                                    ],
+                                    "use_cases": [
+                                        "Learning MCP basics",
+                                        "Building simple utilities",
+                                        "Quick prototypes",
+                                        "Testing MCP concepts"
+                                    ],
+                                    "requirements": ["Python 3.8+", "mcp package"],
+                                    "setup_time": "< 5 minutes"
+                                },
+                                "calculator": {
+                                    "icon": "🔢",
+                                    "category": "Tools",
+                                    "description": "Full-featured calculator server with mathematical operations and functions.",
+                                    "difficulty": "Beginner",
+                                    "features": [
+                                        "Basic arithmetic operations",
+                                        "Scientific functions (sin, cos, log, etc.)",
+                                        "Memory functions",
+                                        "Expression evaluation",
+                                        "Unit conversions"
+                                    ],
+                                    "use_cases": [
+                                        "Mathematical calculations",
+                                        "Data processing pipelines",
+                                        "Educational applications",
+                                        "Scientific computing"
+                                    ],
+                                    "requirements": ["Python 3.8+", "math module", "mcp package"],
+                                    "setup_time": "< 5 minutes"
+                                },
+                                "multi-tool": {
+                                    "icon": "🛠️",
+                                    "category": "Tools",
+                                    "description": "Template for servers with multiple related tools working together.",
+                                    "difficulty": "Intermediate",
+                                    "features": [
+                                        "Multiple tool implementations",
+                                        "Shared state management",
+                                        "Tool interdependencies",
+                                        "Advanced error handling",
+                                        "Configuration system"
+                                    ],
+                                    "use_cases": [
+                                        "Complex tool suites",
+                                        "Workflow automation",
+                                        "Integrated services",
+                                        "Professional utilities"
+                                    ],
+                                    "requirements": ["Python 3.8+", "mcp package", "pydantic"],
+                                    "setup_time": "5-10 minutes"
+                                },
+                                "image-generator": {
+                                    "icon": "🎨",
+                                    "category": "AI/ML",
+                                    "description": "AI-powered image generation server using state-of-the-art models.",
+                                    "difficulty": "Advanced",
+                                    "features": [
+                                        "Multiple AI model support",
+                                        "Stable Diffusion integration",
+                                        "DALL-E API support",
+                                        "Image editing capabilities",
+                                        "Batch processing",
+                                        "Style transfer"
+                                    ],
+                                    "use_cases": [
+                                        "Content creation",
+                                        "Design automation",
+                                        "Creative applications",
+                                        "Marketing tools",
+                                        "Game asset generation"
+                                    ],
+                                    "requirements": [
+                                        "Python 3.8+",
+                                        "GPU recommended",
+                                        "transformers or diffusers",
+                                        "API keys for cloud services"
+                                    ],
+                                    "setup_time": "15-30 minutes"
+                                }
+                            }
+                            
+                            # Get metadata
+                            meta = template_metadata.get(template_name, {
+                                "icon": "📦",
+                                "category": "Other",
+                                "description": template_info.get('description', 'Custom MCP server template'),
+                                "difficulty": "Intermediate",
+                                "features": ["Custom implementation"],
+                                "use_cases": ["Specific use cases"],
+                                "requirements": ["Python 3.8+", "mcp package"],
+                                "setup_time": "Varies"
+                            })
+                            
+                            # Build detailed view
+                            details = f"""
+### {meta['icon']} {template_name}
 
-                        # Display available templates
-                        def update_templates_display():
-                            """Update the templates display"""
-                            if HAS_REGISTRY:
-                                templates = registry.list_templates()
-                                if templates:
-                                    display = ""
-                                    for template in templates:
-                                        template_info = registry.get_template(template)
-                                        if template_info:
-                                            display += f"### {template}\n"
-                                            display += f"- **Description**: {template_info.get('description', 'No description')}\n"
-                                            display += f"- **Files**: {', '.join(template_info.get('files', {}).keys())}\n\n"
-                                    return display
-                                else:
-                                    return "No templates available."
-                            return "Registry not available."
+**Category:** {meta['category']} | **Difficulty:** {meta['difficulty']} | **Setup Time:** {meta['setup_time']}
 
-                        templates_display = gr.Markdown(value=update_templates_display())
+#### 📝 Description
+{meta['description']}
+
+#### ✨ Key Features
+"""
+                            for feature in meta['features']:
+                                details += f"- {feature}\n"
+                            
+                            details += "\n#### 🎯 Use Cases\n"
+                            for use_case in meta['use_cases']:
+                                details += f"- {use_case}\n"
+                            
+                            details += "\n#### 📋 Requirements\n"
+                            for req in meta['requirements']:
+                                details += f"- {req}\n"
+                            
+                            # Add file structure if available
+                            if 'files' in template_info:
+                                details += "\n#### 📁 Template Structure\n```\n"
+                                for filename in template_info['files'].keys():
+                                    details += f"{filename}\n"
+                                details += "```\n"
+                            
+                            # Add quick start guide
+                            details += f"""
+#### 🚀 Quick Start
+
+1. **Create from template:**
+   ```bash
+   gmp create {template_name} my-server
+   ```
+
+2. **Navigate to directory:**
+   ```bash
+   cd servers/my-server
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Run the server:**
+   ```bash
+   python app.py
+   ```
+"""
+                            
+                            # Show action buttons
+                            actions = f"""
+Ready to use this template? Click the button above or use the Quick Create tab to get started!
+"""
+                            
+                            return details, gr.update(visible=True), gr.update(value=actions, visible=True)
+                        
+                        def filter_templates(category, search):
+                            return create_templates_grid(category, search)
+                        
+                        def use_selected_template(template_name):
+                            # Switch to Quick Create tab and pre-select the template
+                            # This would require updating the Quick Create template dropdown
+                            return gr.update(value=template_name)
+                        
+                        # Now create the UI components
+                        # Template categories
+                        with gr.Row():
+                            template_category_filter = gr.Radio(
+                                choices=["All", "Starter", "Tools", "AI/ML", "Data", "Integration"],
+                                value="All",
+                                label="Filter by Category",
+                                interactive=True
+                            )
+                            template_search = gr.Textbox(
+                                placeholder="Search templates...",
+                                label="Search",
+                                scale=2
+                            )
+                        
+                        # Templates grid
+                        with gr.Row():
+                            templates_grid = gr.HTML(value=create_templates_grid())
+                        
+                        # Selected template details
+                        with gr.Row():
+                            with gr.Column(scale=1):
+                                selected_template_dropdown = gr.Dropdown(
+                                    choices=registry.list_templates() if HAS_REGISTRY else [],
+                                    label="Select Template",
+                                    value=None,
+                                    interactive=True
+                                )
+                                
+                                use_template_btn = gr.Button(
+                                    "🚀 Use This Template",
+                                    variant="primary",
+                                    size="lg",
+                                    visible=False
+                                )
+                                
+                                template_actions = gr.Markdown(visible=False)
+                            
+                            with gr.Column(scale=2):
+                                template_details = gr.Markdown(
+                                    value="### Select a template to view details",
+                                    elem_classes=["template-details"]
+                                )
+                        
+                        # Setup event handlers after all components are created
+                        template_category_filter.change(
+                            filter_templates,
+                            inputs=[template_category_filter, template_search],
+                            outputs=[templates_grid]
+                        )
+                        
+                        template_search.change(
+                            filter_templates,
+                            inputs=[template_category_filter, template_search],
+                            outputs=[templates_grid]
+                        )
+                        
+                        selected_template_dropdown.change(
+                            show_template_details,
+                            inputs=[selected_template_dropdown],
+                            outputs=[template_details, use_template_btn, template_actions]
+                        )
+                        
+                        # Note: This references template_dropdown from Quick Create tab
+                        # We'll handle this connection at the dashboard level instead
+                        def switch_to_quick_create_with_template(template_name):
+                            # Return template name to be handled by parent
+                            return template_name
+                        
+                        use_template_btn.click(
+                            switch_to_quick_create_with_template,
+                            inputs=[selected_template_dropdown],
+                            outputs=[]  # Will be connected later
+                        )
 
             # Tab 3: Server Management (Unified)
             with gr.Tab("🖥️ Server Management"):
