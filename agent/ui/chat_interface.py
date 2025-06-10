@@ -242,7 +242,7 @@ class ChatInterface:
         self.examples_dropdown.change(
             fn=self._handle_example_selection,
             inputs=[self.examples_dropdown, self.chatbot],
-            outputs=[self.chatbot, self.message_input, self.examples_dropdown, self.context_display, self.suggestions_display]
+            outputs=[self.chatbot, self.message_input, self.context_display, self.suggestions_display]
         )
         
         # Clear conversation
@@ -342,16 +342,16 @@ class ChatInterface:
             
             return chat_history, "", {"error": str(e), "agent_mode": self.current_agent_mode}, "Try asking for help or rephrasing your request."
     
-    def _handle_example_selection(self, selected_example: str, chat_history: List[Dict]) -> Tuple[List[Dict], str, str, Dict[str, Any], str]:
+    def _handle_example_selection(self, selected_example: str, chat_history: List[Dict]) -> Tuple[List[Dict], str, Dict[str, Any], str]:
         """Handle selection of an example prompt"""
         
         print(f"Example selected: '{selected_example}'")  # Debug print
         
         if not selected_example or selected_example == "":
-            return chat_history, "", "", {}, ""
+            return chat_history, "", {}, ""
         
-        # Set the example as the current message input and clear dropdown
-        return chat_history, selected_example, "", {}, ""
+        # Set the example as the current message input
+        return chat_history, selected_example, {}, ""
     
     def _clear_conversation(self) -> Tuple[List[Dict], Dict[str, Any], str]:
         """Clear the conversation history"""

@@ -66,8 +66,10 @@ class ControlPanelUI:
         try:
             # Get disk usage for the appropriate root path
             import platform
+            import os
             if platform.system() == 'Windows':
-                disk_path = 'C:\\'
+                # Get the drive of the current working directory
+                disk_path = os.path.splitdrive(os.getcwd())[0] + '\\'
             else:
                 disk_path = '/'
             
