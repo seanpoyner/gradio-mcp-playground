@@ -1534,7 +1534,7 @@ Ready to use this template? Click the button above or use the Quick Create tab t
                             
                             with gr.Column(scale=2):
                                 tutorial_content = gr.Markdown(
-                                    value=load_documentation("getting-started.md")
+                                    value="# Getting Started\n\nSelect a tutorial from the list to begin."
                                 )
                     
                     # API Reference
