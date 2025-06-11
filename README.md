@@ -341,7 +341,7 @@ export HF_TOKEN=your_token_here
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/gradio-mcp-playground.git
+git clone https://github.com/seanpoyner/gradio-mcp-playground.git
 cd gradio-mcp-playground
 
 # Install in development mode
